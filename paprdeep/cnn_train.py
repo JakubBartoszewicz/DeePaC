@@ -31,7 +31,7 @@ from Bio import SeqIO
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.layers import Embedding
-from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D
+from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 from keras.preprocessing.text import Tokenizer
 import keras.backend as K
 from keras.callbacks import CSVLogger
@@ -40,7 +40,7 @@ from keras import regularizers
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform
 from keras_contrib.callbacks.dead_relu_detector import DeadReluDetector
-from paprdeep import PaPrSequence, CSVMemoryLogger
+from paprdeep_utils import PaPrSequence, CSVMemoryLogger
 
 def main(argv):
     """Parse the config file and train the CNN on Illumina reads."""
@@ -107,14 +107,16 @@ def train(config):
         raise ValueError('Unknown initializer')
     
     # Define the network architecture
-    conv_1_units = config['Architecture'].getint('Conv_1_Units')  
-    conv_1_filter_size = config['Architecture'].getint('Conv_1_FilterSize')
-    conv_1_activation = config['Architecture']['Conv_1_Activation']
-    conv_1_bn = config['Architecture']['Conv_1_BN']
-    conv_1_pooling = config['Architecture']['Conv_1_Pooling']
-    dense_1_units = config['Architecture'].getint('Dense_1_Units')
-    dense_1_activation = config['Architecture']['Dense_1_Activation']    
-    dense_1_bn = config['Architecture']['Dense_1_BN']
+    n_conv = config['Architecture'].getint('N_Conv')
+    n_dense = config['Architecture'].getint('N_Dense')
+    conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')] 
+    conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
+    conv_activation = config['Architecture']['Conv_Activation']
+    conv_bn = config['Architecture'].getboolean('Conv_BN')
+    conv_pooling = config['Architecture']['Conv_Pooling']
+    dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
+    dense_activation = config['Architecture']['Dense_Activation']    
+    dense_bn = config['Architecture'].getboolean('Dense_BN')
     drop_out = config['Architecture'].getfloat('Dropout')
     
     # If needed, weight classes
@@ -175,26 +177,40 @@ def train(config):
     with tf.device('/cpu:0'):
         model = Sequential()
         
-        # Convolutional layer
-        model.add(Conv1D(conv_1_units, conv_1_filter_size, padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
-        if conv_1_bn:
+        # First convolutional layer
+        model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
+        if conv_bn:
             model.add(BatchNormalization())
-        model.add(Activation(conv_1_activation))
+        model.add(Activation(conv_activation))
         
+        # For next convolutional layers
+        for i in range(1,n_conv):
+            if conv_pooling == 'max':
+                model.add(MaxPooling1D())
+            elif conv_pooling == 'average':
+                model.add(AveragePooling1D())
+            else:
+                raise ValueError('Unknown pooling method')
+            model.add(Conv1D(conv_units[i], conv_filter_size[i], padding='same', kernel_initializer = initializer))
+            if conv_bn:
+                model.add(BatchNormalization())
+            model.add(Activation(conv_activation))
+            
         # Pooling layer
-        if conv_1_pooling == 'max':
+        if conv_pooling == 'max':
             model.add(GlobalMaxPooling1D())
-        elif conv_1_pooling == 'average':
+        elif conv_pooling == 'average':
             model.add(GlobalAveragePooling1D())
         else:
             raise ValueError('Unknown pooling method')
         
-        # Dense layer
-        model.add(Dense(dense_1_units, kernel_initializer = initializer))
-        if dense_1_bn:
-            model.add(BatchNormalization())
-        model.add(Activation(dense_1_activation))
-        model.add(Dropout(drop_out))
+        for i in range(0, n_dense):
+            # Dense layer
+            model.add(Dense(dense_units[i], kernel_initializer = initializer))
+            if dense_bn:
+                model.add(BatchNormalization())
+            model.add(Activation(dense_activation))
+            model.add(Dropout(drop_out))
         
         # Output layer for binary classification
         model.add(Dense(1, kernel_initializer = initializer))
