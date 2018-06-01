@@ -20,6 +20,7 @@ import tensorflow as tf
 tf.set_random_seed(seed)
 import os
 os.environ['PYTHONHASHSEED'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import random as rn
 rn.seed(seed)
 
