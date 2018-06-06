@@ -31,7 +31,7 @@ import configparser
 from Bio import SeqIO
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
-from keras.layers import Embedding
+from keras.layers import LSTM, Bidirectional
 from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 from keras.preprocessing.text import Tokenizer
 import keras.backend as K
@@ -39,7 +39,7 @@ from keras.callbacks import CSVLogger
 from keras.utils import multi_gpu_model
 from keras import regularizers
 from keras.layers.normalization import BatchNormalization
-from keras.initializers import glorot_uniform, he_uniform
+from keras.initializers import glorot_uniform, he_uniform, orthogonal
 from keras_contrib.callbacks.dead_relu_detector import DeadReluDetector
 from paprdeep_utils import PaPrSequence, CSVMemoryLogger
 
@@ -117,6 +117,7 @@ def train(config):
     conv_activation = config['Architecture']['Conv_Activation']
     conv_bn = config['Architecture'].getboolean('Conv_BN')
     conv_pooling = config['Architecture']['Conv_Pooling']
+    lstm_units = [int(u) for u in config['Architecture']['LSTM_Units'].split(',')] 
     dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
     dense_activation = config['Architecture']['Dense_Activation']    
     dense_bn = config['Architecture'].getboolean('Dense_BN')
@@ -180,32 +181,34 @@ def train(config):
     with tf.device(model_build_device):
         model = Sequential()
         
+        model.add(Bidirectional(LSTM(lstm_units[0], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed)), input_shape=(seq_length, seq_dim)))
+        model.add(Dropout(drop_out))
         # First convolutional layer
-        model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
-        if conv_bn:
-            model.add(BatchNormalization())
-        model.add(Activation(conv_activation))
+        #model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
+        #if conv_bn:
+        #    model.add(BatchNormalization())
+        #model.add(Activation(conv_activation))
         
         # For next convolutional layers
-        for i in range(1,n_conv):
-            if conv_pooling == 'max':
-                model.add(MaxPooling1D())
-            elif conv_pooling == 'average':
-                model.add(AveragePooling1D())
-            else:
-                raise ValueError('Unknown pooling method')
-            model.add(Conv1D(conv_units[i], conv_filter_size[i], padding='same', kernel_initializer = initializer))
-            if conv_bn:
-                model.add(BatchNormalization())
-            model.add(Activation(conv_activation))
+        #for i in range(1,n_conv):
+        #    if conv_pooling == 'max':
+        #        model.add(MaxPooling1D())
+        #    elif conv_pooling == 'average':
+        #        model.add(AveragePooling1D())
+        #    else:
+        #        raise ValueError('Unknown pooling method')
+        #    model.add(Conv1D(conv_units[i], conv_filter_size[i], padding='same', kernel_initializer = initializer))
+        #    if conv_bn:
+        #        model.add(BatchNormalization())
+        #    model.add(Activation(conv_activation))
             
         # Pooling layer
-        if conv_pooling == 'max':
-            model.add(GlobalMaxPooling1D())
-        elif conv_pooling == 'average':
-            model.add(GlobalAveragePooling1D())
-        else:
-            raise ValueError('Unknown pooling method')
+        #if conv_pooling == 'max':
+        #    model.add(GlobalMaxPooling1D())
+        #elif conv_pooling == 'average':
+        #    model.add(GlobalAveragePooling1D())
+        #else:
+        #    raise ValueError('Unknown pooling method')
         
         for i in range(0, n_dense):
             # Dense layer
@@ -218,7 +221,7 @@ def train(config):
         # Output layer for binary classification
         model.add(Dense(1, kernel_initializer = initializer))
         model.add(Activation('sigmoid'))
-    
+    print("Compiling...") 
     # If using multiple GPUs, compile a parallel model for data parallelism 
     if multi_gpu:
         parallel_model = multi_gpu_model(model, gpus=n_gpus) 
@@ -229,7 +232,7 @@ def train(config):
         model.compile(loss='binary_crossentropy',
                       optimizer=optimizer,
                       metrics=['accuracy'])
-                  
+    print("Training...")              
     for i in range(0, n_epochs):
         if multi_gpu:
             if use_generators:
