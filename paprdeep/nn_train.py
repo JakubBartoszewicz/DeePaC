@@ -27,16 +27,18 @@ rn.seed(seed)
 import sys
 import argparse
 import configparser
+from contextlib import redirect_stdout
+from math import isclose
 
 from Bio import SeqIO
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
-from keras.layers import LSTM, Bidirectional
+from keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 from keras.preprocessing.text import Tokenizer
 import keras.backend as K
 from keras.callbacks import CSVLogger
-from keras.utils import multi_gpu_model
+from keras.utils import multi_gpu_model, plot_model
 from keras import regularizers
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
@@ -111,17 +113,21 @@ def train(config):
     
     # Define the network architecture
     n_conv = config['Architecture'].getint('N_Conv')
+    n_recurrent = config['Architecture'].getint('N_Recurrent')
     n_dense = config['Architecture'].getint('N_Dense')
     conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')] 
     conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
     conv_activation = config['Architecture']['Conv_Activation']
     conv_bn = config['Architecture'].getboolean('Conv_BN')
     conv_pooling = config['Architecture']['Conv_Pooling']
-    lstm_units = [int(u) for u in config['Architecture']['LSTM_Units'].split(',')] 
+    conv_drop_out = config['Architecture'].getfloat('Conv_Dropout') 
+    recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
+    recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
+    recurrent_drop_out = config['Architecture'].getfloat('Recurrent_Dropout')  
     dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
     dense_activation = config['Architecture']['Dense_Activation']    
     dense_bn = config['Architecture'].getboolean('Dense_BN')
-    drop_out = config['Architecture'].getfloat('Dropout')
+    dense_drop_out = config['Architecture'].getfloat('Dense_Dropout')
     
     # If needed, weight classes
     use_weights = config['ClassWeights'].getboolean('UseWeights')
@@ -179,39 +185,99 @@ def train(config):
     print("Building model...")
     # Build the model using the CPU
     with tf.device(model_build_device):
+        # Initailize the model
         model = Sequential()
-        
-        model.add(Bidirectional(LSTM(lstm_units[0], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed)), input_shape=(seq_length, seq_dim)))
-        model.add(Dropout(drop_out))
-        # First convolutional layer
-        #model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
-        #if conv_bn:
-        #    model.add(BatchNormalization())
-        #model.add(Activation(conv_activation))
-        
+        # Number of added recurrent layers
+        current_recurrent = 0
+        # The last recurrent layer should return the output for the last unit only. Previous layers must return output for all units
+        return_sequences = True if n_recurrent > 1 else False
+        # First convolutional/recurrent layer
+        if n_conv > 0:
+            # Convolutional layers will always be placed before recurrent ones
+            model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', input_shape=(seq_length, seq_dim), kernel_initializer = initializer))
+            if conv_bn:
+                # Add batch norm
+                model.add(BatchNormalization())
+            # Add activation
+            model.add(Activation(conv_activation))
+        elif n_recurrent > 0:
+            # If no convolutional layers, the first layer is recurrent. CuDNNLSTM requires a GPU and tensorflow with cuDNN
+            if n_gpus > 0:
+                model.add(Bidirectional(CuDNNLSTM(recurrent_units[0], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed), return_sequences = return_sequences), input_shape=(seq_length, seq_dim)))
+            else:
+                model.add(Bidirectional(LSTM(recurrent_units[0], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed), return_sequences = return_sequences), input_shape=(seq_length, seq_dim)))
+            # Add batch norm
+            if recurrent_bn:
+                model.add(BatchNormalization())
+            # Add dropout
+            model.add(Dropout(recurrent_drop_out))
+            # First recurrent layer already added
+            current_recurrent = 1
+        else:
+            raise ValueError('Input layer should be convolutional or recurrent')
+            
         # For next convolutional layers
-        #for i in range(1,n_conv):
-        #    if conv_pooling == 'max':
-        #        model.add(MaxPooling1D())
-        #    elif conv_pooling == 'average':
-        #        model.add(AveragePooling1D())
-        #    else:
-        #        raise ValueError('Unknown pooling method')
-        #    model.add(Conv1D(conv_units[i], conv_filter_size[i], padding='same', kernel_initializer = initializer))
-        #    if conv_bn:
-        #        model.add(BatchNormalization())
-        #    model.add(Activation(conv_activation))
+        for i in range(1,n_conv):
+            # Add pooling first
+            if conv_pooling == 'max':
+                model.add(MaxPooling1D())
+            elif conv_pooling == 'average':
+                model.add(AveragePooling1D())
+            elif not (conv_pooling in ['last_max', 'last_average', 'none']):
+                # Skip pooling if it should be applied to the last conv layer or skipped altogether. Throw a ValueError if the pooling method is unrecognized.
+                raise ValueError('Unknown pooling method')
+            # Add dropout (drops whole features)
+            if not isclose(conv_drop_out, 0.0): 
+               model.add(Dropout(conv_drop_out))
+            # Add layer
+            model.add(Conv1D(conv_units[i], conv_filter_size[i], padding='same', kernel_initializer = initializer))
+            # Add batch norm
+            if conv_bn:
+                model.add(BatchNormalization())
+            # Add activation
+            model.add(Activation(conv_activation))
             
         # Pooling layer
-        #if conv_pooling == 'max':
-        #    model.add(GlobalMaxPooling1D())
-        #elif conv_pooling == 'average':
-        #    model.add(GlobalAveragePooling1D())
-        #else:
-        #    raise ValueError('Unknown pooling method')
+        if n_conv > 0:
+            if conv_pooling == 'max' or conv_pooling == 'last_max':
+                if n_recurrent == 0:
+                    # If no recurrent layers, use global pooling
+                    model.add(GlobalMaxPooling1D())
+                else:
+                    # for recurrent layers, use normal pooling
+                    model.add(MaxPooling1D())
+            elif conv_pooling == 'average' or conv_pooling == 'last_average':
+                if n_recurrent == 0:
+                    # if no recurrent layers, use global pooling
+                    model.add(GlobalAveragePooling1D())
+                else:
+                    # for recurrent layers, use normal pooling
+                    model.add(AveragePooling1D())
+            elif conv_pooling != 'none':
+                # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized (should be thrown above)
+                raise ValueError('Unknown pooling method')
+            # Add dropout (drops whole features)
+            if not isclose(conv_drop_out, 0.0)
+                model.add(Dropout(conv_drop_out))
         
+        # Recurrent layers
+        for i in range(current_recurrent, n_recurrent):
+            if i == n_recurrent - 1:
+                # In the last layer, return output only for the last unit
+                return_sequences = False
+            # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
+            if n_gpus > 0:
+                model.add(Bidirectional(CuDNNLSTM(recurrent_units[i], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed), return_sequences = return_sequences)))
+            else:
+                model.add(Bidirectional(LSTM(recurrent_units[i], kernel_initializer=initializer, recurrent_initializer=orthogonal(seed), return_sequences = return_sequences)))
+            # Add batch norm
+            if recurrent_bn:
+                model.add(BatchNormalization())
+            # Add dropout
+            model.add(Dropout(dense_drop_out))
+        
+        # Dense layers
         for i in range(0, n_dense):
-            # Dense layer
             model.add(Dense(dense_units[i], kernel_initializer = initializer))
             if dense_bn:
                 model.add(BatchNormalization())
@@ -232,6 +298,13 @@ def train(config):
         model.compile(loss='binary_crossentropy',
                       optimizer=optimizer,
                       metrics=['accuracy'])
+    
+    # Print summary and plot model
+    with open("summary-{runname}.txt".format(runname=runname), 'w') as f:
+        with redirect_stdout(f):
+            model.summary()
+    plot_model(model, to_file = "plot-{runname}.png".format(runname=runname), show_shapes = True)
+    
     print("Training...")              
     for i in range(0, n_epochs):
         if multi_gpu:
@@ -281,7 +354,7 @@ def train(config):
                           class_weight = class_weight,
                           initial_epoch = i)
         # The parallel model cannot be saved but shares weights with the template    
-        model.save("cnn-{runname}-e{n:03d}.h5".format(runname=runname, n=i))
+        model.save("nn-{runname}-e{n:03d}.h5".format(runname=runname, n=i))
     
 if __name__ == "__main__":
     main(sys.argv)

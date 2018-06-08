@@ -1,5 +1,5 @@
 """@package eval
-Evaluate a CNN trained on Illumina reads.
+Evaluate a NN trained on Illumina reads.
 
 Requires a config file describing the data directory, and dataset and run name, classification threshold and the epoch range.
 
@@ -23,8 +23,8 @@ import numpy as np
 import csv
 
 def main(argv):
-    """Parse the config file and evaluate the CNN on Illumina reads."""
-    parser = argparse.ArgumentParser(description = "Evaluate a CNN trained on Illumina reads.")
+    """Parse the config file and evaluate the NN on Illumina reads."""
+    parser = argparse.ArgumentParser(description = "Evaluate a NN trained on Illumina reads.")
     parser.add_argument("config_file")
     args = parser.parse_args()
     config = configparser.ConfigParser()
@@ -33,7 +33,7 @@ def main(argv):
    
     
 def evaluate(config):
-    """Evaluate the CNN on Illumina reads using the supplied configuration."""
+    """Evaluate the NN on Illumina reads using the supplied configuration."""
     # Clear session needed or TypeError can happen in some cases
     backend.clear_session()
 
@@ -44,7 +44,7 @@ def evaluate(config):
     set = config['Data']['DataSet']
     # Set the run name
     runname = config['Data']['RunName']
-    name_prefix = "cnn-{}".format(runname)
+    name_prefix = "nn-{}".format(runname)
     # Set the classification threshold
     thresh = config['Data'].getfloat('Threshold')
     

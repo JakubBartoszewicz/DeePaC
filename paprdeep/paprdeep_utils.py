@@ -34,7 +34,7 @@ class PaPrSequence(Sequence):
         self.on_epoch_end()
 
     def __len__(self):
-         """Return the number of items of a sequence."""
+        """Return the number of items of a sequence."""
         return math.floor(len(self.X) / self.batch_size)
 
     def __getitem__(self,idx):
