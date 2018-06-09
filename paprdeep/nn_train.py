@@ -257,7 +257,7 @@ def train(config):
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized (should be thrown above)
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not isclose(conv_drop_out, 0.0)
+            if not isclose(conv_drop_out, 0.0):
                 model.add(Dropout(conv_drop_out))
         
         # Recurrent layers
