@@ -158,7 +158,6 @@ class PaPrConfig:
         # Set the number op epochs, batch size and the optimizer
         self.epoch_start = config['Training'].getint('EpochStart')
         self.epoch_end = config['Training'].getint('EpochEnd')
-        self.n_epochs = self.epoch_end - self.epoch_start
         self.batch_size = config['Training'].getint('BatchSize')
 
         self.patience = config['Training'].getint('Patience')        
@@ -362,7 +361,7 @@ class PaPrNet:
             if self.config.use_generators:
                 # Fit a parallel model using generators
                 self.history = self.parallel_model.fit_generator(generator = self.training_sequence,
-                                                                 epochs = self.config.n_epochs,
+                                                                 epochs = self.config.epoch_end,
                                                                  callbacks = self.callbacks,
                                                                  validation_data = self.validation_sequence,                       
                                                                  class_weight = self.config.class_weight,
@@ -375,7 +374,7 @@ class PaPrNet:
                 self.history = self.parallel_model.fit(x = self.x_train,
                                                        y = self.y_train,
                                                        batch_size = self.config.batch_size,
-                                                       epochs = self.config.n_epochs,
+                                                       epochs = self.config.epoch_end,
                                                        callbacks = self.callbacks,
                                                        validation_data = (self.x_val, self.y_val),
                                                        shuffle = True,
@@ -385,7 +384,7 @@ class PaPrNet:
             if self.config.use_generators: 
                 # Fit a model using generators
                 self.history = self.model.fit_generator(generator = self.training_sequence,
-                                                        epochs = self.config.n_epochs,
+                                                        epochs = self.config.epoch_end,
                                                         callbacks = self.callbacks,
                                                         validation_data = self.validation_sequence,                       
                                                         class_weight = self.config.class_weight,
@@ -398,7 +397,7 @@ class PaPrNet:
                 self.history = self.model.fit(x = self.x_train,
                                               y = self.y_train,
                                               batch_size = self.config.batch_size,
-                                              epochs = self.config.n_epochs,
+                                              epochs = self.config.epoch_end,
                                               callbacks = self.callbacks,
                                               validation_data = (self.x_val, self.y_val),
                                               shuffle = True,
