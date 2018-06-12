@@ -92,8 +92,9 @@ class PaPrConfig:
             
         ### Data Loading Config ###
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
-        self.use_generators = config['DataLoad'].getboolean('LoadByBatch')
-        if self.use_generators:
+        self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
+        self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch')
+        if self.use_generators_train or self.use_generators_val:
             self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
             self.batch_queue = config['DataLoad'].getint('BatchQueue')
         
@@ -172,6 +173,10 @@ class PaPrConfig:
             self.optimizer = self.optimization_method
         # If needed, log the memory usage
         self.log_memory = True if config['DataLoad'].getboolean('MemUsageLog') else False
+        self.use_tb = config['Training'].getboolean('Use_TB')
+        if self.use_tb:
+            self.tb_path = config['Training']['TBPath']
+            self.tb_hist_freq = config['Training'].getint('TBHistFreq')
     
 class PaPrNet:
     
@@ -192,23 +197,28 @@ class PaPrNet:
         """Load datasets"""
         print("Loading...")
         
-        if self.config.use_generators:
+        if self.config.use_generators_train:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
-            self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
-            self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
             self.training_sequence = PaPrSequence(self.x_train, self.y_train, self.config.batch_size)
-            self.validation_sequence = PaPrSequence(self.x_val, self.y_val, self.config.batch_size)
             self.length_train = len(self.x_train)
-            self.length_val = len(self.x_val)
         else:
             # ... or load all the data to memory
             self.x_train = np.load(self.config.x_train_path)
             self.y_train = np.load(self.config.y_train_path)
+            self.length_train = self.x_train.shape
+        if self.config.use_generators_val:
+            # Prepare the generators for loading data batch by batch
+            self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
+            self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
+            self.validation_data = PaPrSequence(self.x_val, self.y_val, self.config.batch_size)
+            self.length_val = len(self.x_val)
+        else:
+            # ... or load all the data to memory
             self.x_val = np.load(self.config.x_val_path)
             self.y_val = np.load(self.config.y_val_path)
-            self.length_train = self.x_train.shape
+            self.validation_data = (self.x_val, self.y_val)
             self.length_val = self.x_val.shape
         
     def __buildSeqModel(self):
@@ -353,17 +363,18 @@ class PaPrNet:
         # Set early stopping
         self.callbacks.append(EarlyStopping(monitor="val_acc", patience = self.config.patience))
         # Set TensorBoard
-        self.callbacks.append(TensorBoard(log_dir="./{runname}-logs".format(runname=self.config.runname), histogram_freq=0, batch_size = self.config.batch_size, write_grads=True, write_images=True))
+        if self.config.use_tb:
+            self.callbacks.append(TensorBoard(log_dir=self.config.tb_path + "/{runname}-logs".format(runname=self.config.runname), histogram_freq=self.config.tb_hist_freq, batch_size = self.config.batch_size, write_grads=True, write_images=True))
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""           
         print("Training...")
         if self.config.multi_gpu:
-            if self.config.use_generators:
+            if self.config.use_generators_train:
                 # Fit a parallel model using generators
                 self.history = self.parallel_model.fit_generator(generator = self.training_sequence,
                                                                  epochs = self.config.epoch_end,
                                                                  callbacks = self.callbacks,
-                                                                 validation_data = self.validation_sequence,                       
+                                                                 validation_data = self.validation_data,                       
                                                                  class_weight = self.config.class_weight,
                                                                  max_queue_size = self.config.batch_queue,
                                                                  workers = self.config.batch_loading_workers,
@@ -376,17 +387,17 @@ class PaPrNet:
                                                        batch_size = self.config.batch_size,
                                                        epochs = self.config.epoch_end,
                                                        callbacks = self.callbacks,
-                                                       validation_data = (self.x_val, self.y_val),
+                                                       validation_data = self.validation_data,
                                                        shuffle = True,
                                                        class_weight = self.config.class_weight,
                                                        initial_epoch = self.config.epoch_start)
         else:
-            if self.config.use_generators: 
+            if self.config.use_generators_train: 
                 # Fit a model using generators
                 self.history = self.model.fit_generator(generator = self.training_sequence,
                                                         epochs = self.config.epoch_end,
                                                         callbacks = self.callbacks,
-                                                        validation_data = self.validation_sequence,                       
+                                                        validation_data = self.validation_data,                       
                                                         class_weight = self.config.class_weight,
                                                         max_queue_size = self.config.batch_queue,
                                                         workers = self.config.batch_loading_workers,
@@ -399,7 +410,7 @@ class PaPrNet:
                                               batch_size = self.config.batch_size,
                                               epochs = self.config.epoch_end,
                                               callbacks = self.callbacks,
-                                              validation_data = (self.x_val, self.y_val),
+                                              validation_data = self.validation_data,
                                               shuffle = True,
                                               class_weight = self.config.class_weight,
                                               initial_epoch = self.config.epoch_start)
