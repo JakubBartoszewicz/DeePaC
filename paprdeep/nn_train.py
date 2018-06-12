@@ -43,7 +43,6 @@ from keras import regularizers
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
-from keras_contrib.callbacks.dead_relu_detector import DeadReluDetector
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 def main(argv):
@@ -64,7 +63,7 @@ class PaPrConfig:
     """
     
     def __init__(self, config):
-    """PaPrConfig constuctor"""
+        """PaPrConfig constuctor"""
         ### Devices Config ###    
         # Get the number of available GPUs
         self.n_gpus = config['Devices'].getint('N_GPUs')
@@ -102,7 +101,7 @@ class PaPrConfig:
         # Set the sequence length and the alphabet
         self.seq_length = config['InputData'].getint('SeqLength')
         self.alphabet = "ACGT"
-        self.seq_dim = len(alphabet)
+        self.seq_dim = len(self.alphabet)
         
         ### Architecture Config ###
         # Set the seed
@@ -157,7 +156,9 @@ class PaPrConfig:
         
         ### Training Config ###
         # Set the number op epochs, batch size and the optimizer
-        self.n_epochs = config['Training'].getint('N_Epochs')
+        self.epoch_start = config['Training'].getint('EpochStart')
+        self.epoch_end = config['Training'].getint('EpochEnd')
+        self.n_epochs = self.epoch_end - self.epoch_start
         self.batch_size = config['Training'].getint('BatchSize')
 
         self.patience = config['Training'].getint('Patience')        
@@ -183,10 +184,10 @@ class PaPrNet:
     def __init__(self, config):
         """PaPrNet constructor and config parsing"""
         self.config = PaPrConfig(config)
-        __loadData()
-        __setCallbacks()
-        __buildSeqModel()
-        __compileSeqModel()
+        self.__loadData()
+        self.__setCallbacks()
+        self.__buildSeqModel()
+        self.__compileSeqModel()
         
     def __loadData(self):
         """Load datasets"""
@@ -225,7 +226,7 @@ class PaPrNet:
             # First convolutional/recurrent layer
             if self.config.n_conv > 0:
                 # Convolutional layers will always be placed before recurrent ones
-                self.model.add(Conv1D(conv_units[0], conv_filter_size[0], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
+                self.model.add(Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
                 if self.config.conv_bn:
                     # Add batch norm
                     self.model.add(BatchNormalization())
@@ -305,7 +306,7 @@ class PaPrNet:
                 if self.config.recurrent_bn:
                     self.model.add(BatchNormalization())
                 # Add dropout
-                self.model.add(Dropout(self.config.dense_drop_out))
+                self.model.add(Dropout(self.config.recurrent_drop_out))
             
             # Dense layers
             for i in range(0, self.config.n_dense):
@@ -313,7 +314,7 @@ class PaPrNet:
                 if self.config.dense_bn:
                     self.model.add(BatchNormalization())
                 self.model.add(Activation(self.config.dense_activation))
-                self.model.add(Dropout(self.config.drop_out))
+                self.model.add(Dropout(self.config.dense_drop_out))
             
             # Output layer for binary classification
             self.model.add(Dense(1, kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer))
@@ -343,68 +344,66 @@ class PaPrNet:
         """Set callbacks to use during training"""
         self.callbacks=[]
         # Add CSV callback with or without memory log
-        if self.config.log_memory):
-            callbacks.append(CSVMemoryLogger("training-{runname}.csv".format(runname=runname), append=True))
+        if self.config.log_memory:
+            self.callbacks.append(CSVMemoryLogger("training-{runname}.csv".format(runname=sel.self.config.runname), append=True))
         else:
-            callbacks.append(CSVLogger("training-{runname}.csv".format(runname=runname), append=True))
-        # Add the dead relus detector
-        callbacks.append(DeadReluDetector(self.x_train, verbose = True))
+            self.callbacks.append(CSVLogger("training-{runname}.csv".format(runname=self.config.runname), append=True))
         # Save model after every epoch
-        callbacks.append(ModelCheckpoint(filepath="nn-{runname}-e{epoch:03d}.h5".format(runname=runname)))
+        checkpoint_name = "nn-{runname}-".format(runname=self.config.runname)
+        self.callbacks.append(ModelCheckpoint(filepath = checkpoint_name + "e{epoch:03d}.h5"))
         # Set early stopping
-        callbacks.append(EarlyStopping(monitor="val_acc", patience = self.config.patience))
+        self.callbacks.append(EarlyStopping(monitor="val_acc", patience = self.config.patience))
         # Set TensorBoard
-        callbacks.append(TensorBoard(log_dir="./{runname}-logs".format(runname=runname), histogram_freq=0, batch_size = self.config.batch_size, write_grads=True, write_weights=True)
-    def train(config):
+        self.callbacks.append(TensorBoard(log_dir="./{runname}-logs".format(runname=self.config.runname), histogram_freq=0, batch_size = self.config.batch_size, write_grads=True, write_images=True))
+    def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""           
-        print("Training...")              
-        for i in range(0, self.config.n_epochs):
-            if self.config.multi_gpu:
-                if self.config.use_generators:
-                    # Fit a parallel model using generators
-                    self.history = self.parallel_model.fit_generator(generator = self.training_sequence,
-                                                                     epochs = i+1,
-                                                                     callbacks = self.callbacks,
-                                                                     validation_data = self.validation_sequence,                       
-                                                                     class_weight = self.config.class_weight,
-                                                                     max_queue_size = self.config.batch_queue,
-                                                                     workers = self.config.batch_loading_workers,
-                                                                     use_multiprocessing = True,
-                                                                     initial_epoch = i)
-                else:
-                    # Fit a parallel model using data in memory
-                    self.history = self.parallel_model.fit(x = self.x_train,
-                                                           y = self.y_train,
-                                                           batch_size = self.config.batch_size,
-                                                           epochs = i+1,
-                                                           callbacks = self.callbacks,
-                                                           validation_data = (self.x_val, self.y_val),
-                                                           shuffle = True,
-                                                           class_weight = self.config.class_weight,
-                                                           initial_epoch = i)
+        print("Training...")
+        if self.config.multi_gpu:
+            if self.config.use_generators:
+                # Fit a parallel model using generators
+                self.history = self.parallel_model.fit_generator(generator = self.training_sequence,
+                                                                 epochs = self.config.n_epochs,
+                                                                 callbacks = self.callbacks,
+                                                                 validation_data = self.validation_sequence,                       
+                                                                 class_weight = self.config.class_weight,
+                                                                 max_queue_size = self.config.batch_queue,
+                                                                 workers = self.config.batch_loading_workers,
+                                                                 use_multiprocessing = True,
+                                                                 initial_epoch = self.config.epoch_start)
             else:
-                if self.config.use_generators: 
-                    # Fit a model using generators
-                    self.history = self.model.fit_generator(generator = self.training_sequence,
-                                                            epochs = i+1,
-                                                            callbacks = self.callbacks,
-                                                            validation_data = self.validation_sequence,                       
-                                                            class_weight = self.config.class_weight,
-                                                            max_queue_size = self.config.batch_queue,
-                                                            workers = self.config.batch_loading_workers,
-                                                            use_multiprocessing = True,
-                                                            initial_epoch = i)
-                else:
-                    # Fit a model using data in memory
-                    self.history = self.model.fit(x = self.x_train,
-                                                  y = self.y_train,
-                                                  batch_size = self.config.batch_size,
-                                                  epochs = i+1,
-                                                  callbacks = self.callbacks,
-                                                  validation_data = (self.x_val, self.y_val),
-                                                  shuffle = True,
-                                                  class_weight = self.config.class_weight,
-                                                  initial_epoch = i)
+                # Fit a parallel model using data in memory
+                self.history = self.parallel_model.fit(x = self.x_train,
+                                                       y = self.y_train,
+                                                       batch_size = self.config.batch_size,
+                                                       epochs = self.config.n_epochs,
+                                                       callbacks = self.callbacks,
+                                                       validation_data = (self.x_val, self.y_val),
+                                                       shuffle = True,
+                                                       class_weight = self.config.class_weight,
+                                                       initial_epoch = self.config.epoch_start)
+        else:
+            if self.config.use_generators: 
+                # Fit a model using generators
+                self.history = self.model.fit_generator(generator = self.training_sequence,
+                                                        epochs = self.config.n_epochs,
+                                                        callbacks = self.callbacks,
+                                                        validation_data = self.validation_sequence,                       
+                                                        class_weight = self.config.class_weight,
+                                                        max_queue_size = self.config.batch_queue,
+                                                        workers = self.config.batch_loading_workers,
+                                                        use_multiprocessing = True,
+                                                        initial_epoch = self.config.epoch_start)
+            else:
+                # Fit a model using data in memory
+                self.history = self.model.fit(x = self.x_train,
+                                              y = self.y_train,
+                                              batch_size = self.config.batch_size,
+                                              epochs = self.config.n_epochs,
+                                              callbacks = self.callbacks,
+                                              validation_data = (self.x_val, self.y_val),
+                                              shuffle = True,
+                                              class_weight = self.config.class_weight,
+                                              initial_epoch = self.config.epoch_start)
                 
 if __name__ == "__main__":
     main(sys.argv)
