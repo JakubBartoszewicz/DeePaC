@@ -27,6 +27,7 @@ rn.seed(seed)
 import sys
 import argparse
 import configparser
+import errno
 from contextlib import redirect_stdout
 from math import isclose
 
@@ -173,9 +174,10 @@ class PaPrConfig:
             self.optimizer = self.optimization_method
         # If needed, log the memory usage
         self.log_memory = True if config['DataLoad'].getboolean('MemUsageLog') else False
+        self.log_superpath = config['Training']['LogPath']
+        self.log_dir = self.log_superpath + "/{runname}-logs".format(runname=self.runname)
         self.use_tb = config['Training'].getboolean('Use_TB')
         if self.use_tb:
-            self.tb_path = config['Training']['TBPath']
             self.tb_hist_freq = config['Training'].getint('TBHistFreq')
     
 class PaPrNet:
@@ -188,6 +190,11 @@ class PaPrNet:
     def __init__(self, config):
         """PaPrNet constructor and config parsing"""
         self.config = PaPrConfig(config)
+        try:
+            os.makedirs(self.config.log_dir)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
         self.__loadData()
         self.__setCallbacks()
         self.__buildSeqModel()
@@ -219,7 +226,7 @@ class PaPrNet:
             self.x_val = np.load(self.config.x_val_path)
             self.y_val = np.load(self.config.y_val_path)
             self.validation_data = (self.x_val, self.y_val)
-            self.length_val = self.x_val.shape
+            self.length_val = self.x_val.shape[0]
         
     def __buildSeqModel(self):
         """Build the network"""
@@ -251,7 +258,7 @@ class PaPrNet:
                 if self.config.recurrent_bn:
                     self.model.add(BatchNormalization())
                 # Add dropout
-                self.model.add(Dropout(self.config.recurrent_drop_out))
+                self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
                 # First recurrent layer already added
                 current_recurrent = 1
             else:
@@ -269,7 +276,7 @@ class PaPrNet:
                     raise ValueError('Unknown pooling method')
                 # Add dropout (drops whole features)
                 if not isclose(self.config.conv_drop_out, 0.0): 
-                   self.model.add(Dropout(self.config.conv_drop_out))
+                   self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
                 # Add layer
                 self.model.add(Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
                 # Add batch norm
@@ -299,7 +306,7 @@ class PaPrNet:
                     raise ValueError('Unknown pooling method')
                 # Add dropout (drops whole features)
                 if not isclose(self.config.conv_drop_out, 0.0):
-                    self.model.add(Dropout(self.config.conv_drop_out))
+                    self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
             
             # Recurrent layers
             for i in range(current_recurrent, self.config.n_recurrent):
@@ -315,7 +322,7 @@ class PaPrNet:
                 if self.config.recurrent_bn:
                     self.model.add(BatchNormalization())
                 # Add dropout
-                self.model.add(Dropout(self.config.recurrent_drop_out))
+                self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
             
             # Dense layers
             for i in range(0, self.config.n_dense):
@@ -323,7 +330,7 @@ class PaPrNet:
                 if self.config.dense_bn:
                     self.model.add(BatchNormalization())
                 self.model.add(Activation(self.config.dense_activation))
-                self.model.add(Dropout(self.config.dense_drop_out))
+                self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
             
             # Output layer for binary classification
             self.model.add(Dense(1, kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer))
@@ -344,27 +351,27 @@ class PaPrNet:
                                metrics=['accuracy'])
         
         # Print summary and plot model
-        with open("summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
+        with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
             with redirect_stdout(f):
                 self.model.summary()
-        plot_model(self.model, to_file = "plot-{runname}.png".format(runname=self.config.runname), show_shapes = True)    
+        plot_model(self.model, to_file = self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname), show_shapes = True)    
     
     def __setCallbacks(self):
         """Set callbacks to use during training"""
         self.callbacks=[]
         # Add CSV callback with or without memory log
         if self.config.log_memory:
-            self.callbacks.append(CSVMemoryLogger("training-{runname}.csv".format(runname=sel.self.config.runname), append=True))
+            self.callbacks.append(CSVMemoryLogger(self.config.log_dir + "/training-{runname}.csv".format(runname=sel.self.config.runname), append=True))
         else:
-            self.callbacks.append(CSVLogger("training-{runname}.csv".format(runname=self.config.runname), append=True))
+            self.callbacks.append(CSVLogger(self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname), append=True))
         # Save model after every epoch
-        checkpoint_name = "nn-{runname}-".format(runname=self.config.runname)
+        checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
         self.callbacks.append(ModelCheckpoint(filepath = checkpoint_name + "e{epoch:03d}.h5"))
         # Set early stopping
         self.callbacks.append(EarlyStopping(monitor="val_acc", patience = self.config.patience))
         # Set TensorBoard
         if self.config.use_tb:
-            self.callbacks.append(TensorBoard(log_dir=self.config.tb_path + "/{runname}-logs".format(runname=self.config.runname), histogram_freq=self.config.tb_hist_freq, batch_size = self.config.batch_size, write_grads=True, write_images=True))
+            self.callbacks.append(TensorBoard(log_dir=self.config.log_superpath + "/{runname}-tb".format(runname=self.config.runname), histogram_freq=self.config.tb_hist_freq, batch_size = self.config.batch_size, write_grads=True, write_images=True))
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""           
         print("Training...")
