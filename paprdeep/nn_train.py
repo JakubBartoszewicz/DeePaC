@@ -158,8 +158,8 @@ class PaPrConfig:
         
         ### Training Config ###
         # Set the number op epochs, batch size and the optimizer
-        self.epoch_start = config['Training'].getint('EpochStart')
-        self.epoch_end = config['Training'].getint('EpochEnd')
+        self.epoch_start = config['Training'].getint('EpochStart') - 1
+        self.epoch_end = config['Training'].getint('EpochEnd') - 1
         self.batch_size = config['Training'].getint('BatchSize')
 
         self.patience = config['Training'].getint('Patience')        
@@ -225,6 +225,10 @@ class PaPrNet:
             # ... or load all the data to memory
             self.x_val = np.load(self.config.x_val_path)
             self.y_val = np.load(self.config.y_val_path)
+            self.val_indices = np.arange(len(self.y_val))
+            np.random.shuffle(self.val_indices)
+            self.x_val = self.x_val[self.val_indices]
+            self.y_val = self.y_val[self.val_indices]
             self.validation_data = (self.x_val, self.y_val)
             self.length_val = self.x_val.shape[0]
         
