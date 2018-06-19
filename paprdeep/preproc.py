@@ -38,7 +38,8 @@ def main(argv):
 
 def tokenize(seq, tokenizer):
     """Tokenize and delete the out-of-vocab token (N) column."""
-    matrix = tokenizer.texts_to_matrix(seq)[:,1:]
+    # Cast to float32 instead of deafult float64 to save memory
+    matrix = tokenizer.texts_to_matrix(seq).astype('float32')[:,1:]
     return matrix
 
 def read_fasta(in_handle):

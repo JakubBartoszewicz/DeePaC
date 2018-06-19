@@ -29,7 +29,6 @@ import argparse
 import configparser
 import errno
 from contextlib import redirect_stdout
-from math import isclose
 
 from Bio import SeqIO
 from keras.models import Sequential
@@ -53,7 +52,10 @@ def main(argv):
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
-    paprnet = PaPrNet(config)
+    paprconfig = PaPrConfig(config)
+    if K.backend() == 'tensorflow':
+        paprconfig.setTFSession()
+    paprnet = PaPrNet(paprconfig)
     paprnet.train()
 
 class PaPrConfig:
@@ -68,29 +70,11 @@ class PaPrConfig:
         ### Devices Config ###    
         # Get the number of available GPUs
         self.n_gpus = config['Devices'].getint('N_GPUs')
+        self.n_cpus = config['Devices'].getint('N_CPUs')
         self.multi_gpu = True if self.n_gpus > 1 else False
         self.model_build_device = '/cpu:0' if self.multi_gpu else '/device:GPU:0'
-
-        # If no GPUs, use CPUs
-        if self.n_gpus == 0:
-            self.n_cpus = config['Devices'].getint('N_CPUs')
-            # Use as many intra_threads as the CPUs available
-            intra_threads = self.n_cpus
-            # Same for inter_threads
-            inter_threads = intra_threads
-
-            tf_config = tf.ConfigProto(intra_op_parallelism_threads=intra_threads, inter_op_parallelism_threads=inter_threads, \
-                                    allow_soft_placement=True, device_count = {'CPU': n_cpus})
-            session = tf.Session(config=tf_config)
-            K.set_session(session)
-            self.model_build_device = '/cpu:0'
-        elif config['Devices'].getboolean('AllowGrowth'):
-            # If using GPUs, allow for GPU memory growth, instead of reserving it all
-            tf_config = tf.ConfigProto()
-            tf_config.gpu_options.allow_growth = True
-            session = tf.Session(config=tf_config)
-            K.set_session(session)
-            
+        self.allow_growth = config['Devices'].getboolean('AllowGrowth')  
+ 
         ### Data Loading Config ###
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
         self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
@@ -173,13 +157,35 @@ class PaPrConfig:
             warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
             self.optimizer = self.optimization_method
         # If needed, log the memory usage
-        self.log_memory = True if config['DataLoad'].getboolean('MemUsageLog') else False
+        self.log_memory = config['Training'].getboolean('MemUsageLog')
+        self.summaries = config['Training'].getboolean('Summaries')
         self.log_superpath = config['Training']['LogPath']
         self.log_dir = self.log_superpath + "/{runname}-logs".format(runname=self.runname)
         self.use_tb = config['Training'].getboolean('Use_TB')
         if self.use_tb:
             self.tb_hist_freq = config['Training'].getint('TBHistFreq')
-    
+        
+    def setTFSession(self):
+        """Set TF session"""
+        # If no GPUs, use CPUs
+        if self.n_gpus == 0:            
+            # Use as many intra_threads as the CPUs available
+            intra_threads = self.n_cpus
+            # Same for inter_threads
+            inter_threads = intra_threads
+
+            tf_config = tf.ConfigProto(intra_op_parallelism_threads=intra_threads, inter_op_parallelism_threads=inter_threads, \
+                                    allow_soft_placement=True, device_count = {'CPU': self.n_cpus})
+            session = tf.Session(config=tf_config)
+            K.set_session(session)
+            self.model_build_device = '/cpu:0'
+        elif self.allow_growth:
+            # If using GPUs, allow for GPU memory growth, instead of reserving it all
+            tf_config = tf.ConfigProto()
+            tf_config.gpu_options.allow_growth = True
+            session = tf.Session(config=tf_config)
+            K.set_session(session)
+
 class PaPrNet:
     
     """
@@ -189,7 +195,7 @@ class PaPrNet:
     
     def __init__(self, config):
         """PaPrNet constructor and config parsing"""
-        self.config = PaPrConfig(config)
+        self.config = config
         try:
             os.makedirs(self.config.log_dir)
         except OSError as e:
@@ -197,7 +203,14 @@ class PaPrNet:
                 raise
         self.__loadData()
         self.__setCallbacks()
-        self.__buildSeqModel()
+        if K.backend() == 'tensorflow':
+            # Build the model using the CPU or GPU
+            with tf.device(self.config.model_build_device):
+                self.__buildSeqModel()
+        elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
+            raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
+        else:
+            self.__buildSeqModel()
         self.__compileSeqModel()
         
     def __loadData(self):
@@ -235,111 +248,109 @@ class PaPrNet:
     def __buildSeqModel(self):
         """Build the network"""
         print("Building model...")
-        # Build the model using the CPU or GPU
-        with tf.device(self.config.model_build_device):
-            # Initailize the model
-            self.model = Sequential()
-            # Number of added recurrent layers
-            current_recurrent = 0
-            # The last recurrent layer should return the output for the last unit only. Previous layers must return output for all units
-            return_sequences = True if self.config.n_recurrent > 1 else False
-            # First convolutional/recurrent layer
-            if self.config.n_conv > 0:
-                # Convolutional layers will always be placed before recurrent ones
-                self.model.add(Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
-                if self.config.conv_bn:
-                    # Add batch norm
-                    self.model.add(BatchNormalization())
-                # Add activation
-                self.model.add(Activation(self.config.conv_activation))
-            elif self.config.n_recurrent > 0:
-                # If no convolutional layers, the first layer is recurrent. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-                if self.config.n_gpus > 0:
-                    self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
-                else:
-                    self.model.add(Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+        # Initailize the model
+        self.model = Sequential()
+        # Number of added recurrent layers
+        current_recurrent = 0
+        # The last recurrent layer should return the output for the last unit only. Previous layers must return output for all units
+        return_sequences = True if self.config.n_recurrent > 1 else False
+        # First convolutional/recurrent layer
+        if self.config.n_conv > 0:
+            # Convolutional layers will always be placed before recurrent ones
+            self.model.add(Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',  kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
+            if self.config.conv_bn:
                 # Add batch norm
-                if self.config.recurrent_bn:
-                    self.model.add(BatchNormalization())
-                # Add dropout
-                self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
-                # First recurrent layer already added
-                current_recurrent = 1
+                self.model.add(BatchNormalization())
+            # Add activation
+            self.model.add(Activation(self.config.conv_activation))
+        elif self.config.n_recurrent > 0:
+            # If no convolutional layers, the first layer is recurrent. CuDNNLSTM requires a GPU and tensorflow with cuDNN
+            if self.config.n_gpus > 0:
+                self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
             else:
-                raise ValueError('Input layer should be convolutional or recurrent')
-                
-            # For next convolutional layers
-            for i in range(1,self.config.n_conv):
-                # Add pooling first
-                if self.config.conv_pooling == 'max':
-                    self.model.add(MaxPooling1D())
-                elif self.config.conv_pooling == 'average':
-                    self.model.add(AveragePooling1D())
-                elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
-                    # Skip pooling if it should be applied to the last conv layer or skipped altogether. Throw a ValueError if the pooling method is unrecognized.
-                    raise ValueError('Unknown pooling method')
-                # Add dropout (drops whole features)
-                if not isclose(self.config.conv_drop_out, 0.0): 
-                   self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
-                # Add layer
-                self.model.add(Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
-                # Add batch norm
-                if self.config.conv_bn:
-                    self.model.add(BatchNormalization())
-                # Add activation
-                self.model.add(Activation(self.config.conv_activation))
-                
-            # Pooling layer
-            if self.config.n_conv > 0:
-                if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
-                    if self.config.n_recurrent == 0:
-                        # If no recurrent layers, use global pooling
-                        self.model.add(GlobalMaxPooling1D())
-                    else:
-                        # for recurrent layers, use normal pooling
-                        self.model.add(MaxPooling1D())
-                elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
-                    if self.config.n_recurrent == 0:
-                        # if no recurrent layers, use global pooling
-                        self.model.add(GlobalAveragePooling1D())
-                    else:
-                        # for recurrent layers, use normal pooling
-                        self.model.add(AveragePooling1D())
-                elif self.config.conv_pooling != 'none':
-                    # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized (should be thrown above)
-                    raise ValueError('Unknown pooling method')
-                # Add dropout (drops whole features)
-                if not isclose(self.config.conv_drop_out, 0.0):
-                    self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
+                self.model.add(Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+            # Add batch norm
+            if self.config.recurrent_bn:
+                self.model.add(BatchNormalization())
+            # Add dropout
+            self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
+            # First recurrent layer already added
+            current_recurrent = 1
+        else:
+            raise ValueError('Input layer should be convolutional or recurrent')
             
-            # Recurrent layers
-            for i in range(current_recurrent, self.config.n_recurrent):
-                if i == self.config.n_recurrent - 1:
-                    # In the last layer, return output only for the last unit
-                    return_sequences = False
-                # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-                if self.config.n_gpus > 0:
-                    self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
+        # For next convolutional layers
+        for i in range(1,self.config.n_conv):
+            # Add pooling first
+            if self.config.conv_pooling == 'max':
+                self.model.add(MaxPooling1D())
+            elif self.config.conv_pooling == 'average':
+                self.model.add(AveragePooling1D())
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+                # Skip pooling if it should be applied to the last conv layer or skipped altogether. Throw a ValueError if the pooling method is unrecognized.
+                raise ValueError('Unknown pooling method')
+            # Add dropout (drops whole features)
+            if not np.isclose(self.config.conv_drop_out, 0.0): 
+               self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
+            # Add layer
+            self.model.add(Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
+            # Add batch norm
+            if self.config.conv_bn:
+                self.model.add(BatchNormalization())
+            # Add activation
+            self.model.add(Activation(self.config.conv_activation))
+            
+        # Pooling layer
+        if self.config.n_conv > 0:
+            if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
+                if self.config.n_recurrent == 0:
+                    # If no recurrent layers, use global pooling
+                    self.model.add(GlobalMaxPooling1D())
                 else:
-                    self.model.add(Bidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
-                # Add batch norm
-                if self.config.recurrent_bn:
-                    self.model.add(BatchNormalization())
-                # Add dropout
-                self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
+                    # for recurrent layers, use normal pooling
+                    self.model.add(MaxPooling1D())
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+                if self.config.n_recurrent == 0:
+                    # if no recurrent layers, use global pooling
+                    self.model.add(GlobalAveragePooling1D())
+                else:
+                    # for recurrent layers, use normal pooling
+                    self.model.add(AveragePooling1D())
+            elif self.config.conv_pooling != 'none':
+                # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized (should be thrown above)
+                raise ValueError('Unknown pooling method')
+            # Add dropout (drops whole features)
+            if not np.isclose(self.config.conv_drop_out, 0.0):
+                self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
+        
+        # Recurrent layers
+        for i in range(current_recurrent, self.config.n_recurrent):
+            if i == self.config.n_recurrent - 1:
+                # In the last layer, return output only for the last unit
+                return_sequences = False
+            # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
+            if self.config.n_gpus > 0:
+                self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
+            else:
+                self.model.add(Bidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
+            # Add batch norm
+            if self.config.recurrent_bn:
+                self.model.add(BatchNormalization())
+            # Add dropout
+            self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
             
-            # Dense layers
-            for i in range(0, self.config.n_dense):
-                self.model.add(Dense(self.config.dense_units[i], kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer))
-                if self.config.dense_bn:
-                    self.model.add(BatchNormalization())
-                self.model.add(Activation(self.config.dense_activation))
-                self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
-            
-            # Output layer for binary classification
-            self.model.add(Dense(1, kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer))
-            self.model.add(Activation('sigmoid'))
-    
+        # Dense layers
+        for i in range(0, self.config.n_dense):
+            self.model.add(Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer))
+            if self.config.dense_bn:
+                self.model.add(BatchNormalization())
+            self.model.add(Activation(self.config.dense_activation))
+            self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
+        
+        # Output layer for binary classification
+        self.model.add(Dense(1,  kernel_regularizer=self.config.regularizer))
+        self.model.add(Activation('sigmoid'))
+ 
     def __compileSeqModel(self):
         """Compile model and save model summaries"""
         print("Compiling...") 
@@ -355,17 +366,18 @@ class PaPrNet:
                                metrics=['accuracy'])
         
         # Print summary and plot model
-        with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
-            with redirect_stdout(f):
-                self.model.summary()
-        plot_model(self.model, to_file = self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname), show_shapes = True)    
+        if (self.config.summaries):
+            with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
+                with redirect_stdout(f):
+                    self.model.summary()
+            plot_model(self.model, to_file = self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname), show_shapes = True)    
     
     def __setCallbacks(self):
         """Set callbacks to use during training"""
         self.callbacks=[]
         # Add CSV callback with or without memory log
         if self.config.log_memory:
-            self.callbacks.append(CSVMemoryLogger(self.config.log_dir + "/training-{runname}.csv".format(runname=sel.self.config.runname), append=True))
+            self.callbacks.append(CSVMemoryLogger(self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname), append=True))
         else:
             self.callbacks.append(CSVLogger(self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname), append=True))
         # Save model after every epoch
@@ -376,6 +388,7 @@ class PaPrNet:
         # Set TensorBoard
         if self.config.use_tb:
             self.callbacks.append(TensorBoard(log_dir=self.config.log_superpath + "/{runname}-tb".format(runname=self.config.runname), histogram_freq=self.config.tb_hist_freq, batch_size = self.config.batch_size, write_grads=True, write_images=True))
+    
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""           
         print("Training...")
