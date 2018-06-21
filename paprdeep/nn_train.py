@@ -32,16 +32,16 @@ from contextlib import redirect_stdout
 
 from Bio import SeqIO
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation
+from keras.layers import Dense, DenseAfterRevcompWeightedSum, Dropout, Activation
 from keras.layers import CuDNNLSTM, LSTM, Bidirectional
-from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+from keras.layers import Conv1D, RevCompConv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 from keras.preprocessing.text import Tokenizer
 import keras.backend as K
 from keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.utils import plot_model
 from keras import regularizers
 from keras.optimizers import Adam
-from keras.layers.normalization import BatchNormalization
+from keras.layers.normalization import BatchNormalization, RevCompConv1DBatchNorm
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
@@ -106,6 +106,7 @@ class PaPrConfig:
             raise ValueError('Unknown initializer')
         
         # Define the network architecture
+        self.use_rc_conv = config['Architecture'].getboolean('Use_RC_Conv')
         self.n_conv = config['Architecture'].getint('N_Conv')
         self.n_recurrent = config['Architecture'].getint('N_Recurrent')
         self.n_dense = config['Architecture'].getint('N_Dense')
@@ -247,8 +248,11 @@ class PaPrNet:
         
     def __buildSeqModel(self):
         """Build the network"""
-        print("Building model...")
-        # Initailize the model
+        if not self.config.use_rc_conv:
+            print("Building model...")
+        else:
+            print("Building RC-model...")
+        # Initialize the model
         self.model = Sequential()
         # Number of added recurrent layers
         current_recurrent = 0
@@ -257,10 +261,21 @@ class PaPrNet:
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
-            self.model.add(Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',  kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
+            # Standard convolutional layer
+            if not self.config.use_rc_conv:
+                self.model.add(Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',  kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
+            # Reverse-complement convolutional layer
+            else:
+                self.model.add(RevCompConv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',  kernel_regularizer=self.config.regularizer, input_shape=(self.config.seq_length, self.config.seq_dim)))
             if self.config.conv_bn:
                 # Add batch norm
-                self.model.add(BatchNormalization())
+                # Standard batch normalization layer
+                if not self.config.use_rc_conv:
+                    self.model.add(BatchNormalization())
+                # Reverse-complemented batch normalization layer
+                else:
+                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
+                    self.model.add(RevCompConv1DBatchNorm())
             # Add activation
             self.model.add(Activation(self.config.conv_activation))
         elif self.config.n_recurrent > 0:
@@ -271,7 +286,13 @@ class PaPrNet:
                 self.model.add(Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
             # Add batch norm
             if self.config.recurrent_bn:
-                self.model.add(BatchNormalization())
+                # standard batch normalization layer
+                if not self.config.use_rc_conv:
+                    self.model.add(BatchNormalization())
+                # reverse-complemented batch normalization layer
+                else:
+                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
+                    self.model.add(RevCompConv1DBatchNorm())
             # Add dropout
             self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
             # First recurrent layer already added
@@ -291,12 +312,23 @@ class PaPrNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_drop_out, 0.0): 
-               self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
+                self.model.add(Dropout(self.config.conv_drop_out, seed = self.config.seed))
             # Add layer
-            self.model.add(Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
+            # Standard convolutional layer
+            if not self.config.use_rc_conv:
+                self.model.add(Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
+            # Reverse-complement convolutional layer
+            else:
+                self.model.add(RevCompConv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same', kernel_initializer = self.config.initializer, kernel_regularizer=self.config.regularizer))
             # Add batch norm
             if self.config.conv_bn:
-                self.model.add(BatchNormalization())
+                # Standard batch normalization layer
+                if not self.config.use_rc_conv:
+                    self.model.add(BatchNormalization())
+                # Reverse-complemented batch normalization layer
+                else:
+                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
+                    self.model.add(RevCompConv1DBatchNorm())
             # Add activation
             self.model.add(Activation(self.config.conv_activation))
             
@@ -335,15 +367,30 @@ class PaPrNet:
                 self.model.add(Bidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
             # Add batch norm
             if self.config.recurrent_bn:
-                self.model.add(BatchNormalization())
+                # Standard batch normalization layer
+                if not self.config.use_rc_conv:
+                    self.model.add(BatchNormalization())
+                # Reverse-complemented batch normalization layer
+                else:
+                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
+                    self.model.add(RevCompConv1DBatchNorm())
             # Add dropout
             self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
             
         # Dense layers
         for i in range(0, self.config.n_dense):
-            self.model.add(Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer))
+            if self.config.use_rc_conv and i == 0:
+                self.model.add(DenseAfterRevcompWeightedSum(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer))
+            else:
+                self.model.add(Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer))
             if self.config.dense_bn:
-                self.model.add(BatchNormalization())
+                # Standard batch normalization layer
+                if not self.config.use_rc_conv:
+                    self.model.add(BatchNormalization())
+                # Reverse-complemented batch normalization layer
+                else:
+                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
+                    self.model.add(RevCompConv1DBatchNorm())
             self.model.add(Activation(self.config.dense_activation))
             self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
         
