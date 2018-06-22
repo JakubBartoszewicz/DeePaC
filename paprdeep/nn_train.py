@@ -32,17 +32,18 @@ from contextlib import redirect_stdout
 
 from Bio import SeqIO
 from keras.models import Sequential
-from keras.layers import Dense, DenseAfterRevcompWeightedSum, Dropout, Activation
+from keras.layers import Dense, Dropout, Activation
 from keras.layers import CuDNNLSTM, LSTM, Bidirectional
-from keras.layers import Conv1D, RevCompConv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 from keras.preprocessing.text import Tokenizer
 import keras.backend as K
 from keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.utils import plot_model
 from keras import regularizers
 from keras.optimizers import Adam
-from keras.layers.normalization import BatchNormalization, RevCompConv1DBatchNorm
+from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
+from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 def main(argv):
