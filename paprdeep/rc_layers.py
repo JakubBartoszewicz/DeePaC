@@ -104,7 +104,7 @@ class RevCompConv1D(Conv1D):
 
     def call(self, inputs):
         #create a rev-comped W. The last axis is the output channel axis.
-        #Rev comp is along both the length (dim 0) and input channel (dim 2)
+        #Rev comp is along both the length (dim 0) and input channel (dim 1)
         #axes; that is the reason for ::-1, ::-1 in the first and third dims.
         #The rev-comp of channel at index i should be at index -i
         #This is the reason for the ::-1 in the last dim.
