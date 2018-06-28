@@ -44,6 +44,7 @@ from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
 from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
+from rc_wrappers import RevCompBidirectional
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 def main(argv):
@@ -281,10 +282,17 @@ class PaPrNet:
             self.model.add(Activation(self.config.conv_activation))
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            if self.config.n_gpus > 0:
-                self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
-            else:
-                self.model.add(Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+            if not self.config.use_rc_conv:
+                if self.config.n_gpus > 0:
+                    self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+
+                else:
+                    self.model.add(Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+            else: 
+                if self.config.n_gpus > 0:
+                    self.model.add(RevCompBidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+                else:
+                    self.model.add(RevCompBidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
             # Add batch norm
             if self.config.recurrent_bn:
                 # standard batch normalization layer
@@ -362,10 +370,17 @@ class PaPrNet:
                 # In the last layer, return output only for the last unit
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            if self.config.n_gpus > 0:
-                self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
-            else:
-                self.model.add(Bidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences)))
+            if not self.config.use_rc_conv:
+                if self.config.n_gpus > 0:
+                    self.model.add(Bidirectional(CuDNNLSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+                else:
+                    self.model.add(Bidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+            else: 
+                if self.config.n_gpus > 0:
+                    self.model.add(RevCompBidirectional(CuDNNLSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
+
+                else:
+                    self.model.add(RevCompBidirectional(LSTM(self.config.recurrent_units[i], kernel_initializer=self.config.initializer, recurrent_initializer=orthogonal(self.config.seed), kernel_regularizer=self.config.regularizer, return_sequences = return_sequences), input_shape=(self.config.seq_length, self.config.seq_dim)))
             # Add batch norm
             if self.config.recurrent_bn:
                 # Standard batch normalization layer
