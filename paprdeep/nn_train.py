@@ -396,7 +396,10 @@ class PaPrNet:
             self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
         
         # Output layer for binary classification
-        self.model.add(Dense(1,  kernel_regularizer=self.config.regularizer))
+        if self.config.use_rc_conv and self.config.n_dense == 0:
+            self.model.add(DenseAfterRevcompWeightedSum(1,  kernel_regularizer=self.config.regularizer))
+        else:
+            self.model.add(Dense(1,  kernel_regularizer=self.config.regularizer))
         self.model.add(Activation('sigmoid'))
  
     def __compileSeqModel(self):
