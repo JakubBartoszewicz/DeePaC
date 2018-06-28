@@ -3,7 +3,10 @@ from keras.layers.normalization import *
 from keras.layers.core import *
 
 class RevCompConv1D(Conv1D):
-    '''Like Convolution1D, except the reverse-complement filters with tied
+    '''
+    Based on implementation from https://github.com/kundajelab/keras/tree/keras_1
+    Now compatible with Keras 2 models.
+    Like Convolution1D, except the reverse-complement filters with tied
     weights are added in the channel dimension. The reverse complement
     of the channel at index i is at index -i.
 
@@ -121,7 +124,10 @@ class RevCompConv1D(Conv1D):
 
 #Not yet fully tested!!!
 class RevCompConv1DBatchNorm(Layer):
-    '''Batch norm that shares weights over reverse complement channels
+    '''
+    Based on implementation from https://github.com/kundajelab/keras/tree/keras_1
+    Now compatible with Keras 2 models.
+    Batch norm that shares weights over reverse complement channels
     '''
     def __init__(self, epsilon=1e-3, axis=-1, momentum=0.99, center=True, scale=True,
                  beta_initializer='zeros', gamma_initializer='ones', moving_mean_initializer='zeros', moving_variance_initializer='ones',
@@ -272,7 +278,10 @@ class RevCompConv1DBatchNorm(Layer):
 		
 
 class DenseAfterRevcompWeightedSum(Dense):
-
+    '''  
+    Based on implementation from https://github.com/kundajelab/keras/tree/keras_1
+    Now compatible with Keras 2 models.
+    '''
     def build(self, input_shape):
         assert len(input_shape) == 2
         input_dim = input_shape[-1]
