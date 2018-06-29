@@ -1,6 +1,6 @@
 from deeplift.conversion.kerasapi_conversion import *
 from deeplift.util import *
-from deeplift_with_filtering import SequentialModelFilter, Conv1DFilter
+from deeplift_with_filtering import SequentialModelFilter, Conv1DFilter, GlobalAvgPool1D
 
 
 def convert_model_from_saved_files(
@@ -163,6 +163,7 @@ def layer_name_to_conversion_function(layer_name):
         'maxpooling1d': maxpool1d_conversion,
         'globalmaxpooling1d': globalmaxpooling1d_conversion,
         'averagepooling1d': avgpool1d_conversion,
+        'globalaveragepooling1d': globalavgpooling1d_conversion,
 
         'conv2d': conv2d_conversion,
         'maxpooling2d': maxpool2d_conversion,
@@ -185,6 +186,12 @@ def layer_name_to_conversion_function(layer_name):
     # lowercase to create resistance to capitalization changes
     # was a problem with previous Keras versions
     return name_dict[layer_name.lower()]
+
+
+def globalavgpooling1d_conversion(config, name, verbose, **kwargs):
+    return [GlobalAvgPool1D(
+             name=name,
+             verbose=verbose)]
 
 
 def conv1dfilter_conversion(config,
