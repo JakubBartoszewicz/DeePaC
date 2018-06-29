@@ -122,56 +122,63 @@ class RevCompConv1D(Conv1D):
         return output
 
 
-#Not yet fully tested!!!
 class RevCompConv1DBatchNorm(Layer):
     '''
     Based on implementation from https://github.com/kundajelab/keras/tree/keras_1
     Now compatible with Keras 2 models.
     Batch norm that shares weights over reverse complement channels
     '''
-    def __init__(self, epsilon=1e-3, axis=-1, momentum=0.99, center=True, scale=True,
-                 beta_initializer='zeros', gamma_initializer='ones', moving_mean_initializer='zeros', moving_variance_initializer='ones',
-                 gamma_regularizer=None, beta_regularizer=None, beta_constraint=None, gamma_constraint=None, **kwargs):
+    def __init__(self,
+                 axis=-1,
+                 momentum=0.99,
+                 epsilon=1e-3,
+                 center=True,
+                 scale=True,
+                 beta_initializer='zeros',
+                 gamma_initializer='ones',
+                 moving_mean_initializer='zeros',
+                 moving_variance_initializer='ones',
+                 beta_regularizer=None,
+                 gamma_regularizer=None,
+                 beta_constraint=None,
+                 gamma_constraint=None,
+                 **kwargs):
+        super(RevCompConv1DBatchNorm, self).__init__(**kwargs)
         self.supports_masking = True
-        self.beta_initializer = initializers.get(beta_initializer)
-        self.gamma_initializer = initializers.get(gamma_initializer)
-        self.epsilon = epsilon
-        self.center = center
-        self.scale = scale
         assert axis==-1 or axis==2, "Intended for Conv1D"
         self.axis = axis
         self.momentum = momentum
+        self.epsilon = epsilon
+        self.center = center
+        self.scale = scale
+        self.beta_initializer = initializers.get(beta_initializer)
+        self.gamma_initializer = initializers.get(gamma_initializer)
         self.moving_mean_initializer = initializers.get(moving_mean_initializer)
         self.moving_variance_initializer = initializers.get(moving_variance_initializer)
-        self.gamma_regularizer = regularizers.get(gamma_regularizer)
         self.beta_regularizer = regularizers.get(beta_regularizer)
+        self.gamma_regularizer = regularizers.get(gamma_regularizer)
         self.beta_constraint = constraints.get(beta_constraint)
         self.gamma_constraint = constraints.get(gamma_constraint)
-        #if self.mode == 0:
-        #    self.uses_learning_phase = True
-        self.uses_learning_phase = True
-        super(RevCompConv1DBatchNorm, self).__init__(**kwargs)
-
 
     def build(self, input_shape):
-        self.input_spec = [InputSpec(shape=input_shape)]
         self.num_input_chan = input_shape[self.axis]
         if self.num_input_chan is None:
             raise ValueError('Axis ' + str(self.axis) + ' of '
                              'input tensor should have a defined dimension '
                              'but the layer received an input with shape ' +
                              str(input_shape) + '.')
-
         self.input_len = input_shape[1]
         assert len(input_shape)==3,\
          "Implementation done with RevCompConv1D input in mind"
         assert self.input_len is not None,\
          "not implemented for undefined input len"
         assert self.num_input_chan%2 == 0, "should be even for revcomp input"
+        self.input_spec = InputSpec(ndim=3,
+                                    axes={self.axis: self.num_input_chan})
         shape = (int(self.num_input_chan/2),)
 
         if self.scale:
-            self.gamma = self.add_weight(shape,
+            self.gamma = self.add_weight(shape=shape,
                                          name='gamma',
                                          initializer=self.gamma_initializer,
                                          regularizer=self.gamma_regularizer,
@@ -179,76 +186,104 @@ class RevCompConv1DBatchNorm(Layer):
         else:
             self.gamma = None
         if self.center:
-            self.beta = self.add_weight(shape,
+            self.beta = self.add_weight(shape=shape,
                                         name='beta',
                                         initializer=self.beta_initializer,
                                         regularizer=self.beta_regularizer,
                                         constraint=self.beta_constraint)
         else:
             self.beta = None
-
         self.moving_mean = self.add_weight(
-            shape,
+            shape=shape,
             name='moving_mean',
             initializer=self.moving_mean_initializer,
             trainable=False)
         self.moving_variance = self.add_weight(
-            shape,
+            shape=shape,
             name='moving_variance',
             initializer=self.moving_variance_initializer,
             trainable=False)
         self.built = True
 
     def call(self, inputs, training=None):
-        orig_inputs = inputs
-        #create a fake input by concatentating reverse-complemented pairs
-        #along the length dimension
+        inputs_orig = inputs
         inputs = K.concatenate(
             tensors=[inputs[:,:,:int(self.num_input_chan/2)],
-                     inputs[:,:,int(self.num_input_chan/2):][:,:,::-1]],
-            axis=1)
-
-        assert self.built, 'Layer must be built before being called'
-
+                     inputs[:,:,int(self.num_input_chan/2):][:,:,::-1]], axis=1)
+        input_shape = K.int_shape(inputs)
+        # Prepare broadcasting shape.
         reduction_axes = list(range(3))
         del reduction_axes[self.axis]
         broadcast_shape = [1] * 3
-        broadcast_shape[self.axis] = int(self.num_input_chan/2)
+        broadcast_shape[self.axis] = input_shape[self.axis]
 
-        inputs_normed, mean, variance = K.normalize_batch_in_training(
-                        inputs, self.gamma, self.beta, reduction_axes,
-                        epsilon=self.epsilon)
+        # Determines whether broadcasting is needed.
+        #needs_broadcasting = (sorted(reduction_axes) != list(range(3))[:-1])
+        needs_broadcasting = True
 
+        def normalize_inference():
+            if needs_broadcasting:
+                # In this case we must explicitly broadcast all parameters.
+                broadcast_moving_mean = K.reshape(self.moving_mean,
+                                                  broadcast_shape)
+                broadcast_moving_variance = K.reshape(self.moving_variance,
+                                                      broadcast_shape)
+                if self.center:
+                    broadcast_beta = K.reshape(self.beta, broadcast_shape)
+                else:
+                    broadcast_beta = None
+                if self.scale:
+                    broadcast_gamma = K.reshape(self.gamma,
+                                                broadcast_shape)
+                else:
+                    broadcast_gamma = None
+                return K.batch_normalization(
+                    inputs,
+                    broadcast_moving_mean,
+                    broadcast_moving_variance,
+                    broadcast_beta,
+                    broadcast_gamma,
+                    axis=self.axis,
+                    epsilon=self.epsilon)
+            else:
+                return K.batch_normalization(
+                    inputs,
+                    self.moving_mean,
+                    self.moving_variance,
+                    self.beta,
+                    self.gamma,
+                    axis=self.axis,
+                    epsilon=self.epsilon)
+
+        # If the learning phase is *static* and set to inference:
         if training in {0, False}:
-            return inputs_normed
+            inputs_normed = normalize_inference()
+            true_inputs_normed = K.concatenate(tensors=[inputs_normed[:,:self.input_len,:], inputs_normed[:,self.input_len:,:][:,:,::-1]], axis=2)
+            return true_inputs_normed
 
-        else:
-            self.add_update([K.moving_average_update(self.moving_mean, mean, self.momentum),
-                                                         K.moving_average_update(self.moving_variance, variance, self.momentum)], inputs)
+        # If the learning is either dynamic, or set to training:
+        normed_training, mean, variance = K.normalize_batch_in_training(
+            inputs, self.gamma, self.beta, reduction_axes,
+            epsilon=self.epsilon)
 
-            # need broadcasting
-            broadcast_moving_mean = K.reshape(self.moving_mean, broadcast_shape)
-            broadcast_moving_variance = K.reshape(self.moving_variance, broadcast_shape)
+        if K.backend() != 'cntk':
+            sample_size = K.prod([K.shape(inputs)[axis]
+                                  for axis in reduction_axes])
+            sample_size = K.cast(sample_size, dtype=K.dtype(inputs))
 
-            if self.center:
-                        broadcast_beta = K.reshape(self.beta, broadcast_shape)
-            else:
-                        broadcast_beta = None
-            if self.scale:
-                        broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
-            else:
-                        broadcast_gamma = None
+            # sample variance - unbiased estimator of population variance
+            variance *= sample_size / (sample_size - (1.0 + self.epsilon))
 
-            broadcast_beta = K.reshape(self.beta, broadcast_shape)
-            broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
-            inputs_normed_running = K.batch_normalization(
-                                inputs, broadcast_moving_mean, broadcast_moving_variance,
-                                broadcast_beta, broadcast_gamma,
-                                epsilon=self.epsilon)
+        self.add_update([K.moving_average_update(self.moving_mean,
+                                                 mean,
+                                                 self.momentum),
+                         K.moving_average_update(self.moving_variance,
+                                                 variance,
+                                                 self.momentum)],
+                        inputs)
 
-            # pick the normalized form of inputs corresponding to the training phase
-            inputs_normed = K.in_train_phase(inputs_normed, inputs_normed_running)
-
+        # Pick the normalized form corresponding to the training phase.
+        inputs_normed = K.in_train_phase(normed_training, normalize_inference, training=training)
         #recover the reverse-complemented channels
         true_inputs_normed = K.concatenate(
             tensors=[inputs_normed[:,:self.input_len,:],
@@ -257,20 +292,20 @@ class RevCompConv1DBatchNorm(Layer):
         return true_inputs_normed
 
     def get_config(self):
-        config = {'epsilon': self.epsilon,
-                  'mode': self.mode,
-                  'axis': self.axis,
-                  'momentum': self.momentum,
-                  'center': self.center,
-                  'scale': self.scale,
-                  'beta_initializer': initializers.serialize(self.beta_initializer),
-                  'gamma_initializer': initializers.serialize(self.gamma_initializer),
-                  'moving_mean_initializer': initializers.serialize(self.moving_mean_initializer),
-                  'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer),
-                  'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
-                  'beta_regularizer': regularizers.serialize(self.beta_regularizer),
-                  'beta_constraint': constraints.serialize(self.beta_constraint),
-                  'gamma_constraint': constraints.serialize(self.gamma_constraint)
+        config = {
+            'axis': self.axis,
+            'momentum': self.momentum,
+            'epsilon': self.epsilon,
+            'center': self.center,
+            'scale': self.scale,
+            'beta_initializer': initializers.serialize(self.beta_initializer),
+            'gamma_initializer': initializers.serialize(self.gamma_initializer),
+            'moving_mean_initializer': initializers.serialize(self.moving_mean_initializer),
+            'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer),
+            'beta_regularizer': regularizers.serialize(self.beta_regularizer),
+            'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
+            'beta_constraint': constraints.serialize(self.beta_constraint),
+            'gamma_constraint': constraints.serialize(self.gamma_constraint)
         }
         base_config = super(RevCompConv1DBatchNorm, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
