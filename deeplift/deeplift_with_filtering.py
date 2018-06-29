@@ -1,5 +1,9 @@
 from deeplift.models import *
 from deeplift.layers.convolutional import *
+from deeplift.layers.pooling import *
+
+from tensorflow.python.ops.gen_nn_ops import avg_pool_grad
+
 
 class SequentialModelFilter(SequentialModel):
 	'''
@@ -186,6 +190,45 @@ class Conv1DFilter(Conv1D):
             raise RuntimeError("Unsupported conv mxts mode: "
                                +str(self.conv_mxts_mode))
         return pos_mxts_increments, neg_mxts_increments
+
+
+class GlobalAvgPool1D(SingleInputMixin, Node):
+
+    def __init__(self, **kwargs):
+        super(GlobalAvgPool1D, self).__init__(**kwargs) 
+
+    def _compute_shape(self, input_shape):
+        assert len(input_shape)==3
+        shape_to_return = [None, input_shape[-1]] 
+        return shape_to_return
+
+    def _build_activation_vars(self, input_act_vars):
+        return tf.reduce_mean(input_act_vars, axis=1)
+
+    def _build_pos_and_neg_contribs(self):
+        inp_pos_contribs, inp_neg_contribs =\
+            self._get_input_pos_and_neg_contribs()
+        pos_contribs = self._build_activation_vars(inp_pos_contribs)
+        neg_contribs = self._build_activation_vars(inp_neg_contribs) 
+        return pos_contribs, neg_contribs
+
+    def _grad_op(self, out_grad):
+        #avg_pool_grad: grad: 4-D with shape `[batch, height, width, channels]`, output: 4-D. Gradients w.r.t. the input of avg_pool
+        #input_activation_vars have shape [batch, input_length (width), num_filter (channel)]
+        return tf.squeeze(avg_pool_grad(
+            orig_input_shape=
+                tf.shape(tf.expand_dims(self._get_input_activation_vars(),1)), #add height dim
+            grad=tf.expand_dims(out_grad,1), #add height dim
+            ksize=(1,1,self._get_input_activation_vars().shape[1],1), 
+            strides=(1,1,1,1),
+            padding=PaddingMode.valid),1)
+
+    def _get_mxts_increments_for_inputs(self):
+        pos_mxts_increments = self._grad_op(self.get_pos_mxts())
+        neg_mxts_increments = self._grad_op(self.get_neg_mxts())
+        return pos_mxts_increments, neg_mxts_increments
+
+
 
 def run_function_in_batches(func,
                             input_data_list,
