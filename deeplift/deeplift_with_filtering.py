@@ -213,15 +213,24 @@ class GlobalAvgPool1D(SingleInputMixin, Node):
         return pos_contribs, neg_contribs
 
     def _grad_op(self, out_grad):
+        #input_activation_vars has shape [batch, input_length (width), num_filter (channel)]
+        #out_grad has shape [batch, channel]
+        width = self._get_input_activation_vars().get_shape().as_list()[1]
+        mask = tf.ones_like(self._get_input_activation_vars()) / float(width)
+        return tf.multiply(tf.expand_dims(out_grad, axis=1), mask)        
+
+        #same as:
+        #return tf.concat([tf.expand_dims(out_grad/float(width),1)] * width,1)
+
+        #same as:
         #avg_pool_grad: grad: 4-D with shape `[batch, height, width, channels]`, output: 4-D. Gradients w.r.t. the input of avg_pool
-        #input_activation_vars have shape [batch, input_length (width), num_filter (channel)]
-        return tf.squeeze(avg_pool_grad(
-            orig_input_shape=
-                tf.shape(tf.expand_dims(self._get_input_activation_vars(),1)), #add height dim
-            grad=tf.expand_dims(out_grad,1), #add height dim
-            ksize=(1,1,self._get_input_activation_vars().shape[1],1), 
-            strides=(1,1,1,1),
-            padding=PaddingMode.valid),1)
+        #return tf.squeeze(avg_pool_grad(
+        #    orig_input_shape=tf.shape(tf.expand_dims(self._get_input_activation_vars(),1)), #add height dim
+        #    grad=tf.expand_dims(tf.expand_dims(out_grad,1),1), #add width + height dim
+        #    ksize=(1,1,width,1),
+        #    strides=(1,1,1,1),
+        #    padding=PaddingMode.valid),1)
+
 
     def _get_mxts_increments_for_inputs(self):
         pos_mxts_increments = self._grad_op(self.get_pos_mxts())
