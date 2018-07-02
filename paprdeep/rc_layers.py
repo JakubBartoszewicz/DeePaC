@@ -215,7 +215,7 @@ class RevCompConv1DBatchNorm(Layer):
         reduction_axes = list(range(3))
         del reduction_axes[self.axis]
         broadcast_shape = [1] * 3
-        broadcast_shape[self.axis] = input_shape[self.axis]
+        broadcast_shape[self.axis] = int(self.num_input_chan/2)
 
         # Determines whether broadcasting is needed.
         #needs_broadcasting = (sorted(reduction_axes) != list(range(3))[:-1])
