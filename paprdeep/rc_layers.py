@@ -353,7 +353,10 @@ class DenseAfterRevcompWeightedSum(Dense):
 
 
 class DenseAfterRevcompConv1D(Dense):
-    '''For dense layers that follow 1D Convolutional or Pooling layers that
+    '''
+    Based on implementation from https://github.com/kundajelab/keras/tree/keras_1
+    Now compatible with Keras 2 models.
+    For dense layers that follow 1D Convolutional or Pooling layers that
     have reverse-complement weight sharing
     '''
 
