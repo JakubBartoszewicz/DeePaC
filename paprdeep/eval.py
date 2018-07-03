@@ -21,7 +21,7 @@ from keras.backend import tensorflow_backend as backend
 import sklearn.metrics as mtr
 import numpy as np
 import csv
-from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
+from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum, DenseAfterRevcompConv1D
 
 def main(argv):
     """Parse the config file and evaluate the NN on Illumina reads."""
@@ -64,7 +64,7 @@ def evaluate(config):
 
     # Evaluate for each saved model in epoch range
     for n_epoch in range(epoch_start,epoch_end):
-        model = load_model("{p}-e{ne:03d}.h5".format(p=name_prefix, ne=n_epoch), custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum})
+        model = load_model("{p}-e{ne:03d}.h5".format(p=name_prefix, ne=n_epoch), custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
         
         # Predict class probabilities
         y_pred =  np.ndarray.flatten(model.predict_proba(x_test))
