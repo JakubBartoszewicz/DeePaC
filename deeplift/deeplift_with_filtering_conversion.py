@@ -1,6 +1,6 @@
 from deeplift.conversion.kerasapi_conversion import *
 from deeplift.util import *
-from deeplift_with_filtering import SequentialModelFilter, Conv1DFilter, GlobalAvgPool1D
+from deeplift_with_filtering import SequentialModelFilter, Conv1DFilter, GlobalAvgPool1D, RevCompConv1DFilter, DenseAfterRevcompWeightedSum
 
 
 def convert_model_from_saved_files(
@@ -159,7 +159,7 @@ def layer_name_to_conversion_function(layer_name):
         'inputlayer': input_layer_conversion,
 
         'conv1d': conv1dfilter_conversion,
-        'revcompconv1d': revcompconv1d_conversion,
+        'revcompconv1d': revcompconv1dfilter_conversion, 
         'maxpooling1d': maxpool1d_conversion,
         'globalmaxpooling1d': globalmaxpooling1d_conversion,
         'averagepooling1d': avgpool1d_conversion,
@@ -226,12 +226,38 @@ def conv1dfilter_conversion(config,
     to_return.extend(converted_activation)
     return deeplift.util.connect_list_of_layers(to_return)
 
-def revcompconv1d_conversion(config,
+
+def revcompconv1dfilter_conversion(config,
                       name,
                       verbose,
                       nonlinear_mxts_mode,
                       conv_mxts_mode, **kwargs):
-    raise NotImplementedError("Not yet implemented!")
+    '''
+    Based on implementation from https://github.com/kundajelab/deeplift/tree/keras2compat
+    '''
+    validate_keys(config, [KerasKeys.weights,
+                           KerasKeys.activation,
+                           KerasKeys.filters,
+                           KerasKeys.kernel_size,
+                           KerasKeys.padding,
+                           KerasKeys.strides])
+    #nonlinear_mxts_mode only used for activation
+    converted_activation = activation_conversion(
+                            config=config,
+                            name=name,
+                            verbose=verbose,
+                            nonlinear_mxts_mode=nonlinear_mxts_mode)
+    to_return = [RevCompConv1DFilter( #changed
+            name=("preact_" if len(converted_activation) > 0
+                        else "")+name,
+            kernel=config[KerasKeys.weights][0],
+            bias=config[KerasKeys.weights][1],
+            stride=config[KerasKeys.strides],
+            padding=config[KerasKeys.padding].upper(),
+            conv_mxts_mode=conv_mxts_mode)]
+    to_return.extend(converted_activation)
+    return deeplift.util.connect_list_of_layers(to_return)
+
 
 def revcompconv1dbatchnorm_conversion(config,
                       name,
@@ -240,10 +266,28 @@ def revcompconv1dbatchnorm_conversion(config,
                       conv_mxts_mode, **kwargs):
     raise NotImplementedError("Not yet implemented!")
 
-def denseafterrevcompweightedsum_conversion(config,
-                      name,
-                      verbose,
-                      nonlinear_mxts_mode,
-                      conv_mxts_mode, **kwargs):
-    raise NotImplementedError("Not yet implemented!")
 
+def denseafterrevcompweightedsum_conversion(config,
+                     name,
+                     verbose,
+                     dense_mxts_mode,
+                     nonlinear_mxts_mode,
+                     **kwargs):
+
+    validate_keys(config, [KerasKeys.weights,
+                           KerasKeys.activation])
+
+    converted_activation = activation_conversion(
+                            config=config,
+                            name=name,
+                            verbose=verbose,
+                            nonlinear_mxts_mode=nonlinear_mxts_mode) 
+    to_return = [DenseAfterRevcompWeightedSum(
+                  name=("preact_" if len(converted_activation) > 0
+                        else "")+name, 
+                  kernel=config[KerasKeys.weights][0],
+                  bias=config[KerasKeys.weights][1],
+                  verbose=verbose,
+                  dense_mxts_mode=dense_mxts_mode)]
+    to_return.extend(converted_activation)
+    return deeplift.util.connect_list_of_layers(to_return)
