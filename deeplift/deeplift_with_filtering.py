@@ -7,7 +7,7 @@ from tensorflow.python.ops.gen_nn_ops import avg_pool_grad
 
 class SequentialModelFilter(SequentialModel):
 	'''
-	Based on implementation from https://github.com/kundajelab/deeplift/tree/keras2compat
+	Based on implementation from https://github.com/kundajelab/deeplift/
 	Extended by the option to specify the convolutional layer and filter neurons though which 
         the relevance scores should be passed during the backward pass.
 	'''
@@ -23,7 +23,8 @@ class SequentialModelFilter(SequentialModel):
 			for find_scores_layer in find_scores_layers:
 				find_scores_layer.reset_mxts_updated()
 			self._set_scoring_mode_for_target_layer(target_layer)
-			self._set_filter_index_conv_layer(conv_layer)
+			if conv_layer is not None:
+				self._set_filter_index_conv_layer(conv_layer)
 			for find_scores_layer in find_scores_layers:
 				find_scores_layer.update_mxts()
 			if (func_type == FuncType.contribs):
@@ -34,10 +35,6 @@ class SequentialModelFilter(SequentialModel):
 				output_symbolic_vars = [
 				 find_scores_layer.get_mxts() for find_scores_layer in
 				 find_scores_layers]
-#			elif (func_type == FuncType.multipliers_filter):
-#				output_symbolic_vars = [
-#				 find_scores_layer._get_mxts_increments_for_inputs() for find_scores_layer in
-#				 find_scores_layers]
 			elif (func_type == FuncType.contribs_of_input_with_filter_refs):
 				output_symbolic_vars =\
 				 [find_scores_layer.get_contribs_of_inputs_with_filter_refs()
@@ -78,7 +75,7 @@ class SequentialModelFilter(SequentialModel):
 				#active at once
 				target_layer.set_active()
 				target_layer.update_task_index(task_idx)
-				if (filter_index is None):
+				if (filter_index is None and conv_layer is not None):
 					self._set_filter_index_conv_layer(conv_layer)
 				to_return = run_function_in_batches( #changed
 						func = core_function,
@@ -100,9 +97,9 @@ class SequentialModelFilter(SequentialModel):
 		conv_layer._init_filter_index()
 
         
-	def _get_func(self, find_scores_layer_idx, target_layer_idx=-2, conv_layer_idx = -1, **kwargs):
+	def _get_func(self, find_scores_layer_idx, target_layer_idx=-2, conv_layer_idx = None, **kwargs):
 		'''
-		Based on implementation from https://github.com/kundajelab/deeplift/tree/keras2compat
+		Based on implementation from https://github.com/kundajelab/deeplift/
 		Extended by the option to specify the convolutional layer for which filtering during the
 		backward pass should be perfomed.
 		'''
@@ -110,13 +107,19 @@ class SequentialModelFilter(SequentialModel):
 			find_scores_layers = [self.get_layers()[x] for x in find_scores_layer_idx]
 		else:
 			find_scores_layers = self.get_layers()[find_scores_layer_idx]
-		if (conv_layer_idx == -1 and "Conv1DFilter" in [type(layer).__name__ for layer in self.get_layers()]):
+		if (conv_layer_idx is None and "Conv1DFilter" in [type(layer).__name__ for layer in self.get_layers()]):
 			conv_layer_idx = [type(layer).__name__ for layer in self.get_layers()].index("Conv1DFilter")
-		return self._get_func2(find_scores_layers=find_scores_layers, target_layer=self.get_layers()[target_layer_idx], conv_layer=self.get_layers()[conv_layer_idx], input_layers=[self.get_layers()[0]], **kwargs) #changed
+
+		if (conv_layer_idx is None and "RevCompConv1DFilter" in [type(layer).__name__ for layer in self.get_layers()]):
+			conv_layer_idx = [type(layer).__name__ for layer in self.get_layers()].index("RevCompConv1DFilter")
+		if conv_layer_idx is None:
+			return self._get_func2(find_scores_layers=find_scores_layers, target_layer=self.get_layers()[target_layer_idx], conv_layer=None, input_layers=[self.get_layers()[0]], **kwargs) #changed
+		else:
+			return self._get_func2(find_scores_layers=find_scores_layers, target_layer=self.get_layers()[target_layer_idx], conv_layer=self.get_layers()[conv_layer_idx], input_layers=[self.get_layers()[0]], **kwargs) #changed
 
 class Conv1DFilter(Conv1D):
     '''
-    Based on implementation from https://github.com/kundajelab/deeplift/tree/keras2compat
+    Based on implementation from https://github.com/kundajelab/deeplift/
     Extended by the option to backpropagate only relevance scores through certain filter neurons.
     '''
 
@@ -192,6 +195,206 @@ class Conv1DFilter(Conv1D):
         return pos_mxts_increments, neg_mxts_increments
 
 
+
+class RevCompConv1DFilter(Conv1DFilter):
+    '''
+    Based on implementation from https://github.com/kundajelab/deeplift
+    Converts Keras 2 compatibile RevCompConv1D layer (Keras 1 implementation see: https://github.com/kundajelab/keras/tree/keras_1)
+    to deeplift layer with filtering capacity.
+    '''
+    def _compute_shape(self, input_shape):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Double number of output channels (filter) for fwd and rev-complement.
+        '''
+        #assuming a theano dimension ordering here...
+        shape_to_return = [None]
+        if (input_shape is None or input_shape[1] is None):
+            shape_to_return += [None]
+        else:
+            if (self.padding == PaddingMode.valid):
+                #overhands are excluded
+                shape_to_return.append(
+                    1+int((input_shape[1]-self.kernel.shape[0])/self.stride))
+            elif (self.padding == PaddingMode.same):
+                shape_to_return.append(
+                    int((input_shape[1]+self.stride-1)/self.stride)) 
+            else:
+                raise RuntimeError("Please implement shape inference for"
+                                   " padding mode: "+str(self.padding))
+        shape_to_return.append(2*self.kernel.shape[-1]) 
+        return shape_to_return
+
+    def _build_activation_vars(self, input_act_vars):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes convolution with concatenated fwd and reverse complemented kernels and bias.
+        '''
+        rev_comp_kernel = tf.concat([self.kernel, self.kernel[::-1,::-1,::-1]], axis=-1)
+        rev_comp_conv_without_bias = self._compute_conv_without_bias(
+                                input_act_vars,
+                                kernel=rev_comp_kernel)
+        rev_comp_bias = tf.concat([self.bias, self.bias[::-1]], axis=-1)
+        return rev_comp_conv_without_bias + rev_comp_bias[None,None,:]
+
+    def _build_pos_and_neg_contribs(self):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes contribution scores with concatenated fwd and reverse-complemented kernels.
+        '''
+        if (self.conv_mxts_mode == ConvMxtsMode.Linear):
+            concatenated_kernel = tf.concat([self.kernel, self.kernel[::-1,::-1,::-1]], axis=-1)
+            inp_diff_ref = self._get_input_diff_from_reference_vars() 
+            pos_contribs = (self._compute_conv_without_bias(
+                             x=inp_diff_ref*hf.gt_mask(inp_diff_ref,0.0),
+                             kernel=concatenated_kernel*hf.gt_mask(concatenated_kernel,0.0))
+                           +self._compute_conv_without_bias(
+                             x=inp_diff_ref*hf.lt_mask(inp_diff_ref,0.0),
+                             kernel=concatenated_kernel*hf.lt_mask(concatenated_kernel,0.0)))
+            neg_contribs = (self._compute_conv_without_bias(
+                             x=inp_diff_ref*hf.lt_mask(inp_diff_ref,0.0),
+                             kernel=concatenated_kernel*hf.gt_mask(concatenated_kernel,0.0))
+                           +self._compute_conv_without_bias(
+                             x=inp_diff_ref*hf.gt_mask(inp_diff_ref,0.0),
+                             kernel=concatenated_kernel*hf.lt_mask(concatenated_kernel,0.0)))
+        else:
+            raise RuntimeError("Unsupported conv_mxts_mode: "+
+                               self.conv_mxts_mode)
+        return pos_contribs, neg_contribs
+
+    def _get_mxts_increments_for_inputs(self):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes multipliers with concatenated fwd and reverse complemented kernels.
+        ''' 
+        pos_mxts = self.get_pos_mxts()
+        neg_mxts = self.get_neg_mxts()
+        pos_mxts = self.mask * pos_mxts
+        neg_mxts = self.mask * neg_mxts
+        inp_diff_ref = self._get_input_diff_from_reference_vars() 
+        output_shape = self._get_input_shape()
+        if (self.conv_mxts_mode == ConvMxtsMode.Linear): 
+            pos_inp_mask = hf.gt_mask(inp_diff_ref,0.0)
+            neg_inp_mask = hf.lt_mask(inp_diff_ref,0.0)
+            zero_inp_mask = hf.eq_mask(inp_diff_ref,0.0)
+            concatenated_kernel = tf.concat([self.kernel, self.kernel[::-1,::-1,::-1]], axis=-1)
+            inp_mxts_increments = pos_inp_mask*(
+                conv1d_transpose_via_conv2d(
+                    value=pos_mxts,
+                    kernel=concatenated_kernel*(hf.gt_mask(concatenated_kernel,0.0)),
+                    tensor_with_output_shape=self.inputs.get_activation_vars(),
+                    padding=self.padding,
+                    stride=self.stride)
+                +conv1d_transpose_via_conv2d(
+                    value=neg_mxts,
+                    kernel=concatenated_kernel*(hf.lt_mask(concatenated_kernel,0.0)),
+                    tensor_with_output_shape=self.inputs.get_activation_vars(),
+                    padding=self.padding,
+                    stride=self.stride))
+            inp_mxts_increments += neg_inp_mask*(
+                conv1d_transpose_via_conv2d(
+                    value=pos_mxts,
+                    kernel=concatenated_kernel*(hf.lt_mask(concatenated_kernel,0.0)),
+                    tensor_with_output_shape=self.inputs.get_activation_vars(),
+                    padding=self.padding,
+                    stride=self.stride)
+                +conv1d_transpose_via_conv2d(
+                    value=neg_mxts,
+                    kernel=concatenated_kernel*(hf.gt_mask(concatenated_kernel,0.0)),
+                    tensor_with_output_shape=self.inputs.get_activation_vars(),
+                    padding=self.padding,
+                    stride=self.stride))
+            inp_mxts_increments += zero_inp_mask*(
+                conv1d_transpose_via_conv2d(
+                    value=0.5*(neg_mxts+pos_mxts),
+                    kernel=concatenated_kernel,
+                    tensor_with_output_shape=self.inputs.get_activation_vars(),
+                    padding=self.padding,
+                    stride=self.stride))
+            pos_mxts_increments = inp_mxts_increments
+            neg_mxts_increments = inp_mxts_increments
+        else:
+            raise RuntimeError("Unsupported conv mxts mode: "
+                               +str(self.conv_mxts_mode))
+        return pos_mxts_increments, neg_mxts_increments
+
+
+
+class DenseAfterRevcompWeightedSum(Dense):
+    '''
+    Based on implementation from https://github.com/kundajelab/deeplift
+    Converts Keras 2 compatibile DenseAfterRevcompWeightedSum layer (Keras 1 implementation see: https://github.com/kundajelab/keras/tree/keras_1)
+    to deeplift layer.
+    '''
+    def _build_activation_vars(self, input_act_vars):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes activation vars with concatenated fwd and reverse-complemented weights.
+        '''
+        return tf.matmul(input_act_vars, tf.concat([self.kernel, self.kernel[::-1,:]], axis=0)) + self.bias
+
+    def _build_pos_and_neg_contribs(self):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes contribution scores with fwd and reverse-complemented weights.
+        '''
+        if (self.dense_mxts_mode == DenseMxtsMode.Linear): 
+            inp_diff_ref = self._get_input_diff_from_reference_vars()
+            concatenated_kernel = tf.concat([self.kernel, self.kernel[::-1,:]], axis=0) 
+            pos_contribs = (tf.matmul(
+                             inp_diff_ref*hf.gt_mask(inp_diff_ref, 0.0),
+                             concatenated_kernel*hf.gt_mask(concatenated_kernel,0.0))
+                            +tf.matmul(
+                              inp_diff_ref*hf.lt_mask(inp_diff_ref, 0.0),
+                              concatenated_kernel*hf.lt_mask(concatenated_kernel,0.0)))
+            neg_contribs = (tf.matmul(
+                             inp_diff_ref*hf.gt_mask(inp_diff_ref, 0.0),
+                             concatenated_kernel*hf.lt_mask(concatenated_kernel,0.0))
+                            +tf.matmul(
+                              inp_diff_ref*hf.lt_mask(inp_diff_ref, 0.0),
+                              concatenated_kernel*hf.gt_mask(concatenated_kernel,0.0)))
+        else:
+            raise RuntimeError("Unsupported dense_mxts_mode: "+
+                               self.dense_mxts_mode)
+        return pos_contribs, neg_contribs
+
+    def _get_mxts_increments_for_inputs(self):
+        '''
+        Based on implementation from https://github.com/kundajelab/deeplift
+        Computes multipliers with concatenated fwd and reverse complemented weights.
+        '''
+        if (self.dense_mxts_mode == DenseMxtsMode.Linear): 
+            #different inputs will inherit multipliers differently according
+            #to the sign of inp_diff_ref (as this sign was used to determine
+            #the pos_contribs and neg_contribs; there was no breakdown
+            #by the pos/neg contribs of the input)
+            inp_diff_ref = self._get_input_diff_from_reference_vars() 
+            pos_inp_mask = hf.gt_mask(inp_diff_ref,0.0)
+            neg_inp_mask = hf.lt_mask(inp_diff_ref,0.0)
+            zero_inp_mask = hf.eq_mask(inp_diff_ref,0.0)
+            concatenated_kernel = tf.concat([self.kernel, self.kernel[::-1,:]], axis=0)
+            inp_mxts_increments = pos_inp_mask*(
+                tf.matmul(self.get_pos_mxts(),
+                          tf.transpose(concatenated_kernel)*(hf.gt_mask(tf.transpose(concatenated_kernel), 0.0)))
+                + tf.matmul(self.get_neg_mxts(),
+                            tf.transpose(concatenated_kernel)*(hf.lt_mask(tf.transpose(concatenated_kernel), 0.0)))) 
+            inp_mxts_increments += neg_inp_mask*(
+                tf.matmul(self.get_pos_mxts(),
+                          tf.transpose(concatenated_kernel)*(hf.lt_mask(tf.transpose(concatenated_kernel), 0.0)))
+                + tf.matmul(self.get_neg_mxts(),
+                            tf.transpose(concatenated_kernel)*(hf.gt_mask(tf.transpose(concatenated_kernel), 0.0)))) 
+            inp_mxts_increments += zero_inp_mask*(
+                tf.matmul(0.5*(self.get_pos_mxts()
+                               +self.get_neg_mxts()), tf.transpose(concatenated_kernel)))
+            #pos_mxts and neg_mxts in the input get the same multiplier
+            #because the breakdown between pos and neg wasn't used to
+            #compute pos_contribs and neg_contribs in the forward pass
+            #(it was based entirely on inp_diff_ref)
+            return inp_mxts_increments, inp_mxts_increments
+        else:
+            raise RuntimeError("Unsupported mxts mode: "+str(self.dense_mxts_mode))
+
+
 class GlobalAvgPool1D(SingleInputMixin, Node):
 
     def __init__(self, **kwargs):
@@ -262,7 +465,7 @@ def run_function_in_batches(func,
     to_return = [];
     i = 0;
     #build assign operation to later fill filter mask
-    if (conv_layer != None):
+    if (conv_layer is not None):
         y = tf.placeholder(dtype = tf.float32)
         mask_update = tf.assign(conv_layer.mask, y, validate_shape = False)
     while i < len(input_data_list[0]):
@@ -271,7 +474,7 @@ def run_function_in_batches(func,
                 print("Done",i)
         #fill filter mask with ones for filter neurons through which which relevance scores should be based,
         #zero otherwise
-        if (filter_index is not None):
+        if (conv_layer is not None and filter_index is not None):
             this_filter = filter_index[i:i+batch_size]
             mask_shape = conv_layer._shape
             mask_shape[0] = len(this_filter)
