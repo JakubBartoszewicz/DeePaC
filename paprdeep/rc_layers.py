@@ -159,6 +159,7 @@ class RevCompConv1DBatchNorm(Layer):
         self.gamma_regularizer = regularizers.get(gamma_regularizer)
         self.beta_constraint = constraints.get(beta_constraint)
         self.gamma_constraint = constraints.get(gamma_constraint)
+        self.uses_learning_phase = True
 
     def build(self, input_shape):
         self.num_input_chan = input_shape[self.axis]
@@ -280,7 +281,7 @@ class RevCompConv1DBatchNorm(Layer):
                          K.moving_average_update(self.moving_variance,
                                                  variance,
                                                  self.momentum)],
-                        inputs)
+                        inputs_orig)
 
         # Pick the normalized form corresponding to the training phase.
         inputs_normed = K.in_train_phase(normed_training, normalize_inference, training=training)
