@@ -14,9 +14,12 @@ import deeplift
 from deeplift.util import compile_func
 import deeplift_with_filtering_conversion as conversion
 
-###Calculates max abs nonzero deeplift contribution score per read and filter
 
 def main():
+	'''
+	Calculates DeepLIFT contribution scores for all neurons in the convolutional layer 
+	and extract all motifs for which a filter neuron got a non-zero contribution score.
+	'''
 
 	#parse command line arguments
 	args = parse_arguments()
@@ -110,6 +113,9 @@ def main():
 		i += chunk_size
 	
 def parse_arguments():
+	'''
+	Parse command line arguments.
+	'''
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
 	parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
@@ -128,7 +134,9 @@ def parse_arguments():
 	return args
 	
 def get_reference_seqs(args, len_reads):
-
+	'''
+	Load or create reference sequences for DeepLIFT.
+	'''
 	#generate reference sequence with N's
 	if args.ref_mode == "N":
 	
