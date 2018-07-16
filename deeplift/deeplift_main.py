@@ -39,6 +39,8 @@ def main():
 	pad = int((motif_length - 1)/2)
 
 	if args.w_norm:
+		#perform output-preserving weight matrix normalization for one-hot encoded inputs as described 
+		#in "Learning Important Features Through Propagating Activation Differences" by Shrikumar et al., 2017
 		print("Mean-centering the filter weight matrices ...")
 		Ws = deeplift_model.get_layers()[conv_layer_idx].kernel
 		bs = deeplift_model.get_layers()[conv_layer_idx].bias
