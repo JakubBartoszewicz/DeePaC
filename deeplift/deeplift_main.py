@@ -37,6 +37,18 @@ def main():
 		n_filters = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[-1]
 	motif_length = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[0]
 	pad = int((motif_length - 1)/2)
+
+	if args.w_norm:
+		print("Mean-centering the filter weight matrices ...")
+		Ws = deeplift_model.get_layers()[conv_layer_idx].kernel
+		bs = deeplift_model.get_layers()[conv_layer_idx].bias
+		for filter_index in range(Ws.shape[-1]):
+			bs[filter_index] += np.sum(np.mean(Ws[:,:,filter_index], axis = 0))
+			for pos in range(motif_length):
+				Ws[pos,:,filter_index] -= np.mean(Ws[pos,:,filter_index])
+		deeplift_model.get_layers()[conv_layer_idx].kernel = Ws
+		deeplift_model.get_layers()[conv_layer_idx].bias = bs
+
 	#compile scoring function (find scores of filters (convolutional layer) w.r.t. the layer preceding the sigmoid output layer)
 	deeplift_contribs_func_filter = deeplift_model.get_target_contribs_func(find_scores_layer_idx = conv_layer_idx, target_layer_idx = -2, conv_layer_idx = conv_layer_idx)
 
@@ -118,6 +130,7 @@ def parse_arguments():
 	'''
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
+	parser.add_argument("-b", "--w_norm", action = "store_true", help = "Set flag if filter weight matrices should be mean-centered")
 	parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
 	parser.add_argument("-n", "--nonpatho_test", required=True, help="Nonpathogenic reads of the test data set (.fasta)")
 	parser.add_argument("-p", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
