@@ -36,7 +36,8 @@ def main():
 		conv_layer_idx = [type(layer).__name__ for layer in deeplift_model.get_layers()].index("Conv1DFilter")
 		n_filters = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[-1]
 	motif_length = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[0]
-	pad = int((motif_length - 1)/2)
+	pad_left = (motif_length - 1) // 2
+	pad_right = motif_length - 1 - pad_left
 
 	if args.w_norm:
 		#perform output-preserving weight matrix normalization for one-hot encoded inputs as described 
@@ -66,7 +67,7 @@ def main():
 	patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))
 	reads = nonpatho_reads + patho_reads
 	print("Padding reads ...")
-	reads = ["N" * pad + r + "N" * pad for r in reads]
+	reads = ["N" * pad_left + r + "N" * pad_right for r in reads]
 	
 	assert len(reads) == total_num_reads, "Test data in .npy-format and fasta files containing different number of reads!"
 
