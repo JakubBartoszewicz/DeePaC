@@ -1,7 +1,8 @@
 """@package eval
 Evaluate a NN trained on Illumina reads.
 
-Requires a config file describing the data directory, and dataset and run name, classification threshold and the epoch range.
+Requires a config file describing the data directory, dataset and run name,
+classification threshold and the epoch range.
 
 usage: eval.py [-h] config_file
 
@@ -12,20 +13,19 @@ optional arguments:
   -h, --help   show this help message and exit
   
 """
-import sys
 import argparse
 import configparser
-from keras.models import Model
 from keras.models import load_model
 from keras.backend import tensorflow_backend as backend
-from rc_layers import *
+from .rc_layers import *
 import sklearn.metrics as mtr
 import numpy as np
 import csv
 
-def main(argv):
+
+def main():
     """Parse the config file and evaluate the NN on Illumina reads."""
-    parser = argparse.ArgumentParser(description = "Evaluate a NN trained on Illumina reads.")
+    parser = argparse.ArgumentParser(description="Evaluate a NN trained on Illumina reads.")
     parser.add_argument("config_file")
     args = parser.parse_args()
     config = configparser.ConfigParser()
@@ -37,12 +37,11 @@ def evaluate(config):
     """Evaluate the NN on Illumina reads using the supplied configuration."""
     # Clear session needed or TypeError can happen in some cases
     backend.clear_session()
-
     
     # Set the data directory
-    dir = config['Data']['DataDir']
+    dir_path = config['Data']['DataDir']
     # Set the evaluation dataset name
-    set = config['Data']['DataSet']
+    dataset_path = config['Data']['DataSet']
     # Set the run name
     runname = config['Data']['RunName']
     name_prefix = "nn-{}".format(runname)
@@ -54,27 +53,27 @@ def evaluate(config):
     epoch_end = config['Epochs'].getint('EpochEnd')
 
     # Read data to memory
-    x_test = np.load("{}/{}_data.npy".format(dir,set))
-    y_test = np.load("{}/{}_labels.npy".format(dir,set))
+    x_test = np.load("{}/{}_data.npy".format(dir_path, dataset_path))
+    y_test = np.load("{}/{}_labels.npy".format(dir_path, dataset_path))
     
     # Write CSV header
     with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch","log_loss","acc","auroc","mcc","f1","precision","recall"))
+        file_writer.writerow(("epoch", "log_loss", "acc", "auroc", "mcc", "f1", "precision", "recall"))
 
     # Evaluate for each saved model in epoch range
-    for n_epoch in range(epoch_start,epoch_end):
+    for n_epoch in range(epoch_start, epoch_end):
         model = load_model("{p}-e{ne:03d}.h5".format(p=name_prefix, ne=n_epoch),
                            custom_objects={'RevCompConv1D': RevCompConv1D,
                                            'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm,
                                            'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum})
         
         # Predict class probabilities
-        y_pred =  np.ndarray.flatten(model.predict(x_test))
+        y_pred = np.ndarray.flatten(model.predict(x_test))
         # Assign classes using the chosen threshold
         y_pred_class = (y_pred > thresh).astype('int32')
         # Backup predicted probabilities for future analyses 
-        np.save(file = "{p}-e{ne:03d}-predictions.npy".format(p=name_prefix, ne=n_epoch), arr = y_pred)
+        np.save(file="{p}-e{ne:03d}-predictions.npy".format(p=name_prefix, ne=n_epoch), arr=y_pred)
 
         # Calculate performance measures
         log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
@@ -88,8 +87,8 @@ def evaluate(config):
         # Save the results
         with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
             file_writer = csv.writer(csv_file)
-            file_writer.writerow((n_epoch,log_loss,acc,auroc,mcc,f1,precision,recall))
+            file_writer.writerow((n_epoch, log_loss, acc, auroc, mcc, f1, precision, recall))
 
         
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

@@ -2,9 +2,11 @@
 Convert fasta files to numpy arrays for training.
 
   
-Uses distributed orthographic representation, i.e. every read is coded so that every nucleotide is a one-hot encoded vector. Assumes equal length of all the input sequences - no padding!
+Uses distributed orthographic representation, i.e. every read is coded so that every nucleotide is a one-hot encoded
+ vector. Assumes equal length of all the input sequences - no padding!
 
-Requires a config file describing the available devices, input filepaths (two fasta files containing negative and positive reads respectively), output filepath (for data and labels) and additional options.
+Requires a config file describing the available devices, input filepaths (two fasta files containing negative and
+ positive reads respectively), output filepath (for data and labels) and additional options.
 
 usage: preproc.py [-h] config_file
 
@@ -27,7 +29,8 @@ import gzip
 
 # ***ASSUMES EQUAL LENGTH INPUT SEQUENCES - NO PADDING [TODO]***
 
-def main(argv):
+
+def main():
     """Parse the config file and preprocess the Illumina reads."""
     parser = argparse.ArgumentParser(description = "Convert fasta files to numpy arrays for training.")
     parser.add_argument("config_file")
@@ -36,11 +39,13 @@ def main(argv):
     config.read(args.config_file)
     preproc(config)
 
+
 def tokenize(seq, tokenizer):
     """Tokenize and delete the out-of-vocab token (N) column."""
-    # Cast to float32 instead of deafult float64 to save memory
+    # Cast to float32 instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype('float32')[:,1:]
     return matrix
+
 
 def read_fasta(in_handle):
     """Read fasta file with a fast, memory-efficient generator."""
@@ -53,7 +58,7 @@ def preproc(config):
     """Preprocess the CNN on Illumina reads using the supplied configuration."""
     # Set the number of cores to use
     max_cores = config['Devices'].getint('N_CPUs')
-    p = Pool(processes = max_cores)
+    p = Pool(processes=max_cores)
     
     # Set input and output paths
     neg_path = config['InputPaths']['Fasta_Class_0']
@@ -70,17 +75,19 @@ def preproc(config):
     tokenizer = Tokenizer(char_level = True)
     tokenizer.fit_on_texts(alphabet)
     
-    ### Preproc ###    
+    # Preprocess #
     print("Preprocessing negative data...")
     with open(neg_path) as input_handle:
-        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument. Tokenize function is applied to the fasta sequence generator.
+        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+        # Tokenize function is applied to the fasta sequence generator.
         x_train = np.asarray(p.map(partial(tokenize, tokenizer = tokenizer), read_fasta(input_handle)))
     # Count negative samples
     n_negative = x_train.shape[0]
     print("Preprocessing positive data...")
     with open(pos_path) as input_handle:
         # Parse fasta, tokenize in parallel & concatenate to negative data
-        x_train = np.concatenate((x_train, np.asarray(p.map(partial(tokenize, tokenizer = tokenizer), read_fasta(input_handle)))))
+        x_train = np.concatenate((x_train, np.asarray(p.map(partial(tokenize, tokenizer=tokenizer),
+                                                            read_fasta(input_handle)))))
     # Count positive samples
     n_positive = x_train.shape[0] - n_negative
     # Add labels
@@ -89,13 +96,14 @@ def preproc(config):
     # All sequences must have the same length. Then x_train is an array and the view below can be created
     # Note: It seems that creating a view instead of reversing element-wise saves a lot of memory (800GB vs 450GB)
     
-    # RC augmentation: Add reverse-complements by reversing both dimentions of the matrix - assumes the following order of columns: "ACGT" 
+    # RC augmentation: Add reverse-complements by reversing both dimensions of the matrix
+    # assumes the following order of columns: "ACGT"
     if do_revc:
         print("Augmenting data...")
-        x_train = np.concatenate((x_train, x_train[::,::-1,::-1]))    
+        x_train = np.concatenate((x_train, x_train[::, ::-1, ::-1]))
         y_train = np.concatenate((y_train, y_train))
         
-    ### Save matrices ###
+    # Save matrices #
     print("Saving data...")
     # Compress output files
     if do_gzip:
@@ -109,6 +117,7 @@ def preproc(config):
     np.save(file = f_labels, arr = y_train)
     print("Done!")
 
+
 if __name__ == "__main__":
-    main(sys.argv)
+    main()
 
