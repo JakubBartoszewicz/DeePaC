@@ -32,7 +32,7 @@ import warnings
 from contextlib import redirect_stdout
 
 from keras.models import Model
-from keras.layers import Dense, Dropout, Activation, Input, Lambda, concatenate
+from keras.layers import Dense, Dropout, Activation, Input, Lambda, concatenate, add
 from keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 import keras.backend as K
@@ -332,6 +332,30 @@ class PaPrNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
+    def __add_siam_sum_dense(self, inputs_fwd, inputs_rc, units):
+        shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
+        rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
+                       name="rc_sum_dense_rc_in_{n}".format(n=1))
+        inputs_rc = rc_in(inputs_rc)
+        x_fwd = shared_dense(inputs_fwd)
+        x_rc = shared_dense(inputs_rc)
+        if self.config.dense_bn:
+            # Reverse-complemented batch normalization layer
+            x_fwd = BatchNormalization()(x_fwd)
+            x_rc = BatchNormalization()(x_rc)
+        out = add([x_fwd, x_rc])
+        return out
+
+    def __add_rc_sum_dense(self, inputs, units):
+        shape = inputs._keras_shape[1]
+        fwd_in = Lambda(lambda x: x[:, :(shape // 2)], output_shape=[(shape // 2)],
+                        name="rc_split_fwd_{n}".format(n=1))
+        rc_in = Lambda(lambda x: x[:, (shape // 2):], output_shape=[(shape // 2)],
+                       name="rc_split_rc_{n}".format(n=1))
+        x_fwd = fwd_in(inputs)
+        x_rc = rc_in(inputs)
+        return self.__add_siam_sum_dense(x_fwd, x_rc, units)
+
     def __build_simple_model(self):
         """Build the standard network"""
         print("Building model...")
@@ -523,8 +547,7 @@ class PaPrNet:
         # Dense layers
         for i in range(0, self.config.n_dense):
             if i == 0:
-                x = DenseAfterRevcompWeightedSum(self.config.dense_units[i],
-                                                 kernel_regularizer=self.config.regularizer)(x)
+                x = self.__add_rc_sum_dense(x, self.config.dense_units[i])
             else:
                 x = Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
@@ -534,7 +557,7 @@ class PaPrNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = DenseAfterRevcompWeightedSum(1,  kernel_regularizer=self.config.regularizer)(x)
+            x = self.__add_rc_sum_dense(x, 1)
         else:
             x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
         x = Activation('sigmoid')(x)
