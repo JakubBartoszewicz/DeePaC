@@ -294,10 +294,6 @@ class PaPrNet:
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=shared_lstm.output_shape[1:],
                              name="rc_lstm_out_{n}".format(n=self.__current_recurrent+1))
         x_rc = revcomp_out(x_rc)
-        if self.config.recurrent_bn:
-            # Reverse-complemented batch normalization layer
-            x_fwd = BatchNormalization()(x_fwd)
-            x_rc = BatchNormalization()(x_rc)
         return x_fwd, x_rc
 
     def __add_rc_lstm(self, inputs, return_sequences, units):
@@ -316,12 +312,6 @@ class PaPrNet:
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
                              name="rc_conv1d_out_{n}".format(n=self.__current_conv+1))
         x_rc = revcomp_out(x_rc)
-        if self.config.conv_bn:
-            # Reverse-complemented batch normalization layer
-            x_fwd = BatchNormalization()(x_fwd)
-            x_rc = BatchNormalization()(x_rc)
-        x_fwd = Activation(self.config.conv_activation)(x_fwd)
-        x_rc = Activation(self.config.conv_activation)(x_rc)
         return x_fwd, x_rc
 
     def __add_rc_conv1d(self, inputs, units):
@@ -332,6 +322,43 @@ class PaPrNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
+    def __add_siam_batchnorm(self, inputs_fwd, inputs_rc):
+        input_shape = inputs_rc._keras_shape
+        if len(input_shape) != 3:
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
+                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+        rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
+                       name="rc_batchnorm_rc_in_{n}".format(n=self.__current_bn+1))
+        inputs_rc = rc_in(inputs_rc)
+        out = concatenate([inputs_fwd, inputs_rc], axis=1)
+        out = BatchNormalization()(out)
+        split_shape = out._keras_shape[1] // 2
+        new_shape = [split_shape, input_shape[2]]
+        fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
+                         name="rc_split_batchnorm_fwd_out_{n}".format(n=self.__current_bn+1))
+        rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
+                        name="rc_split_batchnorm_rc_out_{n}".format(n=self.__current_bn+1))
+        x_fwd = fwd_out(out)
+        x_rc = rc_out(out)
+        return x_fwd, x_rc
+
+    def __add_rc_batchnorm(self, inputs):
+        input_shape = inputs._keras_shape
+        if len(input_shape) != 3:
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
+                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+        split_shape = inputs._keras_shape[-1] // 2
+        new_shape = [input_shape[1], split_shape]
+        fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
+                        name="rc_split_batchnorm_fwd_in_{n}".format(n=self.__current_bn+1))
+        rc_in = Lambda(lambda x: x[:, :, split_shape:], output_shape=new_shape,
+                       name="rc_split_batchnorm_rc_in_{n}".format(n=self.__current_bn+1))
+        inputs_fwd = fwd_in(inputs)
+        inputs_rc = rc_in(inputs)
+        x_fwd, x_rc = self.__add_siam_batchnorm(inputs_fwd, inputs_rc)
+        out = concatenate([x_fwd, x_rc], axis=-1)
+        return out
+
     def __add_siam_sum_dense(self, inputs_fwd, inputs_rc, units):
         shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
@@ -339,19 +366,15 @@ class PaPrNet:
         inputs_rc = rc_in(inputs_rc)
         x_fwd = shared_dense(inputs_fwd)
         x_rc = shared_dense(inputs_rc)
-        if self.config.dense_bn:
-            # Reverse-complemented batch normalization layer
-            x_fwd = BatchNormalization()(x_fwd)
-            x_rc = BatchNormalization()(x_rc)
         out = add([x_fwd, x_rc])
         return out
 
     def __add_rc_sum_dense(self, inputs, units):
-        shape = inputs._keras_shape[1]
-        fwd_in = Lambda(lambda x: x[:, :(shape // 2)], output_shape=[(shape // 2)],
-                        name="rc_split_fwd_{n}".format(n=1))
-        rc_in = Lambda(lambda x: x[:, (shape // 2):], output_shape=[(shape // 2)],
-                       name="rc_split_rc_{n}".format(n=1))
+        split_shape = inputs._keras_shape[-1] // 2
+        fwd_in = Lambda(lambda x: x[:, :split_shape], output_shape=[split_shape],
+                        name="rc_split_dense_fwd_{n}".format(n=1))
+        rc_in = Lambda(lambda x: x[:, split_shape:], output_shape=[split_shape],
+                       name="rc_split_dense_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
         return self.__add_siam_sum_dense(x_fwd, x_rc, units)
@@ -381,6 +404,9 @@ class PaPrNet:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x = self.__add_lstm(inputs, return_sequences)
+            if self.config.recurrent_bn:
+                # Standard batch normalization layer
+                x = BatchNormalization()(x)
             # Add dropout
             x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
             # First recurrent layer already added
@@ -444,6 +470,9 @@ class PaPrNet:
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x = self.__add_lstm(inputs, return_sequences)
+            if self.config.recurrent_bn:
+                # Standard batch normalization layer
+                x = BatchNormalization()(x)
             # Add dropout
             x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
 
@@ -469,6 +498,7 @@ class PaPrNet:
         # Number of added recurrent layers
         self.__current_recurrent = 0
         self.__current_conv = 0
+        self.__current_bn = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         # The last recurrent layer should return the output for the last unit only.
@@ -478,12 +508,20 @@ class PaPrNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             x = self.__add_rc_conv1d(inputs, self.config.conv_units[0])
+            if self.config.conv_bn:
+                # Reverse-complemented batch normalization layer
+                x = self.__add_rc_batchnorm(x)
+                self.__current_bn = self.__current_bn + 1
+            x = Activation(self.config.conv_activation)(x)
             self.__current_conv = self.__current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            # RevComp input
             x = self.__add_rc_lstm(inputs, return_sequences, self.config.recurrent_units[0])
+            if self.config.recurrent_bn and return_sequences:
+                # Reverse-complemented batch normalization layer
+                x = self.__add_rc_batchnorm(x)
+                self.__current_bn = self.__current_bn + 1
             # Add dropout
             x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
             # First recurrent layer already added
@@ -507,6 +545,11 @@ class PaPrNet:
                 x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
             # Add layer
             x = self.__add_rc_conv1d(x, self.config.conv_units[i])
+            if self.config.conv_bn:
+                # Reverse-complemented batch normalization layer
+                x = self.__add_rc_batchnorm(x)
+                self.__current_bn = self.__current_bn + 1
+            x = Activation(self.config.conv_activation)(x)
             self.__current_conv = self.__current_conv + 1
 
         # Pooling layer
@@ -540,6 +583,10 @@ class PaPrNet:
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x = self.__add_rc_lstm(x, return_sequences, self.config.recurrent_units[i])
+            if self.config.recurrent_bn and return_sequences:
+                # Reverse-complemented batch normalization layer
+                x = self.__add_rc_batchnorm(x)
+                self.__current_bn = self.__current_bn + 1
             # Add dropout
             x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
             self.__current_recurrent = self.__current_recurrent + 1

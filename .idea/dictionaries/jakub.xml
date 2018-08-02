@@ -4,6 +4,7 @@
       <w>acgt</w>
       <w>attrname</w>
       <w>auroc</w>
+      <w>batchnorm</w>
       <w>conv</w>
       <w>convolutional</w>
       <w>cpus</w>
