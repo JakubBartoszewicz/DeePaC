@@ -27,12 +27,12 @@ from multiprocessing import Pool
 from functools import partial
 import gzip
 
-# ***ASSUMES EQUAL LENGTH INPUT SEQUENCES - NO PADDING [TODO]***
+# ***TODO: ASSUMES EQUAL LENGTH INPUT SEQUENCES - NO PADDING ***
 
 
 def main():
     """Parse the config file and preprocess the Illumina reads."""
-    parser = argparse.ArgumentParser(description = "Convert fasta files to numpy arrays for training.")
+    parser = argparse.ArgumentParser(description="Convert fasta files to numpy arrays for training.")
     parser.add_argument("config_file")
     args = parser.parse_args()
     config = configparser.ConfigParser()
@@ -40,10 +40,10 @@ def main():
     preproc(config)
 
 
-def tokenize(seq, tokenizer):
+def tokenize(seq, tokenizer, datatype='float32'):
     """Tokenize and delete the out-of-vocab token (N) column."""
-    # Cast to float32 instead of default float64 to save memory
-    matrix = tokenizer.texts_to_matrix(seq).astype('float32')[:,1:]
+    # Cast to datatype instead of default float64 to save memory
+    matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
     return matrix
 
 
@@ -66,13 +66,14 @@ def preproc(config):
     out_data_path = config['OutputPaths']['OutData']
     out_labels_path = config['OutputPaths']['OutLabels']
     
-    # Set additional options: gzip compression and RC augmentation
+    # Set additional options: gzip compression, RC augmentation, data type
     do_gzip = config['Options'].getboolean('Do_gzip')
     do_revc = config['Options'].getboolean('Do_revc')
+    datatype = config['Options']['Data_type']
     
     # Set alphabet and prepare the tokenizer
     alphabet = "ACGT"  
-    tokenizer = Tokenizer(char_level = True)
+    tokenizer = Tokenizer(char_level=True)
     tokenizer.fit_on_texts(alphabet)
     
     # Preprocess #
@@ -80,21 +81,21 @@ def preproc(config):
     with open(neg_path) as input_handle:
         # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
         # Tokenize function is applied to the fasta sequence generator.
-        x_train = np.asarray(p.map(partial(tokenize, tokenizer = tokenizer), read_fasta(input_handle)))
+        x_train = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype), read_fasta(input_handle)))
     # Count negative samples
     n_negative = x_train.shape[0]
     print("Preprocessing positive data...")
     with open(pos_path) as input_handle:
         # Parse fasta, tokenize in parallel & concatenate to negative data
-        x_train = np.concatenate((x_train, np.asarray(p.map(partial(tokenize, tokenizer=tokenizer),
+        x_train = np.concatenate((x_train, np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype),
                                                             read_fasta(input_handle)))))
     # Count positive samples
     n_positive = x_train.shape[0] - n_negative
     # Add labels
-    y_train = np.concatenate((np.repeat(0,n_negative),np.repeat(1,n_positive)))
+    y_train = np.concatenate((np.repeat(0, n_negative), np.repeat(1, n_positive)))
     # ** TODO: PADDING (or x_train is an array of arrays, not an array, and it has to be reversed element-wise) **
     # All sequences must have the same length. Then x_train is an array and the view below can be created
-    # Note: It seems that creating a view instead of reversing element-wise saves a lot of memory (800GB vs 450GB)
+    # Note: creating a view instead of reversing element-wise saves a lot of memory (800GB vs 450GB)
     
     # RC augmentation: Add reverse-complements by reversing both dimensions of the matrix
     # assumes the following order of columns: "ACGT"
@@ -113,8 +114,8 @@ def preproc(config):
         f_data = out_data_path
         f_labels = out_labels_path
     # Save output
-    np.save(file = f_data, arr = x_train)
-    np.save(file = f_labels, arr = y_train)
+    np.save(file=f_data, arr=x_train)
+    np.save(file=f_labels, arr=y_train)
     print("Done!")
 
 
