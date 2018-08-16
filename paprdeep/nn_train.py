@@ -186,7 +186,7 @@ class PaPrConfig:
             self.model_build_device = '/cpu:0'
         elif self.allow_growth:
             # If using GPUs, allow for GPU memory growth, instead of reserving it all
-            tf_config = tf.ConfigProto()
+            tf_config = tf.ConfigProto(allow_soft_placement=True)
             tf_config.gpu_options.allow_growth = True
             session = tf.Session(config=tf_config)
             K.set_session(session)
