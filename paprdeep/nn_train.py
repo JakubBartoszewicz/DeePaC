@@ -42,7 +42,7 @@ from keras import regularizers
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
-from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
+# from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 
@@ -108,23 +108,24 @@ class PaPrConfig:
             raise ValueError('Unknown initializer')
 
         # Define the network architecture
-        self.use_rc = config['Architecture'].getboolean('Use_RC')
+        self.rc_mode = config['Architecture']['RC_Mode']
         self.n_conv = config['Architecture'].getint('N_Conv')
         self.n_recurrent = config['Architecture'].getint('N_Recurrent')
         self.n_dense = config['Architecture'].getint('N_Dense')
+        self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
         self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
         self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
         self.conv_activation = config['Architecture']['Conv_Activation']
         self.conv_bn = config['Architecture'].getboolean('Conv_BN')
         self.conv_pooling = config['Architecture']['Conv_Pooling']
-        self.conv_drop_out = config['Architecture'].getfloat('Conv_Dropout')
+        self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
         self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
         self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
-        self.recurrent_drop_out = config['Architecture'].getfloat('Recurrent_Dropout')
+        self.recurrent_dropout = config['Architecture'].getfloat('Recurrent_Dropout')
         self.dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
         self.dense_activation = config['Architecture']['Dense_Activation']
         self.dense_bn = config['Architecture'].getboolean('Dense_BN')
-        self.dense_drop_out = config['Architecture'].getfloat('Dense_Dropout')
+        self.dense_dropout = config['Architecture'].getfloat('Dense_Dropout')
 
         # If needed, weight classes
         self.use_weights = config['ClassWeights'].getboolean('UseWeights')
@@ -212,10 +213,14 @@ class PaPrNet:
         if K.backend() == 'tensorflow':
             # Build the model using the CPU or GPU
             with tf.device(self.config.model_build_device):
-                if self.config.use_rc:
+                if self.config.rc_mode == "full":
                     self.__build_rc_model()
-                else:
+                elif self.config.rc_mode == "siam":
+                    self.__build_siam_model()
+                elif self.config.rc_mode == "none":
                     self.__build_simple_model()
+                else:
+                    raise ValueError('Unrecognized RC mode')
         elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
             raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
         else:
@@ -389,12 +394,17 @@ class PaPrNet:
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
+        # Input dropout
+        if not np.isclose(self.config.input_dropout, 0.0):
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs)
+        else:
+            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
             x = Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',
-                       kernel_regularizer=self.config.regularizer)(inputs)
+                       kernel_regularizer=self.config.regularizer)(x)
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -403,12 +413,12 @@ class PaPrNet:
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_lstm(inputs, return_sequences)
+            x = self.__add_lstm(x, return_sequences)
             if self.config.recurrent_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             # First recurrent layer already added
             self.__current_recurrent = 1
         else:
@@ -426,8 +436,8 @@ class PaPrNet:
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             # Standard convolutional layer
             x = Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same',
@@ -460,8 +470,8 @@ class PaPrNet:
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
 
         # Recurrent layers
         for i in range(self.__current_recurrent, self.config.n_recurrent):
@@ -474,7 +484,7 @@ class PaPrNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
 
         # Dense layers
         for i in range(0, self.config.n_dense):
@@ -483,7 +493,7 @@ class PaPrNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
         x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
@@ -504,10 +514,15 @@ class PaPrNet:
         # The last recurrent layer should return the output for the last unit only.
         #  Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
+        # Input dropout
+        if not np.isclose(self.config.input_dropout, 0.0):
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs)
+        else:
+            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
-            x = self.__add_rc_conv1d(inputs, self.config.conv_units[0])
+            x = self.__add_rc_conv1d(x, self.config.conv_units[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self.__add_rc_batchnorm(x)
@@ -517,13 +532,13 @@ class PaPrNet:
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_rc_lstm(inputs, return_sequences, self.config.recurrent_units[0])
+            x = self.__add_rc_lstm(x, return_sequences, self.config.recurrent_units[0])
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x = self.__add_rc_batchnorm(x)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             # First recurrent layer already added
             self.__current_recurrent = self.__current_recurrent + 1
         else:
@@ -541,8 +556,8 @@ class PaPrNet:
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             x = self.__add_rc_conv1d(x, self.config.conv_units[i])
             if self.config.conv_bn:
@@ -573,8 +588,8 @@ class PaPrNet:
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
 
         # Recurrent layers
         for i in range(self.__current_recurrent, self.config.n_recurrent):
@@ -588,7 +603,7 @@ class PaPrNet:
                 x = self.__add_rc_batchnorm(x)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             self.__current_recurrent = self.__current_recurrent + 1
 
         # Dense layers
@@ -600,7 +615,7 @@ class PaPrNet:
             if self.config.dense_bn:
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_drop_out, seed=self.config.seed)(x)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
@@ -614,9 +629,11 @@ class PaPrNet:
 
     def __build_siam_model(self):
         """Build the RC network"""
-        print("Building RC-model...")
+        print("Building siamese RC-model...")
         # Number of added recurrent layers
         self.__current_recurrent = 0
+        self.__current_conv = 0
+        self.__current_bn = 0
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd._keras_shape[1:],
@@ -625,31 +642,39 @@ class PaPrNet:
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
+        # Input dropout
+        if not np.isclose(self.config.input_dropout, 0.0):
+            x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs_fwd)
+            x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs_rc)
+        else:
+            x_fwd = inputs_fwd
+            x_rc = inputs_rc
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
-            # Standard convolutional layer
-            x = RevCompConv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',
-                              kernel_regularizer=self.config.regularizer)(inputs_fwd)
+            # Reverse-complement convolutional layer
+            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, self.config.conv_units[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x = RevCompConv1DBatchNorm()(x)
+                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
+                self.__current_bn = self.__current_bn + 1
             # Add activation
-            x = Activation(self.config.conv_activation)(x)
+            x_fwd = Activation(self.config.conv_activation)(x_fwd)
+            x_rc = Activation(self.config.conv_activation)(x_rc)
+            self.__current_conv = self.__current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
             # RevComp input
-            x_fwd, x_rc = self.__add_siam_lstm(inputs_fwd, inputs_rc, return_sequences)
-            x = concatenate([x_fwd, x_rc])
+            x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[0])
             # Add batch norm
             if self.config.recurrent_bn:
                 # reverse-complemented batch normalization layer
-                x_fwd = BatchNormalization()(x_fwd)
-                x_rc = BatchNormalization()(x_rc)
+                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
+                self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x_fwd = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x_fwd)
-            x_rc = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x_rc)
+            x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
+            x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
             # First recurrent layer already added
             self.__current_recurrent = 1
         else:
@@ -659,51 +684,59 @@ class PaPrNet:
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
-                x = MaxPooling1D()(x)
+                x_fwd = MaxPooling1D()(x_fwd)
+                x_rc = MaxPooling1D()(x_rc)
             elif self.config.conv_pooling == 'average':
-                x = AveragePooling1D()(x)
+                x_fwd = AveragePooling1D()(x_fwd)
+                x_rc = AveragePooling1D()(x_rc)
             elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x_fwd = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_fwd)
+                x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc)
             # Add layer
             # Reverse-complement convolutional layer
-            x = RevCompConv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same',
-                              kernel_initializer=self.config.initializer,
-                              kernel_regularizer=self.config.regularizer)(x)
-            # Add batch norm
+            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, self.config.conv_units[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x = RevCompConv1DBatchNorm()(x)
+                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
+                self.__current_bn = self.__current_bn + 1
             # Add activation
-            x = Activation(self.config.conv_activation)(x)
+            x_fwd = Activation(self.config.conv_activation)(x_fwd)
+            x_rc = Activation(self.config.conv_activation)(x_rc)
+            self.__current_conv = self.__current_conv + 1
 
         # Pooling layer
         if self.config.n_conv > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
-                    x = GlobalMaxPooling1D()(x)
+                    x_fwd = GlobalMaxPooling1D()(x_fwd)
+                    x_rc = GlobalMaxPooling1D()(x_rc)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = MaxPooling1D()(x)
+                    x_fwd = MaxPooling1D()(x_fwd)
+                    x_rc = MaxPooling1D()(x_rc)
             elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
-                    x = GlobalAveragePooling1D()(x)
+                    x_fwd = GlobalAveragePooling1D()(x_fwd)
+                    x_rc = GlobalAveragePooling1D()(x_rc)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = AveragePooling1D()(x)
+                    x_fwd = AveragePooling1D()(x_fwd)
+                    x_rc = AveragePooling1D()(x_rc)
             elif self.config.conv_pooling != 'none':
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
-            if not np.isclose(self.config.conv_drop_out, 0.0):
-                x = Dropout(self.config.conv_drop_out, seed=self.config.seed)(x)
+            if not np.isclose(self.config.conv_dropout, 0.0):
+                x_fwd = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_fwd)
+                x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc)
 
         # Recurrent layers
         for i in range(self.__current_recurrent, self.config.n_recurrent):
@@ -711,31 +744,36 @@ class PaPrNet:
                 # In the last layer, return output only for the last unit
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences)
+            x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[i])
             # Add batch norm
             if self.config.recurrent_bn:
                 # Reverse-complemented batch normalization layer
-                x = RevCompConv1DBatchNorm()(x)
+                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
+                self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x = Dropout(self.config.recurrent_drop_out, seed=self.config.seed)(x)
-
-        # Dense layers
-        for i in range(0, self.config.n_dense):
-            if i == 0:
-                x = DenseAfterRevcompWeightedSum(self.config.dense_units[i],
-                                                 kernel_regularizer=self.config.regularizer)(x)
-            else:
-                x = Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer)(x)
-            if self.config.dense_bn:
-                # Reverse-complemented batch normalization layer
-                x = RevCompConv1DBatchNorm()(x)
-            x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_drop_out, seed=self.config.seed)(x)
+            x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
+            x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = DenseAfterRevcompWeightedSum(1,  kernel_regularizer=self.config.regularizer)(x)
+            # Output layer for binary classification
+            x = self.__add_siam_sum_dense(x_fwd, x_rc, 1)
         else:
+            # Dense layers
+            x = self.__add_siam_sum_dense(x_fwd, x_rc, self.config.dense_units[0])
+            if self.config.dense_bn:
+                # Batch normalization layer
+                x = BatchNormalization()(x)
+            x = Activation(self.config.dense_activation)(x)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
+            for i in range(1, self.config.n_dense):
+                x = Dense(self.config.dense_units[i], kernel_regularizer=self.config.regularizer)(x)
+                if self.config.dense_bn:
+                    # Batch normalization layer
+                    x = BatchNormalization()(x)
+                x = Activation(self.config.dense_activation)(x)
+                x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
+            # Output layer for binary classification
             x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
         x = Activation('sigmoid')(x)
 

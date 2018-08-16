@@ -69,7 +69,7 @@ def preproc(config):
     # Set additional options: gzip compression, RC augmentation, data type
     do_gzip = config['Options'].getboolean('Do_gzip')
     do_revc = config['Options'].getboolean('Do_revc')
-    datatype = config['Options']['Data_type']
+    datatype = config['Options']['DataType']
     
     # Set alphabet and prepare the tokenizer
     alphabet = "ACGT"  
