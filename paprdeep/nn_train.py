@@ -263,6 +263,7 @@ class PaPrNet:
             self.length_val = self.x_val.shape[0]
 
     def __add_lstm(self, inputs, return_sequences):
+        # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if self.config.n_gpus > 0:
             x = Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
                                         recurrent_initializer=orthogonal(self.config.seed),
@@ -272,13 +273,12 @@ class PaPrNet:
             x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
                                    recurrent_initializer=orthogonal(self.config.seed),
                                    kernel_regularizer=self.config.regularizer,
-                                   return_sequences=return_sequences))(inputs)
-        if self.config.recurrent_bn:
-            # Standard batch normalization layer
-            x = BatchNormalization()(x)
+                                   return_sequences=return_sequences,
+                                   recurrent_activation='sigmoid'))(inputs)
         return x
 
     def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
+        # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if self.config.n_gpus > 0:
             shared_lstm = Bidirectional(CuDNNLSTM(units,
                                                   kernel_initializer=self.config.initializer,
@@ -289,7 +289,8 @@ class PaPrNet:
             shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
                                              recurrent_initializer=orthogonal(self.config.seed),
                                              kernel_regularizer=self.config.regularizer,
-                                             return_sequences=return_sequences))
+                                             return_sequences=return_sequences,
+                                             recurrent_activation='sigmoid'))
         x_fwd = shared_lstm(inputs_fwd)
         x_rc = shared_lstm(inputs_rc)
         if return_sequences:
