@@ -5,11 +5,11 @@ Requires a config file describing the available devices, data loading mode, inpu
 paths to input files and how should was the model trained, and a file with model weights. The original config file may
 be used, as the number of available devices is overridden by this script.
 
-usage: convert_cudnn.py [-h] config_file model_weights
+usage: convert_cudnn.py [-h] config_file saved_model
 
 positional arguments:
   config_file
-  model_weights
+  saved_model
 
 optional arguments:
   -h, --help   show this help message and exit
@@ -32,6 +32,7 @@ import configparser
 import re
 
 import keras.backend as K
+from keras.models import load_model
 
 from nn_train import PaPrConfig, PaPrNet
 
@@ -39,12 +40,21 @@ def main():
     """Parse the config file and train the NN on Illumina reads."""
     parser = argparse.ArgumentParser(description="Convert a CuDNNLSTM to a CPU-compatible LSTM.")
     parser.add_argument("config_file")
-    parser.add_argument("model_weights")
+    parser.add_argument("saved_model")
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
-    paprconfig = PaPrConfig(config)
 
+    # Prepare weights
+    model = load_model(args.saved_model)
+    path = args.saved_model
+    if re.search("\.h5$", path) is not None:
+        path = re.sub("\.h5$", "", path)
+    weights_path = path + "_weights.h5"
+    model.save_weights(weights_path)
+
+    # Load model architecture and weights
+    paprconfig = PaPrConfig(config)
     paprconfig.n_gpus = 0
     paprconfig.multi_gpu = False
     paprconfig.model_build_device = '/cpu:0'
@@ -53,13 +63,10 @@ def main():
         paprconfig.set_tf_session()
     paprnet = PaPrNet(paprconfig)
 
-    paprnet.model.load_weights(args.model_weights)
+    paprnet.model.load_weights(weights_path)
 
-    save_path = args.model_weights
-    if re.search("\.h5$", save_path) is not None:
-        save_path = re.sub("\.h5$", "", save_path)
-    save_path = save_path + "_cpu.h5"
-
+    # Save output
+    save_path = path + "_cpu.h5"
     paprnet.model.save(save_path)
 
 
