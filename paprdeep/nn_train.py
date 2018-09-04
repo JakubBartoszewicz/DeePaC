@@ -42,7 +42,7 @@ from keras import regularizers
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
-# from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
+
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 
@@ -57,6 +57,7 @@ def main():
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
     paprnet = PaPrNet(paprconfig)
+    paprnet.compile_model()
     paprnet.train()
 
 
@@ -228,7 +229,6 @@ class PaPrNet:
                 self.__build_rc_model()
             else:
                 self.__build_simple_model()
-        self.__compile_model()
 
     def __load_data(self):
         """Load datasets"""
@@ -780,7 +780,7 @@ class PaPrNet:
         # Initialize the model
         self.model = Model(inputs_fwd, x)
 
-    def __compile_model(self):
+    def compile_model(self):
         """Compile model and save model summaries"""
         print("Compiling...")
         # If using multiple GPUs, compile a parallel model for data parallelism.
