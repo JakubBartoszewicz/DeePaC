@@ -57,6 +57,7 @@ def main():
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
     paprnet = PaPrNet(paprconfig)
+    paprnet.load_data()
     paprnet.compile_model()
     paprnet.train()
 
@@ -209,7 +210,6 @@ class PaPrNet:
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
-        self.__load_data()
         self.__set_callbacks()
         if K.backend() == 'tensorflow':
             # Build the model using the CPU or GPU
@@ -230,7 +230,7 @@ class PaPrNet:
             else:
                 self.__build_simple_model()
 
-    def __load_data(self):
+    def load_data(self):
         """Load datasets"""
         print("Loading...")
 
