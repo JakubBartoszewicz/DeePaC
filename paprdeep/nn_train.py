@@ -674,8 +674,9 @@ class PaPrNet:
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
-            x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
+            if not np.isclose(self.config.recurrent_dropout, 0.0):
+                x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
+                x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
             # First recurrent layer already added
             self.__current_recurrent = 1
         else:
@@ -752,8 +753,9 @@ class PaPrNet:
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
-            x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
+            if not np.isclose(self.config.recurrent_dropout, 0.0):
+                x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
+                x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
@@ -803,7 +805,7 @@ class PaPrNet:
                     self.model.summary()
             plot_model(self.model,
                        to_file=self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname),
-                       show_shapes=True)
+                       show_shapes=False, rankdir='TB')
 
     def __set_callbacks(self):
         """Set callbacks to use during training"""
