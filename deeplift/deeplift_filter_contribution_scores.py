@@ -12,7 +12,8 @@ from Bio import SeqIO
 
 import deeplift
 import deeplift_additional_conversion_functions as conversion
-
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from paprdeep.rc_layers import *
 
 def main():
 	'''
@@ -23,6 +24,15 @@ def main():
 	#parse command line arguments
 	args = parse_arguments()
 	
+	if args.w_norm:
+		print("Create model with mean-centered weight matrices ...")
+		model = load_model(args.model, custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
+		conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
+		kernel_normed, bias_normed = normalize_filter_weights( model.get_layer(index=conv_layer_idx).get_weights()[0], model.get_layer(index=conv_layer_idx).get_weights()[1])
+		model.get_layer(index = conv_layer_idx).set_weights([kernel_normed, bias_normed])
+		model.save(os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5")		
+		args.model = os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5"
+	print(args.model)
 	#convert keras model to deeplift model
 	print("Building DeepLIFT model ...")
 	deeplift_model = conversion.convert_model_from_saved_files(args.model, nonlinear_mxts_mode=deeplift.layers.NonlinearMxtsMode.DeepLIFT_GenomicsDefault)
@@ -37,12 +47,6 @@ def main():
 	motif_length = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[0]
 	pad_left = (motif_length - 1) // 2
 	pad_right = motif_length - 1 - pad_left
-
-	if args.w_norm:
-		print("Mean-centering the filter weight matrices ...")
-		kernel_normed, bias_normed = normalize_filter_weights(deeplift_model.get_layers()[conv_layer_idx].kernel, deeplift_model.get_layers()[conv_layer_idx].bias)
-		deeplift_model.get_layers()[conv_layer_idx].kernel = kernel_normed
-		deeplift_model.get_layers()[conv_layer_idx].bias = bias_normed
 
 	#compile scoring function (find scores of filters (convolutional layer) w.r.t. the layer preceding the sigmoid output layer)
 	deeplift_contribs_func_filter = deeplift_model.get_target_contribs_func(find_scores_layer_idx = conv_layer_idx, target_layer_idx = -2)
@@ -67,16 +71,20 @@ def main():
 	
 	assert len(reads) == total_num_reads, "Test data in .npy-format and fasta files containing different number of reads!"
 
-        #create output directory
+        #create output directory and subdirectories
 	if not os.path.exists(args.out_dir):
 		os.makedirs(args.out_dir)
+	if not os.path.exists(args.out_dir + "/filter_scores/"):
+		os.makedirs(args.out_dir + "/filter_scores/")
+	if not os.path.exists(args.out_dir + "/fasta/"):
+		os.makedirs(args.out_dir + "/fasta/")
 	
 	#load or create reference sequences
 	ref_samples = get_reference_seqs(args, len_reads)
 	num_ref_seqs = ref_samples.shape[0]
 	
 	print("Running DeepLIFT ...")
-	chunk_size = 100000
+	chunk_size = 100000 // num_ref_seqs
 	i = 0
 	while i < total_num_reads:
 
@@ -87,14 +95,13 @@ def main():
 		
 		input_data_list = np.repeat(samples_chunk, num_ref_seqs, axis = 0)
 		input_references_list = np.concatenate([ref_samples]*num_reads, axis = 0)
-
-		scores_filter = np.array(deeplift_contribs_func_filter(task_idx = 0, input_data_list = [input_data_list], input_references_list = [input_references_list], batch_size = 50, progress_update = 10000))
+		
+		scores_filter = np.array(deeplift_contribs_func_filter(task_idx = 0, input_data_list = [input_data_list], input_references_list = [input_references_list], batch_size = 25, progress_update = 10000))
 		scores_filter = np.reshape(scores_filter, [num_reads, num_ref_seqs, len_reads, n_filters])
 		#average the results per ref sequence
 		scores_filter_avg = np.mean(scores_filter, axis = 1)
-		print("Saving data ...")	
+		print("Saving data ...")
 		for filter_index in range(n_filters):
-
 			#determine non-zero contribution scores per read and filter and extract DNA-sequence of corresponding subreads
 			contribution_scores = []
 			motifs = []
@@ -102,13 +109,14 @@ def main():
 				if np.any(scores_filter_avg[seq_id,:,filter_index]):
 					non_zero_neurons = np.nonzero(scores_filter_avg[seq_id,:,filter_index])[0]
 					scores = scores_filter_avg[seq_id, non_zero_neurons, filter_index]
-					contribution_scores.append((reads_chunk[seq_id].id, non_zero_neurons,['%.4g' % n for n in scores]))
+					#contribution_scores.append((reads_chunk[seq_id].id, non_zero_neurons,['%.4g' % n for n in scores])) #save scores with less precison to save memory
+					contribution_scores.append((reads_chunk[seq_id].id, non_zero_neurons, scores))
 					motifs.append([reads_chunk[seq_id][non_zero_neuron:(non_zero_neuron+motif_length)] for non_zero_neuron in non_zero_neurons])
 
 			if contribution_scores:
 
 				#save filter contribution scores
-				filter_rel_file = args.out_dir + "/" + test_data_set_name + "_rel_filter_%d.csv" % filter_index
+				filter_rel_file = args.out_dir + "/filter_scores/" + test_data_set_name + "_rel_filter_%d.csv" % filter_index
 				with open(filter_rel_file, 'a') as csv_file:
 					file_writer = csv.writer(csv_file)
 					for dat in contribution_scores:
@@ -117,7 +125,7 @@ def main():
 						file_writer.writerow(dat[2])
 
 				#save subreads which cause non-zero contribution scores
-				filter_motifs_file = args.out_dir + "/" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_index
+				filter_motifs_file = args.out_dir + "/fasta/" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_index
 				with open(filter_motifs_file, "a") as output_handle:
 					SeqIO.write([subread for motif in motifs for subread in motif], output_handle, "fasta")
 			
@@ -204,10 +212,11 @@ def normalize_filter_weights(kernel, bias):
 		in "Learning Important Features Through Propagating Activation Differences" by Shrikumar et al., 2017
 		'''
 		for filter_index in range(kernel.shape[-1]):
-			bias[filter_index] += np.sum(np.mean(kernel[:,:,filter_index], axis = 0))
+			bias[filter_index] += np.sum(np.mean(kernel[:,:,filter_index], axis = 1))
 			for pos in range(kernel.shape[0]):
 				kernel[pos,:,filter_index] -= np.mean(kernel[pos,:,filter_index])
 		return kernel, bias
 
 if __name__ == "__main__":
     main()
+
