@@ -26,6 +26,7 @@ rn.seed(seed)
 
 import sys
 import argparse
+import warnings
 import configparser
 import errno
 from contextlib import redirect_stdout
@@ -43,8 +44,9 @@ from keras import regularizers
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
-from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum
+from rc_layers import RevCompConv1D, RevCompConv1DBatchNorm, DenseAfterRevcompWeightedSum, DenseAfterRevcompConv1D
 from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
+from keras.models import load_model
 
 def main(argv):
     """Parse the config file and train the NN on Illumina reads."""
@@ -156,7 +158,7 @@ class PaPrConfig:
         if self.optimization_method == "adam":
             self.optimizer = Adam(lr=self.learning_rate)
         else:
-            warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
+            warnings.warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
             self.optimizer = self.optimization_method
         # If needed, log the memory usage
         self.log_memory = config['Training'].getboolean('MemUsageLog')
@@ -205,14 +207,19 @@ class PaPrNet:
                 raise
         self.__loadData()
         self.__setCallbacks()
-        if K.backend() == 'tensorflow':
-            # Build the model using the CPU or GPU
-            with tf.device(self.config.model_build_device):
-                self.__buildSeqModel()
-        elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
-            raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
+	# Load model from previous epoch
+        if self.config.epoch_start > 1:
+            self.__loadModel()
+        # Build model
         else:
-            self.__buildSeqModel()
+            if K.backend() == 'tensorflow':
+                # Build the model using the CPU or GPU
+                with tf.device(self.config.model_build_device):
+                    self.__buildSeqModel()
+            elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
+                raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
+            else:
+                self.__buildSeqModel()
         self.__compileSeqModel()
         
     def __loadData(self):
@@ -247,6 +254,12 @@ class PaPrNet:
             self.validation_data = (self.x_val, self.y_val)
             self.length_val = self.x_val.shape[0]
         
+    def __loadModel(self):
+        """Loads model trained until certain epoch and continues training for further epochs"""
+        print("Loading model from previous epoch...")
+        self.model = load_model(self.config.log_dir + "/nn-{p}-e{ne:03d}.h5".format(p=self.config.runname, ne=self.config.epoch_start-1), custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
+
+
     def __buildSeqModel(self):
         """Build the network"""
         if not self.config.use_rc_conv:
@@ -275,7 +288,6 @@ class PaPrNet:
                     self.model.add(BatchNormalization())
                 # Reverse-complemented batch normalization layer
                 else:
-                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
                     self.model.add(RevCompConv1DBatchNorm())
             # Add activation
             self.model.add(Activation(self.config.conv_activation))
@@ -292,7 +304,6 @@ class PaPrNet:
                     self.model.add(BatchNormalization())
                 # reverse-complemented batch normalization layer
                 else:
-                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
                     self.model.add(RevCompConv1DBatchNorm())
             # Add dropout
             self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
@@ -328,7 +339,6 @@ class PaPrNet:
                     self.model.add(BatchNormalization())
                 # Reverse-complemented batch normalization layer
                 else:
-                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
                     self.model.add(RevCompConv1DBatchNorm())
             # Add activation
             self.model.add(Activation(self.config.conv_activation))
@@ -373,7 +383,6 @@ class PaPrNet:
                     self.model.add(BatchNormalization())
                 # Reverse-complemented batch normalization layer
                 else:
-                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
                     self.model.add(RevCompConv1DBatchNorm())
             # Add dropout
             self.model.add(Dropout(self.config.recurrent_drop_out, seed = self.config.seed))
@@ -390,7 +399,6 @@ class PaPrNet:
                     self.model.add(BatchNormalization())
                 # Reverse-complemented batch normalization layer
                 else:
-                    print("Attention: Your using reverse-complemented batch normalization which is not yet fully tested!!!")
                     self.model.add(RevCompConv1DBatchNorm())
             self.model.add(Activation(self.config.dense_activation))
             self.model.add(Dropout(self.config.dense_drop_out, seed = self.config.seed))
