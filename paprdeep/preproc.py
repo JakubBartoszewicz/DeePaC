@@ -92,7 +92,7 @@ def preproc(config):
     # Count positive samples
     n_positive = x_train.shape[0] - n_negative
     # Add labels
-    y_train = np.concatenate((np.repeat(0, n_negative), np.repeat(1, n_positive)))
+    y_train = np.concatenate((np.repeat(0, n_negative).astype(datatype), np.repeat(1, n_positive).astype(datatype)))
     # ** TODO: PADDING (or x_train is an array of arrays, not an array, and it has to be reversed element-wise) **
     # All sequences must have the same length. Then x_train is an array and the view below can be created
     # Note: creating a view instead of reversing element-wise saves a lot of memory (800GB vs 450GB)
