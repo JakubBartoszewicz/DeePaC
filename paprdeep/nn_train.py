@@ -76,8 +76,12 @@ class PaPrConfig:
         self.n_gpus = config['Devices'].getint('N_GPUs')
         self.n_cpus = config['Devices'].getint('N_CPUs')
         self.multi_gpu = True if self.n_gpus > 1 else False
-        self.model_build_device = '/cpu:0' if self.multi_gpu else '/device:GPU:0'
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
+        self.device_parallel = config['Devices'].getboolean('DeviceParallel')
+        self.gpu_fwd = config['Devices']['GPU_fwd']
+        self.gpu_rc = config['Devices']['GPU_rc']
+
+        self.model_build_device = '/cpu:0' if self.multi_gpu else self.gpu_fwd
 
         # Data Loading Config #
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
@@ -291,8 +295,15 @@ class PaPrNet:
                                              kernel_regularizer=self.config.regularizer,
                                              return_sequences=return_sequences,
                                              recurrent_activation='sigmoid'))
-        x_fwd = shared_lstm(inputs_fwd)
-        x_rc = shared_lstm(inputs_rc)
+        if self.config.device_parallel:
+            with tf.device_scope(self.config.gpu_fwd):
+                x_fwd = shared_lstm(inputs_fwd)
+            # Process the next sequence on another GPU
+            with tf.device_scope(self.config.gpu_rc):
+                x_rc = shared_lstm(inputs_rc)
+        else:
+            x_fwd = shared_lstm(inputs_fwd)
+            x_rc = shared_lstm(inputs_rc)
         if return_sequences:
             rev_axes = (1, 2)
         else:
@@ -313,8 +324,15 @@ class PaPrNet:
     def __add_siam_conv1d(self, inputs_fwd, inputs_rc, units):
         shared_conv = Conv1D(units, self.config.conv_filter_size[0], padding='same',
                              kernel_regularizer=self.config.regularizer)
-        x_fwd = shared_conv(inputs_fwd)
-        x_rc = shared_conv(inputs_rc)
+        if self.config.device_parallel:
+            with tf.device_scope(self.config.gpu_fwd):
+                x_fwd = shared_conv(inputs_fwd)
+            # Process the next sequence on another GPU
+            with tf.device_scope(self.config.gpu_rc):
+                x_rc = shared_conv(inputs_rc)
+        else:
+            x_fwd = shared_conv(inputs_fwd)
+            x_rc = shared_conv(inputs_rc)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
                              name="rc_conv1d_out_{n}".format(n=self.__current_conv+1))
         x_rc = revcomp_out(x_rc)
@@ -344,8 +362,15 @@ class PaPrNet:
                          name="rc_split_batchnorm_fwd_out_{n}".format(n=self.__current_bn+1))
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
                         name="rc_split_batchnorm_rc_out_{n}".format(n=self.__current_bn+1))
-        x_fwd = fwd_out(out)
-        x_rc = rc_out(out)
+        if self.config.device_parallel:
+            with tf.device_scope(self.config.gpu_fwd):
+                x_fwd = fwd_out(out)
+            # Process the next sequence on another GPU
+            with tf.device_scope(self.config.gpu_rc):
+                x_rc = rc_out(out)
+        else:
+            x_fwd = fwd_out(out)
+            x_rc = rc_out(out)
         return x_fwd, x_rc
 
     def __add_rc_batchnorm(self, inputs):
