@@ -32,7 +32,8 @@ import warnings
 from contextlib import redirect_stdout
 
 from keras.models import Model
-from keras.layers import Dense, Dropout, Activation, Input, Lambda, concatenate, add
+from keras.layers import Dense, Dropout, Activation, Input, Lambda
+from keras.layers import concatenate, add, subtract, multiply, average, maximum
 from keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 import keras.backend as K
@@ -77,7 +78,7 @@ class PaPrConfig:
         self.n_cpus = config['Devices'].getint('N_CPUs')
         self.multi_gpu = True if self.n_gpus > 1 else False
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
-        self.device_parallel = config['Devices'].getboolean('DeviceParallel')
+        self.device_parallel = config['Devices'].getboolean('DeviceParallel') and self.multi_gpu
         self.gpu_fwd = config['Devices']['GPU_fwd']
         self.gpu_rc = config['Devices']['GPU_rc']
 
@@ -128,6 +129,22 @@ class PaPrConfig:
         self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
         self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
         self.recurrent_dropout = config['Architecture'].getfloat('Recurrent_Dropout')
+        merge_dict = {
+            # motif on fwd fuzzy OR rc (Goedel t-conorm)
+            "maximum": maximum,
+            # motif on fwd fuzzy AND rc (product t-norm)
+            "multiply": multiply,
+            # motif on fwd PLUS/"OR" rc (Shrikumar-style)
+            "add": add,
+            # motif on fwd PLUS/"OR" rc (Shrikumar-style), rescaled
+            "average": average,
+            # motif on fwd MINUS/"BUT NOT" rc (Shrikumar-like),
+            "subtract": subtract
+        }
+        if self.rc_mode != "none":
+            self.dense_merge = merge_dict.get(config['Architecture']['Dense_Merge'])
+            if self.dense_merge is None:
+                raise ValueError('Unknown dense merge function')
         self.dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
         self.dense_activation = config['Architecture']['Dense_Activation']
         self.dense_bn = config['Architecture'].getboolean('Dense_BN')
@@ -390,17 +407,17 @@ class PaPrNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def __add_siam_sum_dense(self, inputs_fwd, inputs_rc, units):
+    def __add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
         shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
                        name="rc_sum_dense_rc_in_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
         x_fwd = shared_dense(inputs_fwd)
         x_rc = shared_dense(inputs_rc)
-        out = add([x_fwd, x_rc])
+        out = merge_function([x_fwd, x_rc])
         return out
 
-    def __add_rc_sum_dense(self, inputs, units):
+    def __add_rc_merge_dense(self, inputs, units, merge_function=add):
         split_shape = inputs._keras_shape[-1] // 2
         fwd_in = Lambda(lambda x: x[:, :split_shape], output_shape=[split_shape],
                         name="rc_split_dense_fwd_{n}".format(n=1))
@@ -408,7 +425,7 @@ class PaPrNet:
                        name="rc_split_dense_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
-        return self.__add_siam_sum_dense(x_fwd, x_rc, units)
+        return self.__add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
     def __build_simple_model(self):
         """Build the standard network"""
@@ -635,7 +652,7 @@ class PaPrNet:
         # Dense layers
         for i in range(0, self.config.n_dense):
             if i == 0:
-                x = self.__add_rc_sum_dense(x, self.config.dense_units[i])
+                x = self.__add_rc_merge_dense(x, self.config.dense_units[i])
             else:
                 x = Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
@@ -645,7 +662,7 @@ class PaPrNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = self.__add_rc_sum_dense(x, 1)
+            x = self.__add_rc_merge_dense(x, 1)
         else:
             x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
         x = Activation('sigmoid')(x)
@@ -785,10 +802,10 @@ class PaPrNet:
         # Output layer for binary classification
         if self.config.n_dense == 0:
             # Output layer for binary classification
-            x = self.__add_siam_sum_dense(x_fwd, x_rc, 1)
+            x = self.__add_siam_merge_dense(x_fwd, x_rc, 1)
         else:
             # Dense layers
-            x = self.__add_siam_sum_dense(x_fwd, x_rc, self.config.dense_units[0])
+            x = self.__add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
             if self.config.dense_bn:
                 # Batch normalization layer
                 x = BatchNormalization()(x)
@@ -859,7 +876,7 @@ class PaPrNet:
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
-        if self.config.multi_gpu:
+        if self.config.multi_gpu and not self.config.device_parallel:
             if self.config.use_generators_train:
                 # Fit a parallel model using generators
                 self.history = self.parallel_model.fit_generator(generator=self.training_sequence,
