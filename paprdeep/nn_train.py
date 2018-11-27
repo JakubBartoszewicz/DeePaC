@@ -313,10 +313,10 @@ class RCNet:
                                              return_sequences=return_sequences,
                                              recurrent_activation='sigmoid'))
         if self.config.device_parallel:
-            with tf.device(self.config.gpu_fwd):
+            with tf.device(self.config.device_fwd):
                 x_fwd = shared_lstm(inputs_fwd)
             # Process the next sequence on another GPU
-            with tf.device(self.config.gpu_rc):
+            with tf.device(self.config.device_rc):
                 x_rc = shared_lstm(inputs_rc)
         else:
             x_fwd = shared_lstm(inputs_fwd)
@@ -342,10 +342,10 @@ class RCNet:
         shared_conv = Conv1D(units, self.config.conv_filter_size[0], padding='same',
                              kernel_regularizer=self.config.regularizer)
         if self.config.device_parallel:
-            with tf.device(self.config.gpu_fwd):
+            with tf.device(self.config.device_fwd):
                 x_fwd = shared_conv(inputs_fwd)
             # Process the next sequence on another GPU
-            with tf.device(self.config.gpu_rc):
+            with tf.device(self.config.device_rc):
                 x_rc = shared_conv(inputs_rc)
         else:
             x_fwd = shared_conv(inputs_fwd)
@@ -380,10 +380,10 @@ class RCNet:
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
                         name="rc_split_batchnorm_rc_out_{n}".format(n=self.__current_bn+1))
         if self.config.device_parallel:
-            with tf.device(self.config.gpu_fwd):
+            with tf.device(self.config.device_fwd):
                 x_fwd = fwd_out(out)
             # Process the next sequence on another GPU
-            with tf.device(self.config.gpu_rc):
+            with tf.device(self.config.device_rc):
                 x_rc = rc_out(out)
         else:
             x_fwd = fwd_out(out)
@@ -412,8 +412,15 @@ class RCNet:
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
                        name="rc_sum_dense_rc_in_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
-        x_fwd = shared_dense(inputs_fwd)
-        x_rc = shared_dense(inputs_rc)
+        if self.config.device_parallel:
+            with tf.device(self.config.device_fwd):
+                x_fwd = shared_dense(inputs_fwd)
+            # Process the next sequence on another GPU
+            with tf.device(self.config.device_rc):
+                x_rc = shared_dense(inputs_rc)
+        else:
+            x_fwd = shared_dense(inputs_fwd)
+            x_rc = shared_dense(inputs_rc)
         out = merge_function([x_fwd, x_rc])
         return out
 
