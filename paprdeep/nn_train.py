@@ -54,19 +54,19 @@ def main():
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
-    paprconfig = PaPrConfig(config)
+    paprconfig = RCConfig(config)
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
-    paprnet = PaPrNet(paprconfig)
+    paprnet = RCNet(paprconfig)
     paprnet.load_data()
     paprnet.compile_model()
     paprnet.train()
 
 
-class PaPrConfig:
+class RCConfig:
 
     """
-    PaPrNet configuration class
+    RCNet configuration class
 
     """
 
@@ -79,10 +79,10 @@ class PaPrConfig:
         self.multi_gpu = True if self.n_gpus > 1 else False
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
         self.device_parallel = config['Devices'].getboolean('DeviceParallel') and self.multi_gpu
-        self.gpu_fwd = config['Devices']['GPU_fwd']
-        self.gpu_rc = config['Devices']['GPU_rc']
+        self.device_fwd = config['Devices']['Device_fwd']
+        self.device_rc = config['Devices']['Device_rc']
 
-        self.model_build_device = '/cpu:0' if self.multi_gpu else self.gpu_fwd
+        self.model_build_device = config['Devices']['Device_build']
 
         # Data Loading Config #
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
@@ -215,10 +215,10 @@ class PaPrConfig:
             K.set_session(session)
 
 
-class PaPrNet:
+class RCNet:
 
     """
-    Pathogenicity prediction network class.
+    Reverse-complement neural network class.
 
     """
 
@@ -313,10 +313,10 @@ class PaPrNet:
                                              return_sequences=return_sequences,
                                              recurrent_activation='sigmoid'))
         if self.config.device_parallel:
-            with tf.device_scope(self.config.gpu_fwd):
+            with tf.device(self.config.gpu_fwd):
                 x_fwd = shared_lstm(inputs_fwd)
             # Process the next sequence on another GPU
-            with tf.device_scope(self.config.gpu_rc):
+            with tf.device(self.config.gpu_rc):
                 x_rc = shared_lstm(inputs_rc)
         else:
             x_fwd = shared_lstm(inputs_fwd)
@@ -342,10 +342,10 @@ class PaPrNet:
         shared_conv = Conv1D(units, self.config.conv_filter_size[0], padding='same',
                              kernel_regularizer=self.config.regularizer)
         if self.config.device_parallel:
-            with tf.device_scope(self.config.gpu_fwd):
+            with tf.device(self.config.gpu_fwd):
                 x_fwd = shared_conv(inputs_fwd)
             # Process the next sequence on another GPU
-            with tf.device_scope(self.config.gpu_rc):
+            with tf.device(self.config.gpu_rc):
                 x_rc = shared_conv(inputs_rc)
         else:
             x_fwd = shared_conv(inputs_fwd)
@@ -380,10 +380,10 @@ class PaPrNet:
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
                         name="rc_split_batchnorm_rc_out_{n}".format(n=self.__current_bn+1))
         if self.config.device_parallel:
-            with tf.device_scope(self.config.gpu_fwd):
+            with tf.device(self.config.gpu_fwd):
                 x_fwd = fwd_out(out)
             # Process the next sequence on another GPU
-            with tf.device_scope(self.config.gpu_rc):
+            with tf.device(self.config.gpu_rc):
                 x_rc = rc_out(out)
         else:
             x_fwd = fwd_out(out)
@@ -830,7 +830,7 @@ class PaPrNet:
         print("Compiling...")
         # If using multiple GPUs, compile a parallel model for data parallelism.
         # Use a wrapper for the parallel model to use the ModelCheckpoint callback
-        if self.config.multi_gpu:
+        if self.config.multi_gpu and not self.config.device_parallel:
             self.parallel_model = ModelMGPU(self.model, gpus=self.config.n_gpus)
             self.parallel_model.compile(loss='binary_crossentropy',
                                         optimizer=self.config.optimizer,
