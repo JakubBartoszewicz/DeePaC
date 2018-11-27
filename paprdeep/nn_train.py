@@ -79,8 +79,9 @@ class RCConfig:
         self.multi_gpu = True if self.n_gpus > 1 else False
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
         self.device_parallel = config['Devices'].getboolean('DeviceParallel') and self.multi_gpu
-        self.device_fwd = config['Devices']['Device_fwd']
-        self.device_rc = config['Devices']['Device_rc']
+        if self.device_parallel:
+            self.device_fwd = config['Devices']['Device_fwd']
+            self.device_rc = config['Devices']['Device_rc']
 
         self.model_build_device = config['Devices']['Device_build']
 
