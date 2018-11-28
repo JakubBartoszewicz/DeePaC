@@ -152,8 +152,11 @@ class RCConfig:
         # If needed, weight classes
         self.use_weights = config['ClassWeights'].getboolean('UseWeights')
         if self.use_weights:
-            self.class_weight = {0: config['Architecture'].getfloat('ClassWeight_0'),
-                                 1: config['Architecture'].getfloat('ClassWeight_1')}
+            class_count_0 = config['ClassWeights'].getfloat('ClassCount_0')
+            class_count_1 = config['ClassWeights'].getfloat('ClassCount_1')
+            sum_count = class_count_0 + class_count_1
+            self.class_weight = {0: sum_count/(2*class_count_0),
+                                 1: sum_count/(2*class_count_1)}
         else:
             self.class_weight = None
 
