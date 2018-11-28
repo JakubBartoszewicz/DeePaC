@@ -138,9 +138,7 @@ class RCConfig:
             # motif on fwd PLUS/"OR" rc (Shrikumar-style)
             "add": add,
             # motif on fwd PLUS/"OR" rc (Shrikumar-style), rescaled
-            "average": average,
-            # motif on fwd MINUS/"BUT NOT" rc (Shrikumar-like),
-            "subtract": subtract
+            "average": average
         }
         if self.rc_mode != "none":
             self.dense_merge = merge_dict.get(config['Architecture']['Dense_Merge'])
