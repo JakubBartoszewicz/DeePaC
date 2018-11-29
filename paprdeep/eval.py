@@ -20,6 +20,7 @@ from keras.backend import tensorflow_backend as backend
 import sklearn.metrics as mtr
 import numpy as np
 import csv
+import matplotlib.pyplot as plt
 
 
 def main():
@@ -51,6 +52,8 @@ def evaluate(config):
     epoch_start = config['Epochs'].getint('EpochStart')
     epoch_end = config['Epochs'].getint('EpochEnd')
 
+    do_plots = config['Options'].getboolean('Do_plots')
+
     # Read data to memory
     x_test = np.load("{}/{}_data.npy".format(dir_path, dataset_path))
     y_test = np.load("{}/{}_labels.npy".format(dir_path, dataset_path))
@@ -58,7 +61,7 @@ def evaluate(config):
     # Write CSV header
     with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "log_loss", "acc", "auroc", "mcc", "f1", "precision", "recall"))
+        file_writer.writerow(("epoch", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
     for n_epoch in range(epoch_start, epoch_end):
@@ -79,12 +82,35 @@ def evaluate(config):
         f1 = mtr.f1_score(y_test, y_pred_class)
         precision = mtr.precision_score(y_test, y_pred_class)
         recall = mtr.recall_score(y_test, y_pred_class)
+        aupr = mtr.average_precision_score(y_test, y_pred_class)
 
         # Save the results
         with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
             file_writer = csv.writer(csv_file)
-            file_writer.writerow((n_epoch, log_loss, acc, auroc, mcc, f1, precision, recall))
+            file_writer.writerow((n_epoch, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
+        if do_plots:
+            fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
+            plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
+            plt.title("AUROC: {}".format(dataset_path))
+            plt.legend(loc='lower right')
+            plt.plot([0, 1], [0, 1], 'r--')
+            plt.xlim([0, 1])
+            plt.ylim([0, 1])
+            plt.ylabel('True Positive Rate')
+            plt.xlabel('False Positive Rate')
+            plt.savefig("auc_{}_.png".format(name_prefix, n_epoch))
+            plt.clf()
 
+            precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
+            plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
+            plt.title("AUPR: {}".format(dataset_path))
+            plt.legend(loc='lower right')
+            plt.plot([0, 1], [0, 1], 'r--')
+            plt.xlim([0, 1])
+            plt.ylim([0, 1])
+            plt.ylabel('Precision')
+            plt.xlabel('Recall')
+            plt.savefig("aupr_{}_.png".format(name_prefix, n_epoch))
         
 if __name__ == "__main__":
     main()
