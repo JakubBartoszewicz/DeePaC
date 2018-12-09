@@ -34,39 +34,39 @@ import re
 import keras.backend as K
 from keras.models import load_model
 
-from nn_train import PaPrConfig, PaPrNet
+from nn_train import RCConfig, RCNet
 
 def main():
     """Parse the config file and train the NN on Illumina reads."""
     parser = argparse.ArgumentParser(description="Convert a CuDNNLSTM to a CPU-compatible LSTM.")
     parser.add_argument("config_file")
     parser.add_argument("saved_model")
+    parser.add_argument("--prep_weights", default=True, help="prepare weights based on model file")
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
 
-    # Prepare weights
-    model = load_model(args.saved_model)
     path = args.saved_model
     if re.search("\.h5$", path) is not None:
         path = re.sub("\.h5$", "", path)
     weights_path = path + "_weights.h5"
-    model.save_weights(weights_path)
 
-    # Load model architecture and weights
-    paprconfig = PaPrConfig(config)
-    paprconfig.n_gpus = 0
-    paprconfig.multi_gpu = False
-    paprconfig.model_build_device = '/cpu:0'
+    # Prepare weights
+    if args.prep_weights:
+        model = load_model(args.saved_model)
+        model.save_weights(weights_path)
+
+    # Load model architecture, device info and weights
+    paprconfig = RCConfig(config) 
 
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
-    paprnet = PaPrNet(paprconfig)
+    paprnet = RCNet(paprconfig)
 
     paprnet.model.load_weights(weights_path)
 
     # Save output
-    save_path = path + "_cpu.h5"
+    save_path = path + "_converted.h5"
     paprnet.model.save(save_path)
 
 
