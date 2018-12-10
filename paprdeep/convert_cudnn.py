@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description="Convert a CuDNNLSTM to a CPU-compatible LSTM.")
     parser.add_argument("config_file")
     parser.add_argument("saved_model")
-    parser.add_argument("--prep_weights", default=True, help="prepare weights based on model file")
+    parser.add_argument("--no_prep", help="Use prepared weights instead of the model file", action="store_true")
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
@@ -52,7 +52,7 @@ def main():
     weights_path = path + "_weights.h5"
 
     # Prepare weights
-    if args.prep_weights:
+    if not args.no_prep:
         model = load_model(args.saved_model)
         model.save_weights(weights_path)
 

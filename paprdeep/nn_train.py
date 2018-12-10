@@ -71,7 +71,7 @@ class RCConfig:
     """
 
     def __init__(self, config):
-        """PaPrConfig constructor"""
+        """RCConfig constructor"""
         # Devices Config #
         # Get the number of available GPUs
         self.n_gpus = config['Devices'].getint('N_GPUs')
@@ -225,7 +225,7 @@ class RCNet:
     """
 
     def __init__(self, config):
-        """PaPrNet constructor and config parsing"""
+        """RCNet constructor and config parsing"""
         self.config = config
         self.history = None
         try:

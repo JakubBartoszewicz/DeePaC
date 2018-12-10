@@ -22,6 +22,37 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
+class EvalConfig():
+    """
+    Evaluation configuration class
+
+    """
+
+    def __init__(self, config):
+        # Set the data directory
+        self.dir_path = config['Data']['DataDir']
+        # Set the evaluation dataset name
+        self.dataset_path = config['Data']['DataSet']
+        # Set the paired dataset name
+        self.pairedset_path = config['Data']['PairedSet']
+        if self.pairedset_path == "none":
+            self.pairedset_path = None
+            self.combinedset_path = self.dataset_path
+        else:
+            self.combinedset_path = self.dataset_path + "_" + self.pairedset_path
+
+        # Set the run name
+        self.runname = config['Data']['RunName']
+        self.name_prefix = "nn-{}".format(self.runname)
+        # Set the classification threshold
+        self.thresh = config['Data'].getfloat('Threshold')
+
+        # Set the first and last epoch to evaluate
+        self.epoch_start = config['Epochs'].getint('EpochStart')
+        self.epoch_end = config['Epochs'].getint('EpochEnd')
+
+        self.do_plots = config['Options'].getboolean('Do_plots')
+
 
 def main():
     """Parse the config file and evaluate the NN on Illumina reads."""
@@ -31,86 +62,101 @@ def main():
     config = configparser.ConfigParser()
     config.read(args.config_file)
     evaluate(config)
-   
-    
+
+
+
 def evaluate(config):
     """Evaluate the NN on Illumina reads using the supplied configuration."""
     # Clear session needed or TypeError can happen in some cases
     backend.clear_session()
     
-    # Set the data directory
-    dir_path = config['Data']['DataDir']
-    # Set the evaluation dataset name
-    dataset_path = config['Data']['DataSet']
-    # Set the run name
-    runname = config['Data']['RunName']
-    name_prefix = "nn-{}".format(runname)
-    # Set the classification threshold
-    thresh = config['Data'].getfloat('Threshold')
-    
-    # Set the first and last epoch to evaluate
-    epoch_start = config['Epochs'].getint('EpochStart')
-    epoch_end = config['Epochs'].getint('EpochEnd')
-
-    do_plots = config['Options'].getboolean('Do_plots')
+    evalconfig = EvalConfig(config)
 
     # Read data to memory
-    x_test = np.load("{}/{}_data.npy".format(dir_path, dataset_path))
-    y_test = np.load("{}/{}_labels.npy".format(dir_path, dataset_path))
+    print("Loading {}_data.npy...".format(evalconfig.dataset_path))
+    x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
+    y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
     
     # Write CSV header
-    with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
+    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
+        file_writer.writerow(("epoch", "set", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
-    for n_epoch in range(epoch_start, epoch_end):
-        model = load_model("{p}-e{ne:03d}.h5".format(p=name_prefix, ne=n_epoch),)
-        
-        # Predict class probabilities
-        y_pred = np.ndarray.flatten(model.predict(x_test))
-        # Assign classes using the chosen threshold
-        y_pred_class = (y_pred > thresh).astype('int32')
-        # Backup predicted probabilities for future analyses 
-        np.save(file="{p}-e{ne:03d}-predictions.npy".format(p=name_prefix, ne=n_epoch), arr=y_pred)
+    for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end):
+        print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
+        y_pred_1 = predict(evalconfig, x_test, n_epoch)
+        get_performance(evalconfig, y_test, y_pred_1, n_epoch, dataset_name=evalconfig.dataset_path)
 
-        # Calculate performance measures
-        log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
-        acc = mtr.accuracy_score(y_test, y_pred_class)
-        auroc = mtr.roc_auc_score(y_test, y_pred)
-        mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
-        f1 = mtr.f1_score(y_test, y_pred_class)
-        precision = mtr.precision_score(y_test, y_pred_class)
-        recall = mtr.recall_score(y_test, y_pred_class)
-        aupr = mtr.average_precision_score(y_test, y_pred_class)
+        if evalconfig.pairedset_path is not None:
+            print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
+            x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
+            y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
 
-        # Save the results
-        with open("{}-metrics.csv".format(name_prefix), 'a',  newline="") as csv_file:
-            file_writer = csv.writer(csv_file)
-            file_writer.writerow((n_epoch, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
-        if do_plots:
-            fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
-            plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
-            plt.title("AUROC: {}".format(dataset_path))
-            plt.legend(loc='lower right')
-            plt.plot([0, 1], [0, 1], 'r--')
-            plt.xlim([0, 1])
-            plt.ylim([0, 1])
-            plt.ylabel('True Positive Rate')
-            plt.xlabel('False Positive Rate')
-            plt.savefig("auc_{}_.png".format(name_prefix, n_epoch))
-            plt.clf()
+            print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
+            y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True)
+            get_performance(evalconfig, y_test, y_pred_2, n_epoch, dataset_name=evalconfig.pairedset_path)
 
-            precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
-            plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
-            plt.title("AUPR: {}".format(dataset_path))
-            plt.legend(loc='lower right')
-            plt.plot([0, 1], [0, 1], 'r--')
-            plt.xlim([0, 1])
-            plt.ylim([0, 1])
-            plt.ylabel('Precision')
-            plt.xlabel('Recall')
-            plt.savefig("aupr_{}_.png".format(name_prefix, n_epoch))
+            y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
+            get_performance(evalconfig, y_test, y_pred_combined, n_epoch, dataset_name=evalconfig.combinedset_path)
+
+
+def predict(evalconfig, x_test, n_epoch, paired=False):
+    """Predict the pathogenic potentials of Illumina reads using the supplied configuration."""
+    if paired:
+        dataset_path = evalconfig.pairedset_path
+    else:
+        dataset_path = evalconfig.dataset_path
+    model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch),)
+    # Predict class probabilities
+    y_pred = np.ndarray.flatten(model.predict(x_test))
+    # Backup predicted probabilities for future analyses
+    np.save(file="{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path),
+            arr=y_pred)
+    return y_pred
+
+def get_performance(evalconfig, y_test, y_pred, n_epoch, dataset_name):
+    """Get performance measures from predictions using the supplied configuration."""
+    # Assign classes using the chosen threshold
+    y_pred_class = (y_pred > evalconfig.thresh).astype('int32')
+    # Calculate performance measures
+    log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
+    acc = mtr.accuracy_score(y_test, y_pred_class)
+    auroc = mtr.roc_auc_score(y_test, y_pred)
+    mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
+    f1 = mtr.f1_score(y_test, y_pred_class)
+    precision = mtr.precision_score(y_test, y_pred_class)
+    recall = mtr.recall_score(y_test, y_pred_class)
+    aupr = mtr.average_precision_score(y_test, y_pred_class)
+
+    # Save the results
+    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
+        file_writer = csv.writer(csv_file)
+        file_writer.writerow((n_epoch, dataset_name, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
+    if evalconfig.do_plots:
+        fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
+        plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
+        plt.title("AUROC: {}".format(dataset_name))
+        plt.legend(loc='lower right')
+        plt.plot([0, 1], [0, 1], 'r--')
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.ylabel('True Positive Rate')
+        plt.xlabel('False Positive Rate')
+        plt.savefig("auc_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+        plt.clf()
+
+        precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
+        plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
+        plt.title("AUPR: {}".format(dataset_name))
+        plt.legend(loc='lower right')
+        plt.plot([0, 1], [0, 1], 'r--')
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.ylabel('Precision')
+        plt.xlabel('Recall')
+        plt.savefig("aupr_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+        plt.clf()
         
 if __name__ == "__main__":
     main()
