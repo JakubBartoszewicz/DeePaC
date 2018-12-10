@@ -110,6 +110,7 @@ class PaPrConfig:
         
         # Define the network architecture
         self.use_rc_conv = config['Architecture'].getboolean('Use_RC_Conv')
+        self.input_drop_out = config['Architecture'].getfloat('Input_Dropout')
         self.n_conv = config['Architecture'].getint('N_Conv')
         self.n_recurrent = config['Architecture'].getint('N_Recurrent')
         self.n_dense = config['Architecture'].getint('N_Dense')
@@ -268,6 +269,9 @@ class PaPrNet:
             print("Building RC-model...")
         # Initialize the model
         self.model = Sequential()
+        # Add Dropout on Input layer
+        if not np.isclose(self.config.input_drop_out, 0.0):
+            self.model.add(Dropout(self.config.input_drop_out, input_shape=(self.config.seq_length, self.config.seq_dim), seed = self.config.seed))
         # Number of added recurrent layers
         current_recurrent = 0
         # The last recurrent layer should return the output for the last unit only. Previous layers must return output for all units

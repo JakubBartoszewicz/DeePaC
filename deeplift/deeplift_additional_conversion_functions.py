@@ -126,3 +126,4 @@ def denseafterrevcompweightedsum_conversion(config,
                   dense_mxts_mode=dense_mxts_mode)]
     to_return.extend(converted_activation)
     return deeplift.util.connect_list_of_layers(to_return)
+
