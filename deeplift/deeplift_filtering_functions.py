@@ -78,14 +78,11 @@ def get_pos_and_neg_contribs_input_layer(diff_from_ref):
 	return pos_contribs, neg_contribs
 
 
-def get_contribs_of_inputs_after_filtering_conv_layer(conv_layer, diff_from_ref_input, pos_mxts_conv, neg_mxts_conv, filter_mask, RC_architecture):
+def get_contribs_of_inputs_after_filtering_conv_layer(conv_layer, diff_from_ref_input, pos_mxts_conv, neg_mxts_conv, filter_mask, kernel):
 	'''
 	Computes DeepLIFT contribution scores of the input layer after performing filtering in the convolutional layer.
-	'''
-	if RC_architecture:
-		kernel = tf.concat([conv_layer.kernel, conv_layer.kernel[::-1,::-1,::-1]], axis=-1)
-	else:
-		kernel = conv_layer.kernel
+	'''		
 	pos_mxts_input, neg_mxts_input = get_mxts_after_filtering(conv_layer, diff_from_ref_input, pos_mxts_conv, neg_mxts_conv, filter_mask, kernel)
 	pos_delta_input, neg_delta_input = get_pos_and_neg_contribs_input_layer(diff_from_ref_input)
 	return pos_delta_input*pos_mxts_input + neg_delta_input*neg_mxts_input
+

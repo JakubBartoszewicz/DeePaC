@@ -11,6 +11,9 @@ from Bio import SeqIO
 import deeplift
 import deeplift_additional_conversion_functions as conversion
 from deeplift_filtering_functions import *
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from paprdeep.rc_layers import *
+
 
 def main():
 	'''
@@ -20,6 +23,16 @@ def main():
 	
 	#parse command line arguments
 	args = parse_arguments()
+
+	#normalize filter weight matrix + modify bias
+	if args.w_norm:
+		print("Create model with mean-centered weight matrices ...")
+		model = load_model(args.model, custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
+		conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
+		kernel_normed, bias_normed = normalize_filter_weights( model.get_layer(index=conv_layer_idx).get_weights()[0], model.get_layer(index=conv_layer_idx).get_weights()[1])
+		model.get_layer(index = conv_layer_idx).set_weights([kernel_normed, bias_normed])
+		model.save(os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5")
+		args.model = os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5"
 	
 	#convert keras model to deeplift model
 	deeplift_model = conversion.convert_model_from_saved_files(args.model, nonlinear_mxts_mode=deeplift.layers.NonlinearMxtsMode.DeepLIFT_GenomicsDefault)
@@ -34,12 +47,10 @@ def main():
 	motif_length = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[0]
 	pad_left = (motif_length - 1) // 2
 	pad_right = motif_length - 1 - pad_left
-	
-	if args.w_norm:
-		print("Mean-centering the filter weight matrices ...")
-		kernel_normed, bias_normed = normalize_filter_weights(deeplift_model.get_layers()[conv_layer_idx].kernel, deeplift_model.get_layers()[conv_layer_idx].bias)
-		deeplift_model.get_layers()[conv_layer_idx].kernel = kernel_normed
-		deeplift_model.get_layers()[conv_layer_idx].bias = bias_normed	
+
+	kernel = deeplift_model.get_layers()[conv_layer_idx].kernel
+	kernel_bwd_pass = tf.concat([kernel, kernel[::-1,::-1,::-1]], axis=-1) if RC_architecture else kernel		
+
 
 	#compile scoring function (find multipliers of convolutional layer w.r.t. the layer preceding the sigmoid output layer)
 	deeplift_mxts_func_filter = deeplift_model.get_target_multipliers_func(find_scores_layer_idx = conv_layer_idx, target_layer_idx = -2)
@@ -66,15 +77,16 @@ def main():
 	filter_mask_pl = tf.placeholder(shape = conv_layer._pos_mxts.get_shape(), dtype = tf.float32)
 	
 	#define operations to compute contribution scores of the input layer after performing filtering in the convolutional layer
-	contribution_scores_input_filtering = get_contribs_of_inputs_after_filtering_conv_layer(conv_layer, diff_from_ref_input, pos_mxts_conv, neg_mxts_conv, filter_mask_pl, RC_architecture)
-	
+	contribution_scores_input_filtering = get_contribs_of_inputs_after_filtering_conv_layer(conv_layer, diff_from_ref_input, pos_mxts_conv, neg_mxts_conv, filter_mask_pl, kernel_bwd_pass)
 	for filter_index in range(n_filters):
-	
+
 		#file contains all non-zero contribution scores per read and filter
 		file = args.in_dir + "/" +  test_data_set_name + "_rel_filter_%d.csv" % filter_index
-		#skip empty files
-		if not os.stat(file).st_size:
+
+		#skip filters which did nor receive any non-zero contribution score
+		if not os.path.exists(file):
 			continue
+
 		print('Processing filter %d' % filter_index)
 		
 		#save reads for which the filter got non-zero contribution scores
@@ -86,7 +98,8 @@ def main():
 			reader = csv.reader(csvfile)
 			for ind, row in enumerate(reader):
 				if ind % 3 == 0: 
-					read_id = int(re.search("[0-9]+$", row[0]).group())
+					read_id = re.search("seq_[0-9]+", row[0]).group()
+					read_id = int(read_id.replace("seq_", ""))
 					read_ids.append(read_id)
 				elif ind % 3 == 1:
 					motif_start = int(row[0])
@@ -95,7 +108,7 @@ def main():
 		#select all reads for which the filter got a non-zero contribution score
 		samples_filter = samples[read_ids,:,:]
 		num_reads_filter = len(read_ids)
-		chunk_size = 50000
+		chunk_size = 30000
 		i = 0
 		while i < num_reads_filter:
 
@@ -107,7 +120,7 @@ def main():
 			delta = input_data_list-input_references_list
 			
 			#compute positive and negative multipliers of the convolutional layer w.r.t. the layer preceding the sigmoid output layer
-			mxts = np.array(deeplift_mxts_func_filter(task_idx=0, input_data_list=[input_data_list], input_references_list = [input_references_list], progress_update=10000, batch_size = 100))
+			mxts = np.array(deeplift_mxts_func_filter(task_idx=0, input_data_list=[input_data_list], input_references_list = [input_references_list], progress_update=10000, batch_size = 25))
 			pos_mxts = mxts[:,:,:n_filters]
 			neg_mxts = mxts[:,:,n_filters:]
 			
@@ -120,18 +133,19 @@ def main():
 				filter_mask[j, filter[j][0], filter[j][1]] = 1
 
 			#compute contribution scores of the input layer w.r.t. the layer preceding the sigmoid output layer after performing filtering in the convolutional layer
-			scores_input = deeplift.util.get_session().run(contribution_scores_input_filtering, feed_dict={diff_from_ref_input: delta, pos_mxts_conv: pos_mxts, neg_mxts_conv: neg_mxts, filter_mask_pl: filter_mask})
+			scores_input = np.array(deeplift.util.get_session().run(contribution_scores_input_filtering, feed_dict={diff_from_ref_input: delta, pos_mxts_conv: pos_mxts, neg_mxts_conv: neg_mxts, filter_mask_pl: filter_mask}))
 			#average the results per ref sequence
 			scores_input = np.reshape(scores_input, [num_reads, num_ref_seqs, len_reads, 4])
 			scores_input = np.mean(scores_input, axis = 1)
-			#take only relevance score for the nucleotide in the input sequence
-			scores_input *= samples_chunk
+			
+			#sum up scores along the nucleotide axis
 			scores_input = np.sum(scores_input, axis = 2)
+
 			#add zeros for padding
 			scores_input_pad = np.pad(scores_input, ((0,0),(pad_left, pad_right)), 'constant', constant_values = (0.0,0.0))
 
 			#save contribution scores for each nucleotide per filter motif
-			with open(args.out_dir + "/" + test_data_set_name + "_rel_pos_filter_%d.csv" % filter_index, 'a') as csv_file:
+			with open(args.out_dir + "/" + test_data_set_name + "_rel_filter_%d_nucleotides.csv" % filter_index, 'a') as csv_file:
 				file_writer = csv.writer(csv_file)
 				for ind, seq_id in enumerate(read_ids[i:i+chunk_size]):
 					row = ['%.4g' % s for s in scores_input_pad[ind, motif_starts[ind+i]:(motif_starts[ind+i]+motif_length)]]
@@ -146,7 +160,7 @@ def parse_arguments():
 	'''
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
-	parser.add_argument("-b", "--w_norm", action = "store_true", help = "Set flag if filter weight matrices should be mean-centered")
+	parser.add_argument("-b", "--w_norm", action = "store_true", help = "Set flag if filter weights should be mean-centered")
 	parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
 	parser.add_argument("-i", "--in_dir", required=True, help="Directory with the non-zero DeepLIFT scores per filter")
 	parser.add_argument("-o", "--out_dir", default = ".", help="Output directory")
@@ -155,7 +169,8 @@ def parse_arguments():
 	args = parser.parse_args()
 	if args.ref_mode == "own_ref_file" and args.ref_seqs is None:
 		raise ValueError("File with own reference sequences (--ref_seqs) is missing!")
-	
+	if args.w_norm:
+		print("Mean-centered filter weights will be used during forward and backward pass ...")
 	return args
 	
 def get_reference_seqs(args, len_reads):
@@ -191,7 +206,7 @@ def normalize_filter_weights(kernel, bias):
 		in "Learning Important Features Through Propagating Activation Differences" by Shrikumar et al., 2017
 		'''
 		for filter_index in range(kernel.shape[-1]):
-			bias[filter_index] += np.sum(np.mean(kernel[:,:,filter_index], axis = 0))
+			bias[filter_index] += np.sum(np.mean(kernel[:,:,filter_index], axis = 1))
 			for pos in range(kernel.shape[0]):
 				kernel[pos,:,filter_index] -= np.mean(kernel[pos,:,filter_index])
 		return kernel, bias
