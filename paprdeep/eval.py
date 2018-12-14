@@ -45,7 +45,8 @@ def evaluate(config):
     set = config['Data']['DataSet']
     # Set the run name
     runname = config['Data']['RunName']
-    name_prefix = "nn-{}".format(runname)
+    model_name = "nn-{}".format(runname)
+    name_prefix = "nn-{}".format(runname) + "_" + set
     # Set the classification threshold
     thresh = config['Data'].getfloat('Threshold')
     
@@ -64,7 +65,7 @@ def evaluate(config):
 
     # Evaluate for each saved model in epoch range
     for n_epoch in range(epoch_start,epoch_end):
-        model = load_model("{p}-e{ne:03d}.h5".format(p=name_prefix, ne=n_epoch), custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
+        model = load_model("{p}-e{ne:03d}.h5".format(p=model_name, ne=n_epoch), custom_objects={'RevCompConv1D': RevCompConv1D, 'RevCompConv1DBatchNorm': RevCompConv1DBatchNorm, 'DenseAfterRevcompWeightedSum': DenseAfterRevcompWeightedSum, 'DenseAfterRevcompConv1D': DenseAfterRevcompConv1D})
         
         # Predict class probabilities
         y_pred =  np.ndarray.flatten(model.predict_proba(x_test))
