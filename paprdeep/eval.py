@@ -150,7 +150,6 @@ def get_performance(evalconfig, y_test, y_pred, n_epoch, dataset_name):
         plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
         plt.title("AUPR: {}".format(dataset_name))
         plt.legend(loc='lower right')
-        plt.plot([0, 1], [0, 1], 'r--')
         plt.xlim([0, 1])
         plt.ylim([0, 1])
         plt.ylabel('Precision')
