@@ -27,9 +27,6 @@ from multiprocessing import Pool
 from functools import partial
 import gzip
 
-# ***TODO: ASSUMES EQUAL LENGTH INPUT SEQUENCES - NO PADDING ***
-
-
 def main():
     """Parse the config file and preprocess the Illumina reads."""
     parser = argparse.ArgumentParser(description="Convert fasta files to numpy arrays for training.")
@@ -40,10 +37,16 @@ def main():
     preproc(config)
 
 
-def tokenize(seq, tokenizer, datatype='float32'):
+def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
+    if matrix.shape[0] < read_length:
+        # Pad with zeros
+        matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4))))
+    if matrix.shape[0] > read_length:
+        # Trim
+        matrix = matrix[:read_length, :]
     return matrix
 
 
@@ -70,6 +73,7 @@ def preproc(config):
     do_gzip = config['Options'].getboolean('Do_gzip')
     do_revc = config['Options'].getboolean('Do_revc')
     datatype = config['Options']['DataType']
+    read_length = config['Options'].getint('ReadLength')
     
     # Set alphabet and prepare the tokenizer
     alphabet = "ACGT"  
@@ -77,25 +81,36 @@ def preproc(config):
     tokenizer.fit_on_texts(alphabet)
     
     # Preprocess #
-    print("Preprocessing negative data...")
-    with open(neg_path) as input_handle:
-        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-        # Tokenize function is applied to the fasta sequence generator.
-        x_train = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype), read_fasta(input_handle)))
-    # Count negative samples
-    n_negative = x_train.shape[0]
-    print("Preprocessing positive data...")
-    with open(pos_path) as input_handle:
-        # Parse fasta, tokenize in parallel & concatenate to negative data
-        x_train = np.concatenate((x_train, np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype),
-                                                            read_fasta(input_handle)))))
-    # Count positive samples
-    n_positive = x_train.shape[0] - n_negative
+    if neg_path != "none":
+        print("Preprocessing negative data...")
+        with open(neg_path) as input_handle:
+            # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+            # Tokenize function is applied to the fasta sequence generator.
+            x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                   read_length=read_length), read_fasta(input_handle)))
+        # Count negative samples
+        n_negative = x_train_neg.shape[0]
+    else:
+        x_train_neg = np.zeros((0, read_length, 4))
+        n_negative = 0
+
+    if pos_path != "none":
+        print("Preprocessing positive data...")
+        with open(pos_path) as input_handle:
+            # Parse fasta, tokenize in parallel & concatenate to negative data
+            x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                   read_length=read_length), read_fasta(input_handle)))
+        # Count positive samples
+        n_positive = x_train_pos.shape[0]
+    else:
+        x_train_pos = np.zeros((0, read_length, 4))
+        n_positive = 0
+    # Concatenate
+    x_train = np.concatenate((x_train_neg, x_train_pos))
     # Add labels
     y_train = np.concatenate((np.repeat(0, n_negative).astype(datatype), np.repeat(1, n_positive).astype(datatype)))
-    # ** TODO: PADDING (or x_train is an array of arrays, not an array, and it has to be reversed element-wise) **
     # All sequences must have the same length. Then x_train is an array and the view below can be created
-    # Note: creating a view instead of reversing element-wise saves a lot of memory (800GB vs 450GB)
+    # Note: creating a view instead of reversing element-wise saves a lot of memory
     
     # RC augmentation: Add reverse-complements by reversing both dimensions of the matrix
     # assumes the following order of columns: "ACGT"

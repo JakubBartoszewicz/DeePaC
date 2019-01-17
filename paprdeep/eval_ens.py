@@ -21,10 +21,11 @@ import sklearn.metrics as mtr
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+from eval import get_performance
 
-class EvalConfig():
+class EvalEnsConfig():
     """
-    Evaluation configuration class
+    Ensemble evaluation configuration class
 
     """
 
@@ -71,7 +72,7 @@ def evaluate(config):
     # Clear session needed or TypeError can happen in some cases
     backend.clear_session()
     
-    evalconfig = EvalConfig(config)
+    evalconfig = EvalEnsConfig(config)
 
     # Read data to memory
     print("Loading {}_data.npy...".format(evalconfig.dataset_path))
@@ -81,7 +82,7 @@ def evaluate(config):
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("set", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
+        file_writer.writerow(("epoch", "set", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
@@ -119,47 +120,5 @@ def predict(evalconfig, x_test, paired=False):
             arr=y_pred)
     return y_pred
 
-def get_performance(evalconfig, y_test, y_pred, dataset_name):
-    """Get performance measures from predictions using the supplied configuration."""
-    # Assign classes using the chosen threshold
-    y_pred_class = (y_pred > evalconfig.thresh).astype('int32')
-    # Calculate performance measures
-    log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
-    acc = mtr.accuracy_score(y_test, y_pred_class)
-    auroc = mtr.roc_auc_score(y_test, y_pred)
-    mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
-    f1 = mtr.f1_score(y_test, y_pred_class)
-    precision = mtr.precision_score(y_test, y_pred_class)
-    recall = mtr.recall_score(y_test, y_pred_class)
-    aupr = mtr.average_precision_score(y_test, y_pred_class)
-
-    # Save the results
-    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
-        file_writer = csv.writer(csv_file)
-        file_writer.writerow((dataset_name, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
-    if evalconfig.do_plots:
-        fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
-        plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
-        plt.title("AUROC: {}".format(dataset_name))
-        plt.legend(loc='lower right')
-        plt.plot([0, 1], [0, 1], 'r--')
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-        plt.ylabel('True Positive Rate')
-        plt.xlabel('False Positive Rate')
-        plt.savefig("auc_{p}_{s}.png".format(p=evalconfig.name_prefix, s=dataset_name))
-        plt.clf()
-
-        precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
-        plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
-        plt.title("AUPR: {}".format(dataset_name))
-        plt.legend(loc='lower right')      
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-        plt.ylabel('Precision')
-        plt.xlabel('Recall')
-        plt.savefig("aupr_{p}_{s}.png".format(p=evalconfig.name_prefix, s=dataset_name))
-        plt.clf()
-        
 if __name__ == "__main__":
     main()

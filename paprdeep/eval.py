@@ -86,7 +86,7 @@ def evaluate(config):
     for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end):
         print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
         y_pred_1 = predict(evalconfig, x_test, n_epoch)
-        get_performance(evalconfig, y_test, y_pred_1, n_epoch, dataset_name=evalconfig.dataset_path)
+        get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path, n_epoch=n_epoch)
 
         if evalconfig.pairedset_path is not None:
             print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
@@ -95,10 +95,11 @@ def evaluate(config):
 
             print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
             y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True)
-            get_performance(evalconfig, y_test, y_pred_2, n_epoch, dataset_name=evalconfig.pairedset_path)
+            get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path, n_epoch=n_epoch)
 
             y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
-            get_performance(evalconfig, y_test, y_pred_combined, n_epoch, dataset_name=evalconfig.combinedset_path)
+            get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
+                            n_epoch=n_epoch)
 
 
 def predict(evalconfig, x_test, n_epoch, paired=False):
@@ -115,47 +116,81 @@ def predict(evalconfig, x_test, n_epoch, paired=False):
             arr=y_pred)
     return y_pred
 
-def get_performance(evalconfig, y_test, y_pred, n_epoch, dataset_name):
+def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     """Get performance measures from predictions using the supplied configuration."""
     # Assign classes using the chosen threshold
     y_pred_class = (y_pred > evalconfig.thresh).astype('int32')
     # Calculate performance measures
-    log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
-    acc = mtr.accuracy_score(y_test, y_pred_class)
-    auroc = mtr.roc_auc_score(y_test, y_pred)
-    mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
-    f1 = mtr.f1_score(y_test, y_pred_class)
-    precision = mtr.precision_score(y_test, y_pred_class)
-    recall = mtr.recall_score(y_test, y_pred_class)
-    aupr = mtr.average_precision_score(y_test, y_pred_class)
+    try:
+        log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
+    except Exception as err:
+        print(err)
+        log_loss = np.nan
+    try:
+        acc = mtr.accuracy_score(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        acc = np.nan
+    try:
+        auroc = mtr.roc_auc_score(y_test, y_pred)
+    except Exception as err:
+        print(err)
+        auroc = np.nan
+    try:
+        mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        mcc = np.nan
+    try:
+        f1 = mtr.f1_score(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        f1 = np.nan
+    try:
+        precision = mtr.precision_score(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        precision = np.nan
+    try:
+        recall = mtr.recall_score(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        recall = np.nan
+    try:
+        aupr = mtr.average_precision_score(y_test, y_pred_class)
+    except Exception as err:
+        print(err)
+        aupr = np.nan
 
     # Save the results
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
         file_writer.writerow((n_epoch, dataset_name, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
     if evalconfig.do_plots:
-        fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
-        plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
-        plt.title("AUROC: {}".format(dataset_name))
-        plt.legend(loc='lower right')
-        plt.plot([0, 1], [0, 1], 'r--')
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-        plt.ylabel('True Positive Rate')
-        plt.xlabel('False Positive Rate')
-        plt.savefig("auc_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
-        plt.clf()
+        if not np.isnan(auroc):
+            fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
+            plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
+            plt.title("AUROC: {}".format(dataset_name))
+            plt.legend(loc='lower right')
+            plt.plot([0, 1], [0, 1], 'r--')
+            plt.xlim([0, 1])
+            plt.ylim([0, 1])
+            plt.ylabel('True Positive Rate')
+            plt.xlabel('False Positive Rate')
+            plt.savefig("auc_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            plt.clf()
 
-        precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
-        plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
-        plt.title("AUPR: {}".format(dataset_name))
-        plt.legend(loc='lower right')
-        plt.xlim([0, 1])
-        plt.ylim([0, 1])
-        plt.ylabel('Precision')
-        plt.xlabel('Recall')
-        plt.savefig("aupr_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
-        plt.clf()
+        if not np.isnan(aupr):
+            precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
+            plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
+            plt.title("AUPR: {}".format(dataset_name))
+            plt.legend(loc='lower right')
+            plt.xlim([0, 1])
+            plt.ylim([0, 1])
+            plt.ylabel('Precision')
+            plt.xlabel('Recall')
+            plt.savefig("aupr_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            plt.clf()
         
 if __name__ == "__main__":
     main()
