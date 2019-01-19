@@ -80,7 +80,8 @@ def evaluate(config):
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "set", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
+        file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
+                              "recall", "spec", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
     for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end):
@@ -157,6 +158,12 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
         print(err)
         recall = np.nan
     try:
+        tn, fp, fn, tp = mtr.confusion_matrix(y_test, y_pred_class).ravel()
+        specificity = tn / (tn + fp)
+    except Exception as err:
+        print(err)
+        recall = np.nan
+    try:
         aupr = mtr.average_precision_score(y_test, y_pred_class)
     except Exception as err:
         print(err)
@@ -165,7 +172,8 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     # Save the results
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow((n_epoch, dataset_name, log_loss, acc, auroc, aupr, precision, recall, mcc, f1))
+        file_writer.writerow((n_epoch, dataset_name, tp, tn, fp, fn, log_loss, acc, auroc, aupr, precision, recall,
+                              specificity, mcc, f1))
     if evalconfig.do_plots:
         if not np.isnan(auroc):
             fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)

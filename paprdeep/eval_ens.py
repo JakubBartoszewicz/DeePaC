@@ -82,7 +82,8 @@ def evaluate(config):
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "set", "log_loss", "acc", "auroc", "aupr", "precision", "recall", "mcc", "f1"))
+        file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
+                              "recall", "spec", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
