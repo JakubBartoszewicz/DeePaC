@@ -466,7 +466,7 @@ class RCNet:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x = self.__add_lstm(x, return_sequences)
-            if self.config.recurrent_bn:
+            if self.config.recurrent_bn and return_sequences:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
@@ -532,7 +532,7 @@ class RCNet:
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x = self.__add_lstm(inputs, return_sequences)
-            if self.config.recurrent_bn:
+            if self.config.recurrent_bn and return_sequences:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
@@ -720,7 +720,7 @@ class RCNet:
             # RevComp input
             x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[0])
             # Add batch norm
-            if self.config.recurrent_bn:
+            if self.config.recurrent_bn and return_sequences:
                 # reverse-complemented batch normalization layer
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
                 self.__current_bn = self.__current_bn + 1
@@ -799,7 +799,7 @@ class RCNet:
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
             x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[i])
             # Add batch norm
-            if self.config.recurrent_bn:
+            if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
                 self.__current_bn = self.__current_bn + 1
