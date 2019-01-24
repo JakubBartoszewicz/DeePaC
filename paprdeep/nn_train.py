@@ -129,6 +129,9 @@ class RCConfig:
         self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
         self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
         self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
+        if self.n_recurrent == 1 and self.recurrent_bn:
+            raise ValueError("RC-BN is intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning"
+                             " sequences.")
         self.recurrent_dropout = config['Architecture'].getfloat('Recurrent_Dropout')
         merge_dict = {
             # motif on fwd fuzzy OR rc (Goedel t-conorm)
