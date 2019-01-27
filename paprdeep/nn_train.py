@@ -44,7 +44,7 @@ from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
 
-from paprdeep_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
+from deepac_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 
 def main():
