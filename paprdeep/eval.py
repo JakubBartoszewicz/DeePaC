@@ -52,6 +52,8 @@ class EvalConfig():
         self.epoch_end = config['Epochs'].getint('EpochEnd')
 
         self.do_plots = config['Options'].getboolean('Do_plots')
+        self.do_rc = config['Options'].getboolean('Do_RC')
+        self.do_pred = config['Options'].getboolean('Do_Pred')
 
 
 def main():
@@ -74,8 +76,11 @@ def evaluate(config):
 
     # Read data to memory
     print("Loading {}_data.npy...".format(evalconfig.dataset_path))
-    x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
     y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
+    if evalconfig.do_pred:
+        x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
+        if evalconfig.do_rc:
+            x_test = x_test [::, ::-1, ::-1]
     
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
@@ -86,16 +91,37 @@ def evaluate(config):
     # Evaluate for each saved model in epoch range
     for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end):
         print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
-        y_pred_1 = predict(evalconfig, x_test, n_epoch)
+        if evalconfig.do_pred:
+            y_pred_1 = predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=evalconfig.do_rc)
+        else:
+            if evalconfig.do_rc:
+                filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
+                                                                         s=evalconfig.dataset_path)
+            else:
+                filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
+                                                                      s=evalconfig.dataset_path)
+            y_pred_1 = np.load(filename)
         get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path, n_epoch=n_epoch)
 
         if evalconfig.pairedset_path is not None:
             print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
-            x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
             y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
+            if evalconfig.do_pred:
+                x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
+                if evalconfig.do_rc:
+                    x_test = x_test[::, ::-1, ::-1]
 
             print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
-            y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True)
+            if evalconfig.do_pred:
+                y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True, save_as_rc=evalconfig.do_rc)
+            else:
+                if evalconfig.do_rc:
+                    filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
+                                                                             s=evalconfig.pairedset_path)
+                else:
+                    filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
+                                                                          s=evalconfig.pairedset_path)
+                y_pred_2 = np.load(filename)
             get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path, n_epoch=n_epoch)
 
             y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
@@ -103,7 +129,7 @@ def evaluate(config):
                             n_epoch=n_epoch)
 
 
-def predict(evalconfig, x_test, n_epoch, paired=False):
+def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
     """Predict the pathogenic potentials of Illumina reads using the supplied configuration."""
     if paired:
         dataset_path = evalconfig.pairedset_path
@@ -113,8 +139,11 @@ def predict(evalconfig, x_test, n_epoch, paired=False):
     # Predict class probabilities
     y_pred = np.ndarray.flatten(model.predict(x_test))
     # Backup predicted probabilities for future analyses
-    np.save(file="{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path),
-            arr=y_pred)
+    if save_as_rc:
+        filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
+    else:
+        filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
+    np.save(file=filename, arr=y_pred)
     return y_pred
 
 def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
@@ -164,7 +193,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
         print(err)
         recall = np.nan
     try:
-        aupr = mtr.average_precision_score(y_test, y_pred_class)
+        aupr = mtr.average_precision_score(y_test, y_pred)
     except Exception as err:
         print(err)
         aupr = np.nan
