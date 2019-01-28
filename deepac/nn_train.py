@@ -331,13 +331,13 @@ class RCNet:
         else:
             rev_axes = 1
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=shared_lstm.output_shape[1:],
-                             name="rc_lstm_out_{n}".format(n=self.__current_recurrent+1))
+                             name="reverse_lstm_output_{n}".format(n=self.__current_recurrent+1))
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def __add_rc_lstm(self, inputs, return_sequences, units):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs._keras_shape[1:],
-                            name="rc_lstm_in_{n}".format(n=self.__current_recurrent+1))
+                            name="reverse_complement_lstm_input_{n}".format(n=self.__current_recurrent+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self.__add_siam_lstm(inputs, inputs_rc, return_sequences, units)
         out = concatenate([x_fwd, x_rc], axis=-1)
@@ -356,13 +356,13 @@ class RCNet:
             x_fwd = shared_conv(inputs_fwd)
             x_rc = shared_conv(inputs_rc)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
-                             name="rc_conv1d_out_{n}".format(n=self.__current_conv+1))
+                             name="reverse_complement_conv1d_output_{n}".format(n=self.__current_conv+1))
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def __add_rc_conv1d(self, inputs, units):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs._keras_shape[1:],
-                            name="rc_conv1d_in_{n}".format(n=self.__current_conv+1))
+                            name="reverse_complement_conv1d_input_{n}".format(n=self.__current_conv+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self.__add_siam_conv1d(inputs, inputs_rc, units)
         out = concatenate([x_fwd, x_rc], axis=-1)
@@ -374,16 +374,16 @@ class RCNet:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
         rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
-                       name="rc_batchnorm_rc_in_{n}".format(n=self.__current_bn+1))
+                       name="reverse_complement_batchnorm_input_{n}".format(n=self.__current_bn+1))
         inputs_rc = rc_in(inputs_rc)
         out = concatenate([inputs_fwd, inputs_rc], axis=1)
         out = BatchNormalization()(out)
         split_shape = out._keras_shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
-                         name="rc_split_batchnorm_fwd_out_{n}".format(n=self.__current_bn+1))
+                         name="split_batchnorm_fwd_output_{n}".format(n=self.__current_bn+1))
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
-                        name="rc_split_batchnorm_rc_out_{n}".format(n=self.__current_bn+1))
+                        name="split_batchnorm_rc_output_{n}".format(n=self.__current_bn+1))
         if self.config.device_parallel:
             with tf.device(self.config.device_fwd):
                 x_fwd = fwd_out(out)
@@ -403,9 +403,9 @@ class RCNet:
         split_shape = inputs._keras_shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="rc_split_batchnorm_fwd_in_{n}".format(n=self.__current_bn+1))
+                        name="split_batchnorm_fwd_input_{n}".format(n=self.__current_bn+1))
         rc_in = Lambda(lambda x: x[:, :, split_shape:], output_shape=new_shape,
-                       name="rc_split_batchnorm_rc_in_{n}".format(n=self.__current_bn+1))
+                       name="split_batchnorm_rc_input_{n}".format(n=self.__current_bn+1))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self.__add_siam_batchnorm(inputs_fwd, inputs_rc)
@@ -415,7 +415,7 @@ class RCNet:
     def __add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
         shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
-                       name="rc_sum_dense_rc_in_{n}".format(n=1))
+                       name="reverse_merging_dense_input_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
         if self.config.device_parallel:
             with tf.device(self.config.device_fwd):
@@ -432,9 +432,9 @@ class RCNet:
     def __add_rc_merge_dense(self, inputs, units, merge_function=add):
         split_shape = inputs._keras_shape[-1] // 2
         fwd_in = Lambda(lambda x: x[:, :split_shape], output_shape=[split_shape],
-                        name="rc_split_dense_fwd_{n}".format(n=1))
+                        name="split_merging_dense_input_fwd_{n}".format(n=1))
         rc_in = Lambda(lambda x: x[:, split_shape:], output_shape=[split_shape],
-                       name="rc_split_dense_rc_{n}".format(n=1))
+                       name="split_merging_dense_input_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
         return self.__add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
@@ -672,7 +672,8 @@ class RCNet:
             if self.config.dense_bn:
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
+            if not np.isclose(self.config.dense_dropout, 0.0):
+                x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
@@ -694,7 +695,7 @@ class RCNet:
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd._keras_shape[1:],
-                            name="revcomp_in_{n}".format(n=self.__current_recurrent+1))
+                            name="reverse_complement_input_{n}".format(n=self.__current_recurrent+1))
         inputs_rc = revcomp_in(inputs_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
