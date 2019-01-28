@@ -593,7 +593,8 @@ class RCNet:
                 x = self.__add_rc_batchnorm(x)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
+            if not np.isclose(self.config.recurrent_dropout, 0.0):
+                x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             # First recurrent layer already added
             self.__current_recurrent = self.__current_recurrent + 1
         else:
@@ -658,7 +659,8 @@ class RCNet:
                 x = self.__add_rc_batchnorm(x)
                 self.__current_bn = self.__current_bn + 1
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
+            if not np.isclose(self.config.recurrent_dropout, 0.0):
+                x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             self.__current_recurrent = self.__current_recurrent + 1
 
         # Dense layers
