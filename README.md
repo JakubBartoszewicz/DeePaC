@@ -7,7 +7,7 @@ DeePaC is a python package for predicting labels (e.g. pathogenic potentials) fr
 ## Installation
 
 You can just use DeePaC as a set of scripts. Executable scripts include `nn_train.py`, `eval.py`, `eval_ens.py`, `eval_species.py`, `preproc.py`, `convert_cudnn.py` and `filter.py`.
-You must supply a config file to all of them (except fot `filter.py` -- coming soon). For help, use the `-h` flag. `pip` installation and a more in-depth tutorial will be available shortly. Remember to activate your virtual enviroment (with all the dependencies installed) before using DeePaC:
+You must supply a config file to all of them (except for `filter.py` -- coming soon). For help, use the `-h` flag. `pip` installation and a more in-depth tutorial will be available shortly. Remember to activate your virtual enviroment (with all the dependencies installed) before using DeePaC:
 ```
 source my_env/bin/activate
 ```
