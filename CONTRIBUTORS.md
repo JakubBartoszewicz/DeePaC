@@ -8,4 +8,4 @@ Jakub M. Bartoszewicz \<BartoszewiczJ(at)rki.de\>
 Jakub M. Bartoszewicz \<BartoszewiczJ(at)rki.de\>
   
 ### Former Contributors
-N/A  
+Anja Seidel
