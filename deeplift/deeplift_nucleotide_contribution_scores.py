@@ -12,7 +12,7 @@ import deeplift
 import deeplift_additional_conversion_functions as conversion
 from deeplift_filtering_functions import *
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from paprdeep.rc_layers import *
+from rc_layers import *
 
 
 def main():

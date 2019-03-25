@@ -1,7 +1,6 @@
 import argparse
 import os
 import csv
-import random
 import numpy as np
 import sys
 
@@ -13,7 +12,7 @@ from Bio import SeqIO
 import deeplift
 import deeplift_additional_conversion_functions as conversion
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from paprdeep.rc_layers import *
+from rc_layers import *
 
 def main():
 	'''
