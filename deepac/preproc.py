@@ -27,16 +27,6 @@ from multiprocessing import Pool
 from functools import partial
 import gzip
 
-def main():
-    """Parse the config file and preprocess the Illumina reads."""
-    parser = argparse.ArgumentParser(description="Convert fasta files to numpy arrays for training.")
-    parser.add_argument("config_file")
-    args = parser.parse_args()
-    config = configparser.ConfigParser()
-    config.read(args.config_file)
-    preproc(config)
-
-
 def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
@@ -132,8 +122,4 @@ def preproc(config):
     np.save(file=f_data, arr=x_train)
     np.save(file=f_labels, arr=y_train)
     print("Done!")
-
-
-if __name__ == "__main__":
-    main()
 

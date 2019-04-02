@@ -25,8 +25,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import random as rn
 rn.seed(seed)
 
-import argparse
-import configparser
 import errno
 import warnings
 from contextlib import redirect_stdout
@@ -44,24 +42,7 @@ from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
 
-from deepac_utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
-
-
-def main():
-    """Parse the config file and train the NN on Illumina reads."""
-    parser = argparse.ArgumentParser(description="Train a NN on Illumina reads.")
-    parser.add_argument("config_file")
-    args = parser.parse_args()
-    config = configparser.ConfigParser()
-    config.read(args.config_file)
-    paprconfig = RCConfig(config)
-    if K.backend() == 'tensorflow':
-        paprconfig.set_tf_session()
-    paprnet = RCNet(paprconfig)
-    paprnet.load_data()
-    paprnet.compile_model()
-    paprnet.train()
-
+from deepac.utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
 
 class RCConfig:
 
@@ -938,6 +919,3 @@ class RCNet:
                                               class_weight=self.config.class_weight,
                                               initial_epoch=self.config.epoch_start)
 
-
-if __name__ == "__main__":
-    main()
