@@ -1,3 +1,7 @@
+"""@package deepac.command_line
+A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
+
+"""
 import numpy as np
 import tensorflow as tf
 import os
@@ -19,6 +23,7 @@ from deepac import __file__
 
 
 def main():
+    """Run DeePaC CLI."""
     seed = 0
     np.random.seed(seed)
     tf.set_random_seed(seed)
@@ -29,6 +34,7 @@ def main():
 
 
 def parse():
+    """Parse DeePaC CLI arguments."""
     parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                 "with reverse-complement neural networks.")
     subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.')
@@ -107,17 +113,18 @@ def run_train(args):
 
 
 def run_predict(args):
+    """Predict pathogenic potentials from a fasta/npy file."""
     if args.n_cpus <= 0:
         raise argparse.ArgumentTypeError("%s is an invalid number of cores" % args.n_cpus)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
     if args.sensitive:
-        model = load_sensitive_model(args.n_cpus, args.n_gpus)
+        model = __load_sensitive_model(args.n_cpus, args.n_gpus)
     elif args.rapid:
-        model = load_rapid_model(args.n_cpus, args.n_gpus)
+        model = __load_rapid_model(args.n_cpus, args.n_gpus)
     elif args.strain:
-        model = load_strain_model(args.n_cpus, args.n_gpus)
+        model = __load_strain_model(args.n_cpus, args.n_gpus)
     else:
         model = load_model(args.custom)
 
@@ -128,6 +135,7 @@ def run_predict(args):
 
 
 def run_filter(args):
+    """Filter a reads in a fasta file by pathogenic potential."""
     if args.precision <= 0:
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
@@ -163,21 +171,21 @@ def run_convert(args):
     convert_cudnn(config, args.model, args.from_weights)
 
 
-def load_sensitive_model(n_cpus, n_gpus, device_parallel=False):
+def __load_sensitive_model(n_cpus, n_gpus, device_parallel=False):
     if n_gpus > 1:
         device_parallel = True
-    return load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, device_parallel)
+    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, device_parallel)
 
 
-def load_rapid_model(n_cpus, n_gpus, device_parallel=False):
-    return load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, device_parallel)
+def __load_rapid_model(n_cpus, n_gpus, device_parallel=False):
+    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, device_parallel)
 
 
-def load_strain_model(n_cpus, n_gpus, device_parallel=False):
-    return load_builtin_model("nn-patric-strain-cnn-bn", n_cpus, n_gpus, device_parallel)
+def __load_strain_model(n_cpus, n_gpus, device_parallel=False):
+    return __load_builtin_model("nn-patric-strain-cnn-bn", n_cpus, n_gpus, device_parallel)
 
 
-def load_builtin_model(prefix, n_cpus, n_gpus, device_parallel):
+def __load_builtin_model(prefix, n_cpus, n_gpus, device_parallel):
     config_path = os.path.join(os.path.dirname(__file__), "builtin", "config", "{}.ini".format(prefix))
     weights_path = os.path.join(os.path.dirname(__file__), "builtin", "weights", "{}.h5".format(prefix))
     config = configparser.ConfigParser()

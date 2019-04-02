@@ -1,5 +1,5 @@
-"""@package paprdeep_utils
-Utility classes for PaPrDeep.
+"""@package deepac.utils
+Utility classes for DeePaC.
   
 """
 import numpy as np

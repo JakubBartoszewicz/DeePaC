@@ -1,19 +1,10 @@
-"""@package eval
-Evaluate a NN trained on Illumina reads.
+"""@package deepac.eval.eval_species
+Evaluate a NN trained on Illumina reads, species-wise.
 
 Requires a config file describing the data directory, dataset and run name,
 classification threshold and the epoch range.
-
-usage: eval.py [-h] config_file
-
-positional arguments:
-  config_file
-
-optional arguments:
-  -h, --help   show this help message and exit
   
 """
-
 from keras.backend import tensorflow_backend as backend
 import numpy as np
 import csv
@@ -22,7 +13,7 @@ from deepac.eval.eval import get_performance
 
 class EvalSpecConfig:
     """
-    Species-wise evaluation configuration class
+    Species-wise evaluation configuration class.
 
     """
 
@@ -63,6 +54,7 @@ class EvalSpecConfig:
 
 
 def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
+    """Generate species-wise predictions."""
     neglist = []
     with open(negcsv_path, 'r') as negcsv:
         negreader = csv.reader(negcsv, delimiter=delimiter)

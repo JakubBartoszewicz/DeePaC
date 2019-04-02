@@ -1,3 +1,7 @@
+"""@package deepac.predict
+Predict pathogenic potentials and use them to filter sequences of interest.
+
+"""
 from deepac.preproc import read_fasta, tokenize
 from multiprocessing import Pool
 from functools import partial
@@ -9,7 +13,7 @@ import itertools
 
 
 def predict_fasta(model, input_fasta, output, token_cores=8):
-
+    """Predict pathogenic potentials from a fasta file."""
     p = Pool(processes=token_cores)
 
     alphabet = "ACGT"
@@ -34,7 +38,7 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
 
 
 def predict_npy(model, input_npy, output):
-
+    """Predict pathogenic potentials from a preprocessed numpy array."""
     x_data = np.load(input_npy)
     # Predict
     print("Predicting...")
@@ -44,6 +48,7 @@ def predict_npy(model, input_npy, output):
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3):
+    """Filter a reads in a fasta file by pathogenic potential."""
     with open(input_fasta) as in_handle:
         fasta_data = [(title, seq) for (title, seq) in SimpleFastaParser(in_handle)]
     y_pred = np.load(predictions, mmap_mode='r')

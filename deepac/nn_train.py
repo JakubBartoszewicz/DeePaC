@@ -1,17 +1,9 @@
-"""@package nn_train
+"""@package deepac.nn_train
 Train a NN on Illumina reads.
 
 Requires a config file describing the available devices, data loading mode, input sequence length, network architecture,
 paths to input files and how should be the model trained.
 
-usage: nn_train.py [-h] config_file
-
-positional arguments:
-  config_file
-
-optional arguments:
-  -h, --help   show this help message and exit
-  
 """
 
 import numpy as np
@@ -41,7 +33,7 @@ from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 class RCConfig:
 
     """
-    RCNet configuration class
+    RCNet configuration class.
 
     """
 
@@ -178,7 +170,7 @@ class RCConfig:
             self.tb_hist_freq = config['Training'].getint('TBHistFreq')
 
     def set_tf_session(self):
-        """Set TF session"""
+        """Set TF session."""
         # If no GPUs, use CPUs
         if self.n_gpus == 0:
             # Use as many intra_threads as the CPUs available

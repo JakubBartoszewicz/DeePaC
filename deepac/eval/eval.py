@@ -1,16 +1,8 @@
-"""@package eval
+"""@package deepac.eval.eval
 Evaluate a NN trained on Illumina reads.
 
 Requires a config file describing the data directory, dataset and run name,
 classification threshold and the epoch range.
-
-usage: eval.py [-h] config_file
-
-positional arguments:
-  config_file
-
-optional arguments:
-  -h, --help   show this help message and exit
   
 """
 from keras.models import load_model
@@ -23,7 +15,7 @@ import matplotlib.pyplot as plt
 
 class EvalConfig:
     """
-    Evaluation configuration class
+    Evaluation configuration class.
 
     """
 

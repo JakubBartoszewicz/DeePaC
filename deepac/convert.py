@@ -1,18 +1,9 @@
-"""@package convert_cudnn
+"""@package deepac.convert_cudnn
 Convert a CuDNNLSTM to a CPU-compatible LSTM.
 
 Requires a config file describing the available devices, data loading mode, input sequence length, network architecture,
 paths to input files and how should was the model trained, and a file with model weights. The original config file may
 be used, as the number of available devices is overridden by this script.
-
-usage: convert.py [-h] config_file saved_model
-
-positional arguments:
-  config_file
-  saved_model
-
-optional arguments:
-  -h, --help   show this help message and exit
 
 """
 
@@ -25,6 +16,7 @@ from deepac.nn_train import RCConfig, RCNet
 
 
 def convert_cudnn(config, saved_model, no_prep):
+    """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
 
     path = saved_model
     if re.search("\.h5$", path) is not None:

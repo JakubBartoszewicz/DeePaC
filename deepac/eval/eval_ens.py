@@ -1,16 +1,8 @@
-"""@package eval
-Evaluate a NN trained on Illumina reads.
+"""@package deepac.eval.eval_ens
+Evaluate an ensemble of NNs trained on Illumina reads.
 
 Requires a config file describing the data directory, dataset and run name,
 classification threshold and the epoch range.
-
-usage: eval.py [-h] config_file
-
-positional arguments:
-  config_file
-
-optional arguments:
-  -h, --help   show this help message and exit
   
 """
 from keras.models import load_model
@@ -22,7 +14,7 @@ from deepac.eval.eval import get_performance
 
 class EvalEnsConfig:
     """
-    Ensemble evaluation configuration class
+    Ensemble evaluation configuration class.
 
     """
 
