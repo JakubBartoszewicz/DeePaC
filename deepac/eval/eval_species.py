@@ -13,13 +13,14 @@ optional arguments:
   -h, --help   show this help message and exit
   
 """
-import argparse
-import configparser
+
+from keras.backend import tensorflow_backend as backend
 import numpy as np
 import csv
 from deepac.eval.eval import get_performance
 
-class EvalSpecConfig():
+
+class EvalSpecConfig:
     """
     Species-wise evaluation configuration class
 
@@ -61,7 +62,6 @@ class EvalSpecConfig():
         self.do_plots = config['Options'].getboolean('Do_plots')
 
 
-
 def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
     neglist = []
     with open(negcsv_path, 'r') as negcsv:
@@ -83,13 +83,14 @@ def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
         pred = np.mean(y_pred[used:used+species[1]])
         y_result.append(pred)
         used = used + species[1]
-    return((np.asarray(y_result), np.concatenate((np.repeat(0,len(neglist)), np.repeat(1,len(poslist))))))
+    return np.asarray(y_result), np.concatenate((np.repeat(0, len(neglist)), np.repeat(1, len(poslist))))
+
 
 def evaluate_species(config):
     """Evaluate the NN on Illumina reads using the supplied configuration."""
     # Clear session needed or TypeError can happen in some cases
-    #backend.clear_session()
-    
+    backend.clear_session()
+
     evalconfig = EvalSpecConfig(config)
 
     # Read data to memory

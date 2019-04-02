@@ -24,17 +24,20 @@ from keras.models import load_model
 from deepac.nn_train import RCConfig, RCNet
 
 
-
 def convert_cudnn(config, saved_model, no_prep):
+
     path = saved_model
     if re.search("\.h5$", path) is not None:
         path = re.sub("\.h5$", "", path)
-    weights_path = path + "_weights.h5"
 
-    # Prepare weights
-    if not no_prep:
+    if no_prep:
+        weights_path = saved_model
+    else:
+        weights_path = path + "_weights.h5"
+        # Prepare weights
         model = load_model(saved_model)
         model.save_weights(weights_path)
+
 
     # Load model architecture, device info and weights
     paprconfig = RCConfig(config)
@@ -48,4 +51,3 @@ def convert_cudnn(config, saved_model, no_prep):
     # Save output
     save_path = path + "_converted.h5"
     paprnet.model.save(save_path)
-

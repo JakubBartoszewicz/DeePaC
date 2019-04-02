@@ -20,7 +20,8 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-class EvalConfig():
+
+class EvalConfig:
     """
     Evaluation configuration class
 
@@ -54,13 +55,13 @@ class EvalConfig():
         self.do_pred = config['Options'].getboolean('Do_Pred')
 
 
-
 def evaluate_reads(config):
     """Evaluate the NN on Illumina reads using the supplied configuration."""
     # Clear session needed or TypeError can happen in some cases
     backend.clear_session()
-    
+
     evalconfig = EvalConfig(config)
+    x_test = None
 
     # Read data to memory
     print("Loading {}_data.npy...".format(evalconfig.dataset_path))
@@ -68,10 +69,10 @@ def evaluate_reads(config):
     if evalconfig.do_pred:
         x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
         if evalconfig.do_rc:
-            x_test = x_test [::, ::-1, ::-1]
-    
+            x_test = x_test[::, ::-1, ::-1]
+
     # Write CSV header
-    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
+    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
         file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
                               "recall", "spec", "mcc", "f1"))
@@ -123,7 +124,7 @@ def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
         dataset_path = evalconfig.pairedset_path
     else:
         dataset_path = evalconfig.dataset_path
-    model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch),)
+    model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch), )
     # Predict class probabilities
     y_pred = np.ndarray.flatten(model.predict(x_test))
     # Backup predicted probabilities for future analyses
@@ -134,10 +135,11 @@ def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
     np.save(file=filename, arr=y_pred)
     return y_pred
 
+
 def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     """Get performance measures from predictions using the supplied configuration."""
     # Assign classes using the chosen threshold
-    y_pred_class = (y_pred > evalconfig.thresh).astype('int32')
+    y_pred_class = (y_pred > evalconfig.thresh).astype('int8')
     # Calculate performance measures
     try:
         log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
@@ -216,4 +218,3 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             plt.xlabel('Recall')
             plt.savefig("aupr_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
             plt.clf()
-        

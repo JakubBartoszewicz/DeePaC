@@ -2,14 +2,7 @@
 Utility classes for PaPrDeep.
   
 """
-# Set seeds at the very beginning for maximum reproducibility
-seed = 0
 import numpy as np
-np.random.seed(seed)
-import os
-os.environ['PYTHONHASHSEED'] = '0'
-import random as rn
-rn.seed(seed)
 
 import math
 from keras.utils.data_utils import Sequence
@@ -46,7 +39,7 @@ class ModelMGPU(Model):
         return super(ModelMGPU, self).__getattribute__(attrname)
 
 
-class PaPrSequence(Sequence):
+class ReadSequence(Sequence):
 
     """
     A Keras sequence for yielding batches from a numpy array loaded in mmap mode.

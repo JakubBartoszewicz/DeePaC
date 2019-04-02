@@ -1,10 +1,14 @@
+import numpy as np
+import tensorflow as tf
+import os
+import random as rn
+
 import argparse
 import configparser
 import keras.backend as K
 from keras.models import load_model
-import os
 
-from deepac.predict import predict, filter
+from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.preproc import preproc
 from deepac.eval.eval import evaluate_reads
@@ -15,6 +19,11 @@ from deepac import __file__
 
 
 def main():
+    seed = 0
+    np.random.seed(seed)
+    tf.set_random_seed(seed)
+    rn.seed(seed)
+
     args = parse()
     args.func(args)
 
@@ -27,6 +36,7 @@ def parse():
     # create the parser for the "predict" command
     parser_predict = subparsers.add_parser('predict', help='Predict using a trained model.')
     parser_predict.add_argument("input", help="Input file path [.fasta]")
+    parser_predict.add_argument('-a, --array', dest='array', action='store_true', help='Use .npy input instead.')
     predict_group = parser_predict.add_mutually_exclusive_group(required=True)
     predict_group.add_argument('-s, --sensitive', dest='sensitive', action='store_true',
                                help='Use the sensitive LSTM model.')
@@ -60,7 +70,7 @@ def parse():
 
     # create the parser for the "preproc" command
     parser_preproc = subparsers.add_parser('preproc', help='Convert fasta files to numpy arrays for training.')
-    parser_preproc.add_argument('config', type=int, help='Preprocessing config file.')
+    parser_preproc.add_argument('config', help='Preprocessing config file.')
     parser_preproc.set_defaults(func=run_preproc)
 
     # create the parser for the "eval" command
@@ -75,7 +85,8 @@ def parse():
     parser_convert = subparsers.add_parser('convert', help='Convert a CuDNNLSTM to a CPU-compatible LSTM.')
     parser_convert.add_argument("config", help='Training config file.')
     parser_convert.add_argument("model", help='Saved model.')
-    parser_convert.add_argument("--no_prep", help="Use prepared weights instead of the model file", action="store_true")
+    parser_convert.add_argument("-w, --weights", dest='from_weights', help="Use prepared weights instead of the model "
+                                                                           "file", action="store_true")
     parser_convert.set_defaults(func=run_convert)
 
     args = parser.parse_args()
@@ -101,16 +112,19 @@ def run_predict(args):
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
-    if args.custom is not None:
-        model = load_model(args.custom)
-    elif args.sensitive:
+    if args.sensitive:
         model = load_sensitive_model(args.n_cpus, args.n_gpus)
     elif args.rapid:
         model = load_rapid_model(args.n_cpus, args.n_gpus)
     elif args.strain:
         model = load_strain_model(args.n_cpus, args.n_gpus)
+    else:
+        model = load_model(args.custom)
 
-    predict(model, args.input, args.output, args.n_cpus)
+    if args.array:
+        predict_npy(model, args.input, args.output)
+    else:
+        predict_fasta(model, args.input, args.output, args.n_cpus)
 
 
 def run_filter(args):
@@ -118,7 +132,7 @@ def run_filter(args):
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
+    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
 
 
 def run_preproc(args):
@@ -130,23 +144,27 @@ def run_preproc(args):
 
 def run_evaluate(args):
     """Parse the config file and evaluate the NN on Illumina reads."""
+    config = configparser.ConfigParser()
     if args.species_config is not None:
-        evaluate_species(args.species_config)
+        config.read(args.species_config)
+        evaluate_species(config)
     elif args.reads_config is not None:
-        evaluate_reads(args.reads_config)
+        config.read(args.reads_config)
+        evaluate_reads(config)
     elif args.ens_config is not None:
-        evaluate_ensemble(args.ens_config)
+        config.read(args.ens_config)
+        evaluate_ensemble(config)
 
 
 def run_convert(args):
     """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
     config = configparser.ConfigParser()
-    config.read(args.config_file)
-    convert_cudnn(config, args.saved_model, args.no_prep)
+    config.read(args.config)
+    convert_cudnn(config, args.model, args.from_weights)
 
 
 def load_sensitive_model(n_cpus, n_gpus, device_parallel=False):
-    if n_gpus > 0:
+    if n_gpus > 1:
         device_parallel = True
     return load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, device_parallel)
 

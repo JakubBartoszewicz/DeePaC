@@ -13,15 +13,14 @@ optional arguments:
   -h, --help   show this help message and exit
   
 """
-import argparse
-import configparser
 from keras.models import load_model
 from keras.backend import tensorflow_backend as backend
 import numpy as np
 import csv
 from deepac.eval.eval import get_performance
 
-class EvalEnsConfig():
+
+class EvalEnsConfig:
     """
     Ensemble evaluation configuration class
 
@@ -117,4 +116,3 @@ def predict(evalconfig, x_test, paired=False, do_pred=True):
     np.save(file="{p}-predictions-{s}.npy".format(p=evalconfig.name_prefix, s=dataset_path),
             arr=y_pred)
     return y_pred
-

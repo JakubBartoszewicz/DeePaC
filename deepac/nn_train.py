@@ -13,17 +13,10 @@ optional arguments:
   -h, --help   show this help message and exit
   
 """
-# Set seeds at the very beginning for maximum reproducibility
-seed = 0
+
 import numpy as np
-np.random.seed(seed)
 import tensorflow as tf
-tf.set_random_seed(seed)
 import os
-os.environ['PYTHONHASHSEED'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-import random as rn
-rn.seed(seed)
 
 import errno
 import warnings
@@ -31,7 +24,7 @@ from contextlib import redirect_stdout
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Input, Lambda
-from keras.layers import concatenate, add, subtract, multiply, average, maximum
+from keras.layers import concatenate, add, multiply, average, maximum
 from keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 import keras.backend as K
@@ -42,7 +35,8 @@ from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.initializers import glorot_uniform, he_uniform, orthogonal
 
-from deepac.utils import ModelMGPU, PaPrSequence, CSVMemoryLogger
+from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
+
 
 class RCConfig:
 
@@ -90,9 +84,9 @@ class RCConfig:
         # Set the initializer (choose between He and Glorot uniform)
         self.init_mode = config['Architecture']['WeightInit']
         if self.init_mode == 'he_uniform':
-            self.initializer = he_uniform(seed)
+            self.initializer = he_uniform(self.seed)
         elif self.init_mode == 'glorot_uniform':
-            self.initializer = glorot_uniform(seed)
+            self.initializer = glorot_uniform(self.seed)
         else:
             raise ValueError('Unknown initializer')
 
@@ -217,6 +211,19 @@ class RCNet:
         """RCNet constructor and config parsing"""
         self.config = config
         self.history = None
+
+        self.training_sequence = None
+        self.x_train = None
+        self.y_train = None
+        self.length_train = 0
+        self.val_indices = None
+        self.x_val = None
+        self.y_val = None
+        self.validation_data = (self.x_val, self.y_val)
+        self.length_val = 0
+        self.model = None
+        self.parallel_model = None
+
         if self.config.do_logs:
             try:
                 os.makedirs(self.config.log_dir)
@@ -251,7 +258,7 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
-            self.training_sequence = PaPrSequence(self.x_train, self.y_train, self.config.batch_size)
+            self.training_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size)
             self.length_train = len(self.x_train)
         else:
             # ... or load all the data to memory
@@ -262,7 +269,7 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
-            self.validation_data = PaPrSequence(self.x_val, self.y_val, self.config.batch_size)
+            self.validation_data = ReadSequence(self.x_val, self.y_val, self.config.batch_size)
             self.length_val = len(self.x_val)
         else:
             # ... or load all the data to memory
@@ -928,4 +935,3 @@ class RCNet:
                                               shuffle=True,
                                               class_weight=self.config.class_weight,
                                               initial_epoch=self.config.epoch_start)
-

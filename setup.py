@@ -29,6 +29,7 @@ setup(name='deepac',
           'scikit-learn',
           'matplotlib',
           'numpy',
+          'h5py',
       ],
       entry_points={
           'console_scripts': ['deepac=deepac.command_line:main'],

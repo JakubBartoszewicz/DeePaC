@@ -17,15 +17,13 @@ optional arguments:
   -h, --help   show this help message and exit
   
 """
-import sys
-import argparse
-import configparser
 from keras.preprocessing.text import Tokenizer
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from multiprocessing import Pool
 from functools import partial
 import gzip
+
 
 def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     """Tokenize and delete the out-of-vocab token (N) column."""
@@ -122,4 +120,3 @@ def preproc(config):
     np.save(file=f_data, arr=x_train)
     np.save(file=f_labels, arr=y_train)
     print("Done!")
-
