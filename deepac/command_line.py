@@ -110,7 +110,7 @@ def run_predict(args):
     elif args.strain:
         model = load_strain_model(args.n_cpus, args.n_gpus)
 
-    predict(model, args.input, args.output, args.n_cores)
+    predict(model, args.input, args.output, args.n_cpus)
 
 
 def run_filter(args):
