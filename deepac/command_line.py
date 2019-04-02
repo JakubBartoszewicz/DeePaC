@@ -29,8 +29,7 @@ def main():
     tf.set_random_seed(seed)
     rn.seed(seed)
 
-    args = parse()
-    args.func(args)
+    parse()
 
 
 def parse():
@@ -96,7 +95,11 @@ def parse():
     parser_convert.set_defaults(func=run_convert)
 
     args = parser.parse_args()
-    return args
+
+    if hasattr(args, 'func'):
+        args.func(args)
+    else:
+        parser.print_help()
 
 
 def run_train(args):
