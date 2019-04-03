@@ -28,16 +28,13 @@ deepac train --help
 
 You can predict pathogenic potentials with one of the built-in models out of the box:
 ```
-# A rapid CNN (trained on IMG data)
+# A rapid CNN (trained on IMG/M data)
 deepac predict -r input.fasta
-# A sensitive LSTM (trained on IMG data)
+# A sensitive LSTM (trained on IMG/M data)
 deepac predict -s input.fasta
-# A strain-level CNN trained on PATRIC data
-deepac predict -p input.fasta
 ```
 
-The rapid and the sensitive models are trained to predict pathogenic potentials of _novel species_, while the 
-strain-level CNN is better suited for new strains of species already found in PATRIC when the training set was prepared.
+The rapid and the sensitive models are trained to predict pathogenic potentials of novel bacterial species.
 For details, see https://www.biorxiv.org/content/10.1101/535286v2
 
 To quickly filter your data according to predicted pathogenic potentials, you can use:

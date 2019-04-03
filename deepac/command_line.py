@@ -46,8 +46,6 @@ def parse():
     predict_group.add_argument('-s, --sensitive', dest='sensitive', action='store_true',
                                help='Use the sensitive LSTM model.')
     predict_group.add_argument('-r, --rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
-    predict_group.add_argument('-p, --patric-strain', dest='strain', action='store_true',
-                               help='Use the strain-based CNN model trained on PATRIC data.')
     predict_group.add_argument('-c, --custom', dest='custom', help='Use the user-supplied, already compiled CUSTOM'
                                                                    ' model')
     parser_predict.add_argument("-o", "--output", help="Output file path [.npy]")
@@ -126,8 +124,6 @@ def run_predict(args):
         model = __load_sensitive_model(args.n_cpus, args.n_gpus)
     elif args.rapid:
         model = __load_rapid_model(args.n_cpus, args.n_gpus)
-    elif args.strain:
-        model = __load_strain_model(args.n_cpus, args.n_gpus)
     else:
         model = load_model(args.custom)
 
@@ -182,10 +178,6 @@ def __load_sensitive_model(n_cpus, n_gpus, device_parallel=False):
 
 def __load_rapid_model(n_cpus, n_gpus, device_parallel=False):
     return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, device_parallel)
-
-
-def __load_strain_model(n_cpus, n_gpus, device_parallel=False):
-    return __load_builtin_model("nn-patric-strain-cnn-bn", n_cpus, n_gpus, device_parallel)
 
 
 def __load_builtin_model(prefix, n_cpus, n_gpus, device_parallel):
