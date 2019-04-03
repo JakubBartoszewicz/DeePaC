@@ -4,7 +4,11 @@
 
 DeePaC is a python package for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
 reads) with reverse-complement neural networks. For details, see our preprint on bioRxiv: 
-https://www.biorxiv.org/content/10.1101/535286v2
+<https://www.biorxiv.org/content/10.1101/535286v2>.
+
+Documentation can be found here:
+<https://rki_bioinformatics.gitlab.io/DeePaC/>.
+
 
 ## Installation
 
@@ -35,7 +39,7 @@ deepac predict -s input.fasta
 ```
 
 The rapid and the sensitive models are trained to predict pathogenic potentials of novel bacterial species.
-For details, see https://www.biorxiv.org/content/10.1101/535286v2
+For details, see <https://www.biorxiv.org/content/10.1101/535286v2>.
 
 To quickly filter your data according to predicted pathogenic potentials, you can use:
 ```
@@ -56,7 +60,7 @@ For more complex analyzes, it can be useful to preprocess the fasta files by con
 ```
 deepac preproc preproc_config.ini
 ```
-See the `config_templates` directory for a sample configuration file.
+See the `config_templates` directory of the GitLab repository (https://gitlab.com/rki_bioinformatics/DeePaC/) for a sample configuration file.
 
 ## Evaluation
 
