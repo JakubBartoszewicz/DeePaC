@@ -1,40 +1,19 @@
-"""@package preproc
+"""@package deepac.preproc
 Convert fasta files to numpy arrays for training.
 
-  
 Uses distributed orthographic representation, i.e. every read is coded so that every nucleotide is a one-hot encoded
  vector. Assumes equal length of all the input sequences - no padding!
 
 Requires a config file describing the available devices, input filepaths (two fasta files containing negative and
  positive reads respectively), output filepath (for data and labels) and additional options.
 
-usage: preproc.py [-h] config_file
-
-positional arguments:
-  config_file
-
-optional arguments:
-  -h, --help   show this help message and exit
-  
 """
-import sys
-import argparse
-import configparser
 from keras.preprocessing.text import Tokenizer
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from multiprocessing import Pool
 from functools import partial
 import gzip
-
-def main():
-    """Parse the config file and preprocess the Illumina reads."""
-    parser = argparse.ArgumentParser(description="Convert fasta files to numpy arrays for training.")
-    parser.add_argument("config_file")
-    args = parser.parse_args()
-    config = configparser.ConfigParser()
-    config.read(args.config_file)
-    preproc(config)
 
 
 def tokenize(seq, tokenizer, datatype='int8', read_length=250):
@@ -132,8 +111,3 @@ def preproc(config):
     np.save(file=f_data, arr=x_train)
     np.save(file=f_labels, arr=y_train)
     print("Done!")
-
-
-if __name__ == "__main__":
-    main()
-

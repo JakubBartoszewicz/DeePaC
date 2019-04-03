@@ -1,0 +1,3 @@
+include README.md
+include deepac/builtin/config/*
+include deepac/builtin/weights/*
