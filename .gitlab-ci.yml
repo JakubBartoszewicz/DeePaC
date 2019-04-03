@@ -13,15 +13,15 @@ test:
   except:
   - master
   
-#pages:
-#  script:
-#  ## execute doxygen
-#  - doxygen documentation/doxygen/config.doxyfile
-#  ## Move documentation/doxygen/html/ to public
-#  - mv documentation/doxygen/html/ public/
-#  artifacts:
-#    paths: 
-#    - public
-#  only:
-#  ## Branch
-#  - master				
+pages:
+  script:
+  ## execute doxygen
+  - doxygen documentation/doxygen/config.doxyfile
+  ## Move documentation/doxygen/html/ to public
+  - mv documentation/doxygen/html/ public/
+  artifacts:
+    paths:
+    - public
+  only:
+  ## Branch
+  - master
