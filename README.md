@@ -86,4 +86,4 @@ CPU-compatible, use `deepac convert`. You can also use it to save the weights of
 from a set of weights to use it with a different Python binary.
 
 ## Dependencies
-DeePaC requires Tensorflow, Keras, Biopython, Scikit-learn and matplotlib.
+DeePaC requires Tensorflow, Keras, Biopython, Scikit-learn and matplotlib. Python 3.4+ is supported.

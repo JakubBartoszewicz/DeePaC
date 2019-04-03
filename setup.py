@@ -24,7 +24,6 @@ setup(name='deepac',
       packages=['deepac', 'deepac.eval'],
       install_requires=[
           'keras>=2.2.4',
-          'tensorflow>=1.11, <2.0',
           'biopython',
           'scikit-learn',
           'matplotlib',
