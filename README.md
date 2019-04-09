@@ -16,6 +16,10 @@ You can install DeePaC with `pip`, and use it an a python package, or a CLI tool
 Remember to activate your virtual environment (with the dependencies installed) before using DeePaC:
 ```
 source my_env/bin/activate
+# for CPU-only:
+pip install tensorflow
+# for GPU support:
+# pip install tensorflow-gpu
 pip install deepac
 ```
 
