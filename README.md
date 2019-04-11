@@ -12,16 +12,44 @@ Documentation can be found here:
 
 ## Installation
 
-You can install DeePaC with `pip`, and use it an a python package, or a CLI tool.
-Remember to activate your virtual environment (with the dependencies installed) before using DeePaC:
+### With conda
+You can install DeePaC with `conda`, and use it an a python package, or a CLI tool. Note that the TensorFlow team 
+recommends using `virtualenv` and `pip` (see below). Set up the [bioconda channel](
+<https://bioconda.github.io/index.html#set-up-channels>) first, and remember to activate your conda environment before
+ using DeePaC:
 ```
+conda create -c bioconda -n my_env
+conda activate my_env
+conda install deepac
+```
+
+### With pip
+
+You can install DeePaC with `pip`, and use it an a python package, or a CLI tool.
+Remember to activate your virtual environment before using DeePaC:
+```
+virtualenv --system-site-packages my_env
 source my_env/bin/activate
-# for CPU-only:
-pip install tensorflow
-# for GPU support:
-# pip install tensorflow-gpu
 pip install deepac
 ```
+
+### GPU support
+
+To use GPUs, you need to reinstall TensorFlow. It is easy in conda:
+```
+conda remove tensorflow
+conda install tensorflow-gpu
+```
+
+If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
+you can do the same as above:
+```
+pip uninstall tensorflow
+pip install tensorflow-gpu
+```
+
+
+### Help
 
 To see help, just use
 
@@ -40,6 +68,8 @@ You can predict pathogenic potentials with one of the built-in models out of the
 deepac predict -r input.fasta
 # A sensitive LSTM (trained on IMG/M data)
 deepac predict -s input.fasta
+# With GPU support
+deepac predict -s -g 1 input.fasta
 ```
 
 The rapid and the sensitive models are trained to predict pathogenic potentials of novel bacterial species.
