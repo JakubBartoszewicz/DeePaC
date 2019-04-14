@@ -13,8 +13,9 @@ Documentation can be found here:
 ## Installation
 
 ### With conda
-You can install DeePaC with `conda`, and use it an a python package, or a CLI tool. Note that the TensorFlow team 
-recommends using `virtualenv` and `pip` (see below). Set up the [bioconda channel](
+ [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
+ 
+You can install DeePaC with `conda`, and use it an a python package, or a CLI tool. Set up the [bioconda channel](
 <https://bioconda.github.io/index.html#set-up-channels>) first, and remember to activate your conda environment before
  using DeePaC:
 ```
@@ -35,10 +36,9 @@ pip install deepac
 
 ### GPU support
 
-To use GPUs, you need to reinstall TensorFlow. It is easy in conda:
+To use GPUs, you need to install the GPU version of TensorFlow. It is easy in conda:
 ```
-conda remove tensorflow
-conda install tensorflow-gpu
+conda install tensorflow-gpu deepac
 ```
 
 If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
@@ -52,7 +52,6 @@ pip install tensorflow-gpu
 ### Help
 
 To see help, just use
-
 ```
 deepac --help
 deepac predict --help
@@ -82,7 +81,6 @@ deepac filter input.fasta input_predictions.npy -t 0.5
 ```
 Note that after running `predict`, you can use the `input_predictions.npy` to filter your fasta file with different
 thresholds. You can also add pathogenic potentials to the fasta headers in the output files:
-
 ```
 deepac filter input.fasta input_predictions.npy -t 0.75 -p -o output-75.fasta
 deepac filter input.fasta input_predictions.npy -t 0.9 -p -o output-90.fasta
