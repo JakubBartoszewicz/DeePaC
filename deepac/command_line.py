@@ -41,31 +41,31 @@ def parse():
 
     # create the parser for the "predict" command
     parser_predict = subparsers.add_parser('predict', help='Predict using a trained model.')
-    parser_predict.add_argument('input', help="Input file path [.fasta]")
+    parser_predict.add_argument('input', help="Input file path [.fasta].")
     parser_predict.add_argument('-a', '--array', dest='array', action='store_true', help='Use .npy input instead.')
     predict_group = parser_predict.add_mutually_exclusive_group(required=True)
     predict_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
                                help='Use the sensitive LSTM model.')
     predict_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
     predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, already compiled CUSTOM'
-                                                                   ' model')
-    parser_predict.add_argument('-o', '--output', help="Output file path [.npy]")
-    parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores", default=8, type=int)
-    parser_predict.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs", default=0, type=int)
-    parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix", default="/device:GPU:")
+                                                                    ' model.')
+    parser_predict.add_argument('-o', '--output', help="Output file path [.npy].")
+    parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+    parser_predict.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+    parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.", default="/device:GPU:")
     parser_predict.set_defaults(func=run_predict)
 
     # create the parser for the "filter" command
     parser_filter = subparsers.add_parser('filter', help='Filter using a trained model.')
 
-    parser_filter.add_argument('input',  help="Input file path [.fasta]")
-    parser_filter.add_argument('predictions', help="Predictions in matching order [.npy]")
-    parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5]", default=0.5, type=float)
-    parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers",
+    parser_filter.add_argument('input',  help="Input file path [.fasta].")
+    parser_filter.add_argument('predictions', help="Predictions in matching order [.npy].")
+    parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
+    parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                default=False, action="store_true")
     parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
-                               "[default=3]", default=3, type=int)
-    parser_filter.add_argument('-o', '--output', help="Output file path [.fasta]")
+                               "[default=3].", default=3, type=int)
+    parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
     parser_filter.set_defaults(func=run_filter)
 
     # create the parser for the "train" command
@@ -75,9 +75,13 @@ def parse():
                                help='Use the sensitive LSTM model.')
     train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
     train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
-    parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores", default=8, type=int)
-    parser_train.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs", default=1, type=int)
-    parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix", default="/device:GPU:")
+    parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+    parser_train.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=1, type=int)
+    parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.", default="/device:GPU:")
+    parser_train.add_argument('-T', '--train-data', dest="train_data", help="Path to training data.")
+    parser_train.add_argument('-t', '--train-labels', dest="train_labels", help="Path to training labels.")
+    parser_train.add_argument('-V', '--val-data', dest="val_data", help="Path to validation data.")
+    parser_train.add_argument('-v', '--val-labels', dest="val_labels", help="Path to validation labels.")
     parser_train.set_defaults(func=run_train)
 
     # create the parser for the "preproc" command
@@ -123,6 +127,15 @@ def run_train(args):
         config = configparser.ConfigParser()
         config.read(args.custom)
         paprconfig = RCConfig(config)
+
+    if args.train_data:
+        paprconfig.x_train_path = args.train_data
+    if args.train_labels:
+        paprconfig.y_train_path = args.train_labels
+    if args.val_data:
+        paprconfig.x_val_path = args.val_data
+    if args.val_labels:
+        paprconfig.y_val_path = args.val_labels
 
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
