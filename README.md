@@ -94,6 +94,23 @@ deepac preproc preproc_config.ini
 ```
 See the `config_templates` directory of the GitLab repository (https://gitlab.com/rki_bioinformatics/DeePaC/) for a sample configuration file.
 
+## Training
+You can use the built-in architectures to train a new model:
+```
+deepac train -r -g 1 -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
+deepac train -s -g 1 -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
+
+```
+
+To train a new model based on you custom configuration, use
+```
+deepac train -c nn_train_config.ini
+```
+
+If you train an LSTM on a GPU, a CUDNNLSTM implementation will be used. To convert the resulting model to be 
+CPU-compatible, use `deepac convert`. You can also use it to save the weights of a model, or recompile a model 
+from a set of weights to use it with a different Python binary.
+
 ## Evaluation
 
 To evaluate a trained model, use
@@ -108,15 +125,7 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
-## Training
-To train a new model, use
-```
-deepac train nn_train_config.ini
-```
 
-If you train an LSTM on a GPU, a CUDNNLSTM implementation will be used. To convert the resulting model to be 
-CPU-compatible, use `deepac convert`. You can also use it to save the weights of a model, or recompile a model 
-from a set of weights to use it with a different Python binary.
 
 ## Dependencies
 DeePaC requires Tensorflow, Keras, Biopython, Scikit-learn and matplotlib. Python 3.4+ is supported.
