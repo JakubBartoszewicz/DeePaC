@@ -2,7 +2,7 @@
 
 # DeePaC
 
-DeePaC is a python package for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
+DeePaC is a python package and a CLI tool for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
 reads) with reverse-complement neural networks. For details, see our preprint on bioRxiv: 
 <https://www.biorxiv.org/content/10.1101/535286v2>.
 
@@ -12,25 +12,40 @@ Documentation can be found here:
 
 ## Installation
 
+### Recommended: virtual environment
+
+We recomment setting up an isolated `conda` environment:
+```
+conda create -n my_env
+conda activate my_env
+```
+
+or a `virtualenv`:
+```
+virtualenv --system-site-packages my_env
+source my_env/bin/activate
+```
+
+
 ### With conda
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
  
-You can install DeePaC with `conda`, and use it an a python package, or a CLI tool. Set up the [bioconda channel](
-<https://bioconda.github.io/index.html#set-up-channels>) first, and remember to activate your conda environment before
- using DeePaC:
+You can install DeePaC with `bioconda`. Set up the [bioconda channel](
+<https://bioconda.github.io/index.html#set-up-channels>) first, and then:
 ```
-conda create -c bioconda -n my_env
-conda activate my_env
 conda install deepac
+```
+
+If you need Windows support, use the `jbrt` channel:
+
+```
+conda install -c jbrt deepac
 ```
 
 ### With pip
 
-You can install DeePaC with `pip`, and use it an a python package, or a CLI tool.
-Remember to activate your virtual environment before using DeePaC:
+You can also install DeePaC with `pip`:
 ```
-virtualenv --system-site-packages my_env
-source my_env/bin/activate
 pip install deepac
 ```
 
@@ -125,7 +140,3 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
-
-
-## Dependencies
-DeePaC requires Tensorflow, Keras, Biopython, Scikit-learn and matplotlib. Python 3.4+ is supported.
