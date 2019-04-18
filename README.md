@@ -51,9 +51,11 @@ pip install deepac
 
 ### GPU support
 
-To use GPUs, you need to install the GPU version of TensorFlow. It is easy in conda:
+To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu from the `defaults` channel before deepac:
 ```
-conda install tensorflow-gpu deepac
+conda remove tensorflow
+conda install -c defaults tensorflow-gpu 
+conda install deepac
 ```
 
 If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
@@ -140,3 +142,6 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
+## Supplementary data and scripts
+
+In the supplement_paper directory you can find the R scripts and data files used in the paper for dataset preprocessing and benchmarking.
