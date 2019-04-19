@@ -36,12 +36,6 @@ You can install DeePaC with `bioconda`. Set up the [bioconda channel](
 conda install deepac
 ```
 
-If you need Windows support, use the `jbrt` channel:
-
-```
-conda install -c jbrt deepac
-```
-
 ### With pip
 
 You can also install DeePaC with `pip`:
