@@ -11,7 +11,8 @@ from deepac import __file__
 import configparser
 import os
 
-def run_tests(n_cpus = 8, n_gpus=0):
+
+def run_tests(n_cpus=8, n_gpus=0):
     """Generate sample data and run all tests."""
     print("TEST: Generating data...")
     datagen.generate_sample_data()
@@ -30,14 +31,15 @@ def run_tests(n_cpus = 8, n_gpus=0):
     tester.test_filter()
     print("TEST: OK")
 
-class Tester():
+
+class Tester:
 
     """
     Tester class.
 
     """
 
-    def __init__(self, n_cpus = 8, n_gpus=0):
+    def __init__(self, n_cpus=8, n_gpus=0):
         self.n_cpus = n_cpus
         self.n_gpus = n_gpus
 
@@ -50,7 +52,6 @@ class Tester():
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
         preproc.preproc(config)
-
 
     def test_train(self):
         """Test training."""
@@ -83,8 +84,7 @@ class Tester():
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()
-        return(paprnet)
-
+        return paprnet
 
     def test_pred(self):
         """Test predicting."""
@@ -100,7 +100,6 @@ class Tester():
         model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
-
 
     def test_eval(self):
         """Test evaluating."""
