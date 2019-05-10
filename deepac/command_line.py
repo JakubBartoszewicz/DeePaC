@@ -4,22 +4,24 @@ A DeePaC CLI. Support subcommands, prediction with built-in and custom models, t
 """
 import numpy as np
 import tensorflow as tf
-import os
 import random as rn
 
 import argparse
 import configparser
+import os
 import keras.backend as K
 from keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
-from deepac.nn_train import RCConfig, RCNet
+from deepac.nn_train import RCNet, RCConfig
 from deepac.preproc import preproc
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_species import evaluate_species
 from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
-from deepac import __file__, __version__
+from deepac import builtin_loading
+from deepac.tests import testcalls
+from deepac import __version__
 
 
 def main():
@@ -56,7 +58,7 @@ def parse():
     parser_predict.set_defaults(func=run_predict)
 
     # create the parser for the "filter" command
-    parser_filter = subparsers.add_parser('filter', help='Filter using a trained model.')
+    parser_filter = subparsers.add_parser('filter', help='Filter prediction results.')
 
     parser_filter.add_argument('input',  help="Input file path [.fasta].")
     parser_filter.add_argument('predictions', help="Predictions in matching order [.npy].")
@@ -105,6 +107,11 @@ def parse():
                                                                              "model file.", action="store_true")
     parser_convert.set_defaults(func=run_convert)
 
+    parser_test = subparsers.add_parser('test', help='Run additional tests.')
+    parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+    parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+    parser_test.set_defaults(func=run_tests)
+
     args = parser.parse_args()
 
     if args.version:
@@ -120,9 +127,9 @@ def run_train(args):
     """Parse the config file and train the NN on Illumina reads."""
     print("Using {} GPUs.".format(args.n_gpus))
     if args.sensitive:
-        paprconfig = __get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        paprconfig = builtin_loading.get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
     elif args.rapid:
-        paprconfig = __get_rapid_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        paprconfig = builtin_loading.get_rapid_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
     else:
         config = configparser.ConfigParser()
         config.read(args.custom)
@@ -154,9 +161,9 @@ def run_predict(args):
         args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
     if args.sensitive:
-        model = __load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        model = builtin_loading.load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
     elif args.rapid:
-        model = __load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        model = builtin_loading.load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
     else:
         model = load_model(args.custom)
 
@@ -202,65 +209,9 @@ def run_convert(args):
     config.read(args.config)
     convert_cudnn(config, args.model, args.from_weights)
 
-
-def __load_sensitive_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-    if n_gpus > 1:
-        device_parallel = True
-    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel)
-
-
-def __load_rapid_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False,):
-    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel)
-
-
-def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-    config_path = os.path.join(os.path.dirname(__file__), "builtin", "config", "{}.ini".format(prefix))
-    weights_path = os.path.join(os.path.dirname(__file__), "builtin", "weights", "{}.h5".format(prefix))
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    paprconfig = RCConfig(config)
-    paprconfig.n_cpus = n_cpus
-    paprconfig.n_gpus = n_gpus
-    paprconfig.device_parallel = device_parallel
-    if device_parallel:
-        paprconfig.device_fwd = d_pref + str(min(0, n_gpus-1))
-        paprconfig.device_rc = d_pref + str(min(1, n_gpus-1))
-        paprconfig.model_build_device = d_pref + str(min(2, n_gpus-1))
-
-    if K.backend() == 'tensorflow':
-        paprconfig.set_tf_session()
-
-    paprnet = RCNet(paprconfig)
-
-    paprnet.model.load_weights(weights_path)
-
-    return paprnet.model
-
-
-def __get_sensitive_training_config(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-    if n_gpus > 1:
-        device_parallel = True
-    return __get_builtin_training_config("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel)
-
-
-def __get_rapid_training_config(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-    return __get_builtin_training_config("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel)
-
-
-def __get_builtin_training_config(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-    config_path = os.path.join(os.path.dirname(__file__), "builtin", "config", "{}.ini".format(prefix))
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    paprconfig = RCConfig(config)
-    paprconfig.n_cpus = n_cpus
-    paprconfig.n_gpus = n_gpus
-    paprconfig.device_parallel = device_parallel
-    if device_parallel:
-        paprconfig.device_fwd = d_pref + str(min(0, n_gpus - 1))
-        paprconfig.device_rc = d_pref + str(min(1, n_gpus - 1))
-        paprconfig.model_build_device = d_pref + str(min(2, n_gpus - 1))
-
-    return paprconfig
+def run_tests(args):
+    """Run tests."""
+    testcalls.run_tests(args.n_cpus, args.n_gpus)
 
 if __name__ == "__main__":
     main()

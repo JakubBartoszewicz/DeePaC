@@ -33,8 +33,7 @@ class EvalConfig:
             self.combinedset_path = self.dataset_path + "_" + self.pairedset_path
 
         # Set the run name
-        self.runname = config['Data']['RunName']
-        self.name_prefix = "nn-{}".format(self.runname)
+        self.name_prefix = config['Data']['RunName']
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
 
@@ -196,7 +195,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             plt.ylim([0, 1])
             plt.ylabel('True Positive Rate')
             plt.xlabel('False Positive Rate')
-            plt.savefig("auc_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            plt.savefig("{p}_{ne}_{s}_auc.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
             plt.clf()
 
         if not np.isnan(aupr):
@@ -208,5 +207,5 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             plt.ylim([0, 1])
             plt.ylabel('Precision')
             plt.xlabel('Recall')
-            plt.savefig("aupr_{p}_{ne}_{s}.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            plt.savefig("{p}_{ne}_{s}_aupr.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
             plt.clf()
