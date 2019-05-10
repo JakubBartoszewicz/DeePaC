@@ -120,4 +120,4 @@ class Tester:
                       os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
         filter_fasta(os.path.join("deepac-tests", "sample-val-pos.fasta"),
                      os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
-                     "sample-train-pos-filtered.fasta")
+                     os.path.join("deepac-tests", "sample-train-pos-filtered.fasta"))

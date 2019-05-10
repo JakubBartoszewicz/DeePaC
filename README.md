@@ -59,6 +59,13 @@ pip uninstall tensorflow
 pip install tensorflow-gpu
 ```
 
+### Optional: run tests
+Optionally, you can run explicit tests of your installation. Note that it may take some time on a CPU.
+```
+deepac test 
+# Test using a GPU
+deepac test -g 1
+```
 
 ### Help
 
