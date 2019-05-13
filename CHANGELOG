@@ -1,4 +1,4 @@
-### v0.9.3 - 11 May 2019
+### v0.9.3 - 13 May 2019
   * Automated tests
   * Bugfix: always saving models trained on built-in architectures
 
