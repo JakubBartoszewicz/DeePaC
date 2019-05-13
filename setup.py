@@ -21,7 +21,7 @@ setup(name='deepac',
       author='Jakub Bartoszewicz',
       author_email='bartoszewiczj@rki.de',
       license='MIT',
-      packages=['deepac', 'deepac.eval'],
+      packages=['deepac', 'deepac.eval', 'deepac.tests'],
       python_requires='>=3',
       install_requires=[
           'keras>=2.2.4',

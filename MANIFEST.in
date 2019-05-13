@@ -1,3 +1,4 @@
 include README.md
 include deepac/builtin/config/*
 include deepac/builtin/weights/*
+include deepac/tests/configs/*
