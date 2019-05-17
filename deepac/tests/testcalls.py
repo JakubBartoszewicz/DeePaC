@@ -68,7 +68,7 @@ class Tester:
     def test_train(self):
         """Test training."""
         print("TEST: Training (sensitive)...")
-        paprconfig = builtin_loading.get_sensitive_training_config(8, 0)
+        paprconfig = builtin_loading.get_sensitive_training_config(self.n_cpus, self.n_gpus)
         self.__config_train(paprconfig).train()
         assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
                                             "nn-img-sensitive-lstm-e001.h5"))), "Training failed."
@@ -78,7 +78,7 @@ class Tester:
                                             "training-img-sensitive-lstm.csv"))), "Training failed."
 
         print("TEST: Training (rapid)...")
-        paprconfig = builtin_loading.get_rapid_training_config(8, 0)
+        paprconfig = builtin_loading.get_rapid_training_config(self.n_cpus, self.n_gpus)
         self.__config_train(paprconfig).train()
         assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
                                             "nn-img-rapid-cnn-e001.h5"))), "Training failed."
@@ -122,14 +122,14 @@ class Tester:
     def test_pred(self):
         """Test predicting."""
         print("TEST: Predicting (sensitive)...")
-        model = builtin_loading.load_sensitive_model(8, 0)
+        model = builtin_loading.load_sensitive_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
         predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                     os.path.join("deepac-tests", "deepac-test-logs", "val-pred-sensitive.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "val-pred-sensitive.npy"))), "Prediction failed."
 
         print("TEST: Predicting (rapid)...")
-        model = builtin_loading.load_rapid_model(8, 0)
+        model = builtin_loading.load_rapid_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
         predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                     os.path.join("deepac-tests", "deepac-test-logs", "val-pred-rapid.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",

@@ -5,22 +5,23 @@ import configparser
 import os
 
 
-def load_sensitive_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
+def load_sensitive_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
     if n_gpus > 1:
         device_parallel = True
-    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel)
+    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel, log_path)
 
 
-def load_rapid_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, ):
-    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel)
+def load_rapid_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
+    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel, log_path)
 
 
-def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
+def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
     config_path = os.path.join(os.path.dirname(__file__), "builtin", "config", "{}.ini".format(prefix))
     weights_path = os.path.join(os.path.dirname(__file__), "builtin", "weights", "{}.h5".format(prefix))
     config = configparser.ConfigParser()
     config.read(config_path)
     paprconfig = RCConfig(config)
+    self.log_superpath = log_path
     paprconfig.n_cpus = n_cpus
     paprconfig.n_gpus = n_gpus
     paprconfig.device_parallel = device_parallel
