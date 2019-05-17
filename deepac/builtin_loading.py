@@ -22,6 +22,7 @@ def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_p
     config.read(config_path)
     paprconfig = RCConfig(config)
     paprconfig.log_superpath = log_path
+    paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
     paprconfig.n_cpus = n_cpus
     paprconfig.n_gpus = n_gpus
     paprconfig.device_parallel = device_parallel
