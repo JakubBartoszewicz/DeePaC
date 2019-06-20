@@ -6,7 +6,7 @@ def readme():
 
 
 setup(name='deepac',
-      version='0.9',
+      version='0.9.3',
       description='Predicting pathogenic potentials of novel DNA with reverse-complement neural networks.',
       long_description=readme(),
       long_description_content_type='text/markdown',
@@ -21,14 +21,17 @@ setup(name='deepac',
       author='Jakub Bartoszewicz',
       author_email='bartoszewiczj@rki.de',
       license='MIT',
-      packages=['deepac', 'deepac.eval'],
+      packages=['deepac', 'deepac.eval', 'deepac.tests'],
+      python_requires='>=3',
       install_requires=[
           'keras>=2.2.4',
+          'tensorflow',
           'biopython',
           'scikit-learn',
           'matplotlib',
           'numpy',
           'h5py',
+          'psutil'
       ],
       entry_points={
           'console_scripts': ['deepac=deepac.command_line:main'],

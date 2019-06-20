@@ -158,13 +158,9 @@ class RCConfig:
         # If needed, log the memory usage
         self.log_memory = config['Training'].getboolean('MemUsageLog')
         self.summaries = config['Training'].getboolean('Summaries')
-        self.do_logs = config['Training'].getboolean('Logs')
-        if self.do_logs:
-            self.log_superpath = config['Training']['LogPath']
-            self.log_dir = self.log_superpath + "/{runname}-logs".format(runname=self.runname)
-        else:
-            self.log_superpath = None
-            self.log_dir = None
+        self.log_superpath = config['Training']['LogPath']
+        self.log_dir = self.log_superpath + "/{runname}-logs".format(runname=self.runname)
+
         self.use_tb = config['Training'].getboolean('Use_TB')
         if self.use_tb:
             self.tb_hist_freq = config['Training'].getint('TBHistFreq')
@@ -216,12 +212,12 @@ class RCNet:
         self.model = None
         self.parallel_model = None
 
-        if self.config.do_logs:
-            try:
-                os.makedirs(self.config.log_dir)
-            except OSError as e:
-                if e.errno != errno.EEXIST:
-                    raise
+        try:
+            os.makedirs(self.config.log_dir)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+
         self.__set_callbacks()
         if K.backend() == 'tensorflow':
             # Build the model using the CPU or GPU
@@ -842,7 +838,7 @@ class RCNet:
                                metrics=['accuracy'])
 
         # Print summary and plot model
-        if self.config.summaries and self.config.do_logs:
+        if self.config.summaries:
             with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
                 with redirect_stdout(f):
                     self.model.summary()
@@ -857,26 +853,25 @@ class RCNet:
         # Set early stopping
         self.callbacks.append(EarlyStopping(monitor="val_acc", patience=self.config.patience))
 
-        if self.config.do_logs:
-            # Add CSV callback with or without memory log
-            if self.config.log_memory:
-                self.callbacks.append(CSVMemoryLogger(
-                    self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname),
-                    append=True))
-            else:
-                self.callbacks.append(CSVLogger(
-                    self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname),
-                    append=True))
-            # Save model after every epoch
-            checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-            self.callbacks.append(ModelCheckpoint(filepath=checkpoint_name + "e{epoch:03d}.h5"))
+        # Add CSV callback with or without memory log
+        if self.config.log_memory:
+            self.callbacks.append(CSVMemoryLogger(
+                self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname),
+                append=True))
+        else:
+            self.callbacks.append(CSVLogger(
+                self.config.log_dir + "/training-{runname}.csv".format(runname=self.config.runname),
+                append=True))
+        # Save model after every epoch
+        checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
+        self.callbacks.append(ModelCheckpoint(filepath=checkpoint_name + "e{epoch:03d}.h5"))
 
-            # Set TensorBoard
-            if self.config.use_tb:
-                self.callbacks.append(TensorBoard(
-                    log_dir=self.config.log_superpath + "/{runname}-tb".format(runname=self.config.runname),
-                    histogram_freq=self.config.tb_hist_freq, batch_size=self.config.batch_size,
-                    write_grads=True, write_images=True))
+        # Set TensorBoard
+        if self.config.use_tb:
+            self.callbacks.append(TensorBoard(
+                log_dir=self.config.log_superpath + "/{runname}-tb".format(runname=self.config.runname),
+                histogram_freq=self.config.tb_hist_freq, batch_size=self.config.batch_size,
+                write_grads=True, write_images=True))
 
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""

@@ -6,7 +6,7 @@ import numpy as np
 
 import math
 from keras.utils.data_utils import Sequence
-import resource
+import psutil
 from keras.callbacks import CSVLogger
 from keras import Model
 from keras.utils import multi_gpu_model
@@ -77,12 +77,18 @@ class CSVMemoryLogger(CSVLogger):
     A Keras CSV logger with a memory usage field.
     Based on a comment by joelthchao: https://github.com/keras-team/keras/issues/5935#issuecomment-289041967
     """
+
+    def __get_memory_usage(self):
+        # return the memory usage in MB
+        process = psutil.Process()
+        mem = process.memory_info()[0] / float(2 ** 20)
+        return mem
     
     def on_epoch_end(self, epoch, logs=None):
         """Log memory usage and performance after each epoch"""
         logs = logs or {}
         # Get memory usage as maxrss
-        mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        mem_usage = self.__get_memory_usage()
         logs["Mem"] = mem_usage
         
         def handle_value(k):

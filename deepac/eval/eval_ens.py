@@ -34,8 +34,8 @@ class EvalEnsConfig:
         # Set the run name        
         self.ensname = config['Data']['EnsembleName']
         self.runnames = [r for r in config['Data']['RunNames'].split(',')]
-        self.run_prefixes = ["nn-{}".format(r) for r in self.runnames]        
-        self.name_prefix = "nn-{}".format(self.ensname)
+        self.run_prefixes = self.runnames
+        self.name_prefix = self.ensname
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
 
