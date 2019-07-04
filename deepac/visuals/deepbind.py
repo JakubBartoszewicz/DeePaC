@@ -7,6 +7,8 @@ import argparse
 from keras.models import load_model
 from keras import backend as K
 from Bio import SeqIO
+from multiprocessing import Pool
+from functools import partial
 
 """
 Calculates DeepBind scores for all neurons in the convolutional layer 
@@ -18,9 +20,11 @@ and extract all motifs for which a filter neuron got a positive score.
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
 parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
-parser.add_argument("-n", "--nonpatho_test", required=True, help="Nonpathogenic reads of the test data set (.fasta)")
-parser.add_argument("-p", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
+parser.add_argument("-N", "--nonpatho_test", required=True, help="Nonpathogenic reads of the test data set (.fasta)")
+parser.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
 parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
+parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=8, type=int, help="Number of CPU cores")
+
 args = parser.parse_args()
 
 
@@ -62,48 +66,63 @@ if not os.path.exists(args.out_dir + "/fasta/"):
 
 # Specify input and output of the network
 input_img = model.layers[0].input
-layer_output = layer_dict[output_layer].output
-iterate = K.function([input_img, K.learning_phase()], [K.max(layer_output, axis=1), K.argmax(layer_output, axis=1)])
+layer_output_fwd = layer_dict[output_layer].get_output_at(0)
+iterate_fwd = K.function([input_img, K.learning_phase()],
+                         [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
+
+layer_output_rc = layer_dict[output_layer].get_output_at(1)
+layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
+# index at fwd_output = output size - index at rc_output
+iterate_rc = K.function([input_img, K.learning_phase()],
+                        [K.max(layer_output_rc, axis=1), K.argmax(layer_output_shape[1] - layer_output_rc, axis=1)])
 
 start_time = time.time()
 
 # number of reads per chunk
 chunk_size = 10000
 n = 0
+cores = args.n_cpus
+
+def get_filter_data(filter_id, activation_list, motif_start_list):
+    filter_activations = activation_list[:, filter_id]
+    filter_motif_starts = motif_start_list[:, filter_id]
+
+    pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
+    pos_act_ids = [i % len(pos_act_ids)//2 for i in pos_act_ids]
+    motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i] + motif_length] for i in pos_act_ids]
+    activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
+    # save filter contribution scores
+    filter_act_file = \
+        args.out_dir + "/filter_activations/deepbind_" + test_data_set_name + "_act_filter_%d.csv" % filter_id
+    with open(filter_act_file, 'a') as csv_file:
+        file_writer = csv.writer(csv_file)
+        for dat in activation_scores:
+            file_writer.writerow([">" + dat[0]])
+            file_writer.writerow([dat[1]])
+            file_writer.writerow([dat[2]])
+
+    filename = args.out_dir + "/fasta/deepbind_" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_id
+    with open(filename, "a") as output_handle:
+        SeqIO.write(motifs, output_handle, "fasta")
+
+
 # for each read do:
 while n < total_num_reads:
 
     print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
     samples_chunk = samples[n:n+chunk_size, :, :]
     reads_chunk = reads[n:n+chunk_size]
-    results = iterate([samples_chunk, 0])
-    activations = results[0]
+    results_fwd = iterate_fwd([samples_chunk, 0])
+    results_rc = iterate_rc([samples_chunk, 0])
+    activations = np.concatenate((results_fwd[0], results_rc[0]))
     # activations.shape = [total_num_reads, n_filters]
-    motif_starts = results[1]
+    motif_starts = np.concatenate((results_fwd[1], results_rc[1]))
     n_filters = activations.shape[-1]
 
     # for each filter do:
-    for filter_index in range(n_filters):
+    p = Pool(processes=cores)
+    p.map(partial(get_filter_data, activation_list=activations, motif_start_list=motif_starts), range(n_filters))
 
-        filter_activations = activations[:, filter_index]
-        filter_motif_starts = motif_starts[:, filter_index]
-
-        pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
-        motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i]+motif_length] for i in pos_act_ids]
-        activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
-        # save filter contribution scores
-        filter_act_file = \
-            args.out_dir + "/filter_activations/deepbind_" + test_data_set_name + "_act_filter_%d.csv" % filter_index
-        with open(filter_act_file, 'a') as csv_file:
-            file_writer = csv.writer(csv_file)
-            for dat in activation_scores:
-                file_writer.writerow([">"+dat[0]])
-                file_writer.writerow([dat[1]])
-                file_writer.writerow([dat[2]])
-
-        filename = args.out_dir + "/fasta/deepbind_" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_index
-        with open(filename, "a") as output_handle:
-            SeqIO.write(motifs, output_handle, "fasta")
     n += chunk_size
 
 end_time = time.time()
