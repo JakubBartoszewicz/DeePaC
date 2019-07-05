@@ -7,10 +7,11 @@ import sys
 from keras.models import load_model
 from keras.preprocessing.text import Tokenizer
 from keras.utils import to_categorical
+import keras.backend as K
+
 from Bio import SeqIO
 
-import deeplift
-from deeplift.conversion import kerasapi_conversion as conversion
+from shap.explainers.deep import DeepExplainer
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 
@@ -22,10 +23,9 @@ def main():
 
     # parse command line arguments
     args = parse_arguments()
-
+    model = load_model(args.model)
     if args.w_norm:
         print("Create model with mean-centered weight matrices ...")
-        model = load_model(args.model)
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
         kernel_normed, bias_normed = normalize_filter_weights(model.get_layer(index=conv_layer_idx).get_weights()[0],
                                                               model.get_layer(index=conv_layer_idx).get_weights()[1])
@@ -33,22 +33,15 @@ def main():
         model.save(os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5")
         args.model = \
             os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5"
-    print(args.model)
-    # convert keras model to deeplift model
-    print("Building DeepLIFT model ...")
-    deeplift_model = conversion.convert_model_from_saved_files(args.model, nonlinear_mxts_mode=deeplift.layers
-                                                               .NonlinearMxtsMode.DeepLIFT_GenomicsDefault)
+
+
     # extract some model information
-    conv_layer_idx = [type(layer).__name__ for layer in deeplift_model.get_layers()].index("Conv1D")
-    n_filters = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[-1]
-    motif_length = deeplift_model.get_layers()[conv_layer_idx].kernel.shape[0]
+    conv_layer_idx = [type(layer).__name__ for layer in model.get_layers()].index("Conv1D")
+    n_filters = model.get_layers()[conv_layer_idx].kernel.shape[-1]
+    motif_length = model.get_layers()[conv_layer_idx].kernel.shape[0]
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
 
-    # compile scoring function (find scores of filters (convolutional layer)
-    # w.r.t. the layer preceding the sigmoid output layer)
-    deeplift_contribs_func_filter = deeplift_model.get_target_contribs_func(find_scores_layer_idx=conv_layer_idx,
-                                                                            target_layer_idx=-2)
 
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
@@ -82,9 +75,17 @@ def main():
     ref_samples = get_reference_seqs(args, len_reads)
     num_ref_seqs = ref_samples.shape[0]
 
-    print("Running DeepLIFT ...")
+    print("Running DeepSHAP ...")
     chunk_size = 100000 // num_ref_seqs
     i = 0
+
+    def map2layer(x, layer):
+        feed_dict = dict(zip([model.get_layers()[0].input], [x]))
+        return K.get_session().run(model.get_layers()[layer].input, feed_dict)
+
+    explainer_fwd = DeepExplainer((model.get_layers()[conv_layer_idx].get_output_at(0), model.layers[-1].output),
+                                  map2layer(ref_samples, conv_layer_idx))
+
     while i < total_num_reads:
 
         print("Done "+str(i)+" from "+str(total_num_reads)+" sequences")
@@ -92,17 +93,12 @@ def main():
         reads_chunk = reads[i:i+chunk_size]
         num_reads = samples_chunk.shape[0]
 
-        input_data_list = np.repeat(samples_chunk, num_ref_seqs, axis=0)
-        input_references_list = np.concatenate([ref_samples]*num_reads, axis=0)
+        scores_filter_avg = explainer_fwd.shap_values(samples_chunk)
 
-        scores_filter = np.array(deeplift_contribs_func_filter(task_idx=0,
-                                                               input_data_list=[input_data_list],
-                                                               input_references_list=[input_references_list],
-                                                               batch_size=25,
-                                                               progress_update=10000))
-        scores_filter = np.reshape(scores_filter, [num_reads, num_ref_seqs, len_reads, n_filters])
+        # scores_filter = np.reshape(scores_filter, [num_reads, num_ref_seqs, len_reads, n_filters])
+
         # average the results per ref sequence
-        scores_filter_avg = np.mean(scores_filter, axis=1)
+        # scores_filter_avg = np.mean(scores_filter, axis=1)
         print("Saving data ...")
         for filter_index in range(n_filters):
             # determine non-zero contribution scores per read and filter
