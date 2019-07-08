@@ -11,7 +11,10 @@ import keras.backend as K
 
 from Bio import SeqIO
 
+from multiprocessing import Pool
+from functools import partial
 from shap.explainers.deep import DeepExplainer
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 
@@ -48,13 +51,12 @@ def main():
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
     samples = np.load(args.test_data, mmap_mode='r')
-    samples = np.concatenate((samples[:50,:,:], samples[-50:,:,:]))
     total_num_reads = samples.shape[0]
     len_reads = samples.shape[1]
 
     print("Loading test data (.fasta) ...")
-    nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))[:50]
-    patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))[:50]
+    nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))
+    patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))
     reads = nonpatho_reads + patho_reads
     for idx, r in enumerate(reads):
         r.id = test_data_set_name + "_seq_" + str(idx) + "_" + os.path.basename(r.id)
@@ -79,17 +81,12 @@ def main():
     num_ref_seqs = ref_samples.shape[0]
 
     print("Running DeepSHAP ...")
-    chunk_size = 100000 // num_ref_seqs
+    chunk_size = 1000 // num_ref_seqs
     i = 0
 
     def map2layer(x, layer, out_node):
         feed_dict = dict(zip([model.get_layer(index=0).input], [x]))
         return K.get_session().run(model.get_layer(index=layer).get_output_at(out_node), feed_dict)
-
-    la = map2layer(ref_samples, conv_layer_idx, 0)
-
-    # explainer_fwd = DeepExplainer((model.get_layer(index=conv_layer_idx).get_output_at(0), model.layers[-1].output),
-    #                             map2layer(ref_samples, conv_layer_idx, 0))
 
     explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                 model.get_layer(index=conv_layer_idx).get_output_at(1)],
@@ -98,57 +95,65 @@ def main():
                                map2layer(ref_samples, conv_layer_idx, 1)])
 
 
+
+    cores = args.n_cpus
+    p = Pool(processes=cores)
+
     while i < total_num_reads:
 
         print("Done "+str(i)+" from "+str(total_num_reads)+" sequences")
         samples_chunk = samples[i:i+chunk_size, :, :]
         reads_chunk = reads[i:i+chunk_size]
-        num_reads = samples_chunk.shape[0]
 
-        scores_filter_avg = explainer.shap_values([map2layer(samples_chunk, conv_layer_idx, 0),
-                                                   map2layer(samples_chunk, conv_layer_idx, 1)])
+        scores_filter = explainer.shap_values([map2layer(samples_chunk, conv_layer_idx, 0),
+                                               map2layer(samples_chunk, conv_layer_idx, 1)])
+        scores_fwd, scores_rc = scores_filter[0]
+        scores_filter = scores_fwd + scores_rc
 
-        # scores_filter = np.reshape(scores_filter, [num_reads, num_ref_seqs, len_reads, n_filters])
+        # shape: [num_reads, len_reads, n_filters]
 
-        # average the results per ref sequence
-        # scores_filter_avg = np.mean(scores_filter, axis=1)
         print("Saving data ...")
-        for filter_index in range(n_filters):
-            # determine non-zero contribution scores per read and filter
-            # and extract DNA-sequence of corresponding subreads
-            contribution_scores = []
-            motifs = []
-            for seq_id in range(num_reads):
-                if np.any(scores_filter_avg[seq_id, :, filter_index]):
-                    non_zero_neurons = np.nonzero(scores_filter_avg[seq_id, :, filter_index])[0]
-                    scores = scores_filter_avg[seq_id, non_zero_neurons, filter_index]
-                    # contribution_scores.append((reads_chunk[seq_id].id,
-                    #                             non_zero_neurons,['%.4g' % n for n in scores]))
-                    # save scores with less precison to save memory
-                    contribution_scores.append((reads_chunk[seq_id].id, non_zero_neurons, scores))
-                    motifs.append([reads_chunk[seq_id][non_zero_neuron:(non_zero_neuron+motif_length)]
-                                   for non_zero_neuron in non_zero_neurons])
-
-            if contribution_scores:
-
-                # save filter contribution scores
-                filter_rel_file = \
-                    args.out_dir + "/filter_scores/" + test_data_set_name + "_rel_filter_%d.csv" % filter_index
-                with open(filter_rel_file, 'a') as csv_file:
-                    file_writer = csv.writer(csv_file)
-                    for dat in contribution_scores:
-                        file_writer.writerow([">"+dat[0]])
-                        file_writer.writerow(dat[1])
-                        file_writer.writerow(dat[2])
-
-                # save subreads which cause non-zero contribution scores
-                filter_motifs_file = \
-                    args.out_dir + "/fasta/" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_index
-                with open(filter_motifs_file, "a") as output_handle:
-                    SeqIO.write([subread for motif in motifs for subread in motif], output_handle, "fasta")
+        # for each filter do:
+        p.map(partial(get_filter_data, scores_filter_avg=scores_filter, input_reads=reads_chunk,
+                      out_dir=args.out_dir, data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters))
 
         i += chunk_size
 
+
+def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, out_dir, data_set_name):
+    # determine non-zero contribution scores per read and filter
+    # and extract DNA-sequence of corresponding subreads
+    num_reads = len(input_reads)
+    contribution_scores = []
+    motifs = []
+    for seq_id in range(num_reads):
+        if np.any(scores_filter_avg[seq_id, :, filter_id]):
+            non_zero_neurons = np.nonzero(scores_filter_avg[seq_id, :, filter_id])[0]
+            scores = scores_filter_avg[seq_id, non_zero_neurons, filter_id]
+            # contribution_scores.append((reads_chunk[seq_id].id,
+            #                             non_zero_neurons,['%.4g' % n for n in scores]))
+            # save scores with less precison to save memory
+            contribution_scores.append((input_reads[seq_id].id, non_zero_neurons, scores))
+            motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                           for non_zero_neuron in non_zero_neurons])
+
+    if contribution_scores:
+
+        # save filter contribution scores
+        filter_rel_file = \
+            out_dir + "/filter_scores/" + data_set_name + "_rel_filter_%d.csv" % filter_id
+        with open(filter_rel_file, 'a') as csv_file:
+            file_writer = csv.writer(csv_file)
+            for dat in contribution_scores:
+                file_writer.writerow([">" + dat[0]])
+                file_writer.writerow(dat[1])
+                file_writer.writerow(dat[2])
+
+        # save subreads which cause non-zero contribution scores
+        filter_motifs_file = \
+            out_dir + "/fasta/" + data_set_name + "_motifs_filter_%d.fasta" % filter_id
+        with open(filter_motifs_file, "a") as output_handle:
+            SeqIO.write([subread for motif in motifs for subread in motif], output_handle, "fasta")
 
 def parse_arguments():
     """
@@ -169,6 +174,7 @@ def parse_arguments():
                         help="Train data (.npy), necessary to calculate reference sequences if ref_mode is 'GC'")
     parser.add_argument("-f", "--ref_seqs",
                         help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
+    parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=8, type=int, help="Number of CPU cores")
     args = parser.parse_args()
     if args.ref_mode == "GC" and args.train_data is None:
         raise ValueError(
