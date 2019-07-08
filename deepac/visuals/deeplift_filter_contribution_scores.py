@@ -36,22 +36,25 @@ def main():
 
 
     # extract some model information
-    conv_layer_idx = [type(layer).__name__ for layer in model.get_layers()].index("Conv1D")
-    n_filters = model.get_layers()[conv_layer_idx].kernel.shape[-1]
-    motif_length = model.get_layers()[conv_layer_idx].kernel.shape[0]
+    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
+    n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
+    motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
+
+    print(model.summary())
 
 
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
     samples = np.load(args.test_data, mmap_mode='r')
+    samples = np.concatenate((samples[:50,:,:], samples[-50:,:,:]))
     total_num_reads = samples.shape[0]
     len_reads = samples.shape[1]
 
     print("Loading test data (.fasta) ...")
-    nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))
-    patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))
+    nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))[:50]
+    patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))[:50]
     reads = nonpatho_reads + patho_reads
     for idx, r in enumerate(reads):
         r.id = test_data_set_name + "_seq_" + str(idx) + "_" + os.path.basename(r.id)
@@ -79,12 +82,21 @@ def main():
     chunk_size = 100000 // num_ref_seqs
     i = 0
 
-    def map2layer(x, layer):
-        feed_dict = dict(zip([model.get_layers()[0].input], [x]))
-        return K.get_session().run(model.get_layers()[layer].input, feed_dict)
+    def map2layer(x, layer, out_node):
+        feed_dict = dict(zip([model.get_layer(index=0).input], [x]))
+        return K.get_session().run(model.get_layer(index=layer).get_output_at(out_node), feed_dict)
 
-    explainer_fwd = DeepExplainer((model.get_layers()[conv_layer_idx].get_output_at(0), model.layers[-1].output),
-                                  map2layer(ref_samples, conv_layer_idx))
+    la = map2layer(ref_samples, conv_layer_idx, 0)
+
+    # explainer_fwd = DeepExplainer((model.get_layer(index=conv_layer_idx).get_output_at(0), model.layers[-1].output),
+    #                             map2layer(ref_samples, conv_layer_idx, 0))
+
+    explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                model.get_layer(index=conv_layer_idx).get_output_at(1)],
+                               model.layers[-1].output),
+                              [map2layer(ref_samples, conv_layer_idx, 0),
+                               map2layer(ref_samples, conv_layer_idx, 1)])
+
 
     while i < total_num_reads:
 
@@ -93,7 +105,8 @@ def main():
         reads_chunk = reads[i:i+chunk_size]
         num_reads = samples_chunk.shape[0]
 
-        scores_filter_avg = explainer_fwd.shap_values(samples_chunk)
+        scores_filter_avg = explainer.shap_values([map2layer(samples_chunk, conv_layer_idx, 0),
+                                                   map2layer(samples_chunk, conv_layer_idx, 1)])
 
         # scores_filter = np.reshape(scores_filter, [num_reads, num_ref_seqs, len_reads, n_filters])
 
@@ -146,9 +159,9 @@ def parse_arguments():
     parser.add_argument("-b", "--w_norm", action="store_true",
                         help="Set flag if filter weight matrices should be mean-centered")
     parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
-    parser.add_argument("-n", "--nonpatho_test", required=True,
+    parser.add_argument("-N", "--nonpatho_test", required=True,
                         help="Nonpathogenic reads of the test data set (.fasta)")
-    parser.add_argument("-p", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
+    parser.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
     parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
     parser.add_argument("-r", "--ref_mode", default="N", choices=['N', 'GC', 'own_ref_file'],
                         help="Modus to calculate reference sequences")
