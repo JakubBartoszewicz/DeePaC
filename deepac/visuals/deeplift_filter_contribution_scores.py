@@ -3,6 +3,7 @@ import os
 import csv
 import numpy as np
 import sys
+import re
 
 from keras.models import load_model
 from keras.preprocessing.text import Tokenizer
@@ -33,9 +34,13 @@ def main():
         kernel_normed, bias_normed = normalize_filter_weights(model.get_layer(index=conv_layer_idx).get_weights()[0],
                                                               model.get_layer(index=conv_layer_idx).get_weights()[1])
         model.get_layer(index=conv_layer_idx).set_weights([kernel_normed, bias_normed])
-        model.save(os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5")
-        args.model = \
-            os.path.dirname(args.model) + "/" + os.path.splitext(os.path.basename(args.model))[0] + "_w_norm.h5"
+        path = args.model
+        if re.search("\.h5$", path) is not None:
+            path = re.sub("\.h5$", "", path)
+        norm_path = path + "_w_norm.h5"
+
+        model.save(norm_path)
+        args.model = norm_path
 
 
     # extract some model information
