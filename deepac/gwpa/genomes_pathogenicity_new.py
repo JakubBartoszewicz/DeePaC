@@ -27,7 +27,7 @@ if not os.path.exists(args.out_dir):
 #for each fragmented genome do
 for fragments_file in os.listdir(args.dir_fragmented_genomes):
 
-    if fragments_file.endswith(".fasta"):
+    if fragments_file.endswith(".fasta") or fragments_file.endswith(".fna"):
 
         genome = os.path.splitext(os.path.basename(fragments_file))[0]
         print("Processing " + genome + " ...")

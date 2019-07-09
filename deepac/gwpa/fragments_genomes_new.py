@@ -26,7 +26,7 @@ if not os.path.exists(args.out_dir):
 
 for file in os.listdir(args.genomes_dir):
 	
-	if file.endswith(".fasta"):
+	if file.endswith(".fasta") or file.endswith(".fna"):
 		print("Processing " + file + " ...")
 		#load sequences
 		instances = []
