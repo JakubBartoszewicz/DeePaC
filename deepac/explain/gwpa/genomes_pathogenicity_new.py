@@ -1,0 +1,111 @@
+import re
+import os
+import argparse
+import numpy as np
+from keras.preprocessing.text import Tokenizer
+from Bio import SeqIO
+import pandas as pd
+from collections import OrderedDict
+
+'''
+Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions.
+'''
+
+#parse command line options
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--dir_fragmented_genomes", required=True, help="Directory containing the fragmented genomes (.fasta)")
+parser.add_argument("-p", "--dir_fragmented_genomes_preds", required=True, help="Directory containing the predictions (.npy) of the fragmented genomes")
+parser.add_argument("-g", "--genomes_dir", required=True, help="Directory containing genomes (.genome)")
+parser.add_argument("-o", "--out_dir", default = ".", help = "Output directory")
+args = parser.parse_args()
+
+#create output directory
+if not os.path.exists(args.out_dir):
+    os.makedirs(args.out_dir)
+
+
+#for each fragmented genome do
+for fragments_file in os.listdir(args.dir_fragmented_genomes):
+	
+	if fragments_file.endswith(".fasta"):
+	
+		genome = os.path.splitext(os.path.basename(fragments_file))[0]
+		print("Processing " + genome + " ...")
+		#load fragments in fasta format
+		tokenizer = Tokenizer(char_level=True)
+		tokenizer.fit_on_texts('ACGT')
+		fragments = list(SeqIO.parse(args.dir_fragmented_genomes + "/" + fragments_file, "fasta"))
+		num_fragments = len(fragments)
+		
+		#load predictions per fragment
+		preds_file = args.dir_fragmented_genomes_preds + "/" + genome + "_predictions.npy"
+		preds = np.load(preds_file)
+		
+		assert num_fragments == len(preds), print("Something went wrong! Number fragments in fasta file and predictions differ ...")
+		
+		#load genome size
+		genome_info_file = args.genomes_dir + "/" + re.split("_fragmented_genomes", genome)[0] + ".genome"
+		if not os.path.isfile(genome_info_file):
+			print("Skipping " +  genome + " since .genome file is missing!")
+			continue
+		
+		genome_info = pd.read_csv(genome_info_file, sep = "\t", index_col = 0, header = None)
+		
+
+		
+		#prepare output table
+		df = pd.DataFrame(OrderedDict( (('seq_name', ""), ('start', np.zeros(num_fragments, dtype='int32')), ('end', np.zeros(num_fragments, dtype='int32')), ('score', np.zeros(num_fragments))) ))
+
+		
+		genome_patho_dict = OrderedDict() #save pathogenicity score for each nucleotide of all strains of that bioproject
+		genome_read_counter_dict = OrderedDict() #count by how many reads each nucleotide is covered
+
+		#build bed graph file representing pathogenicity over genome
+		for fragment_idx in range(num_fragments):
+			
+			seq_name, start, end = re.split(":|\.\.", fragments[fragment_idx].id)
+			strain_len = int(genome_info.loc[seq_name])
+			start = max(0,int(start))
+			end = min(int(end), strain_len) 
+			score = preds[fragment_idx]
+			
+			if not seq_name in genome_patho_dict:
+				genome_patho_dict[seq_name] = np.zeros(strain_len)
+				genome_read_counter_dict[seq_name] = np.zeros(strain_len)
+
+			genome_patho_dict[seq_name][start:end] += score
+			genome_read_counter_dict[seq_name][start:end] += 1
+		
+		c = 0
+		for seq_name, genome_read_counter in genome_read_counter_dict.items():
+		
+			#compute mean pathogenicity score per nucleotide
+			genome_patho_dict[seq_name] /= genome_read_counter
+			
+			#convert array of nucelotde pathogenicity scores to intervals (-> bedgraph format)
+			strain_len = int(genome_info.loc[seq_name])
+			start_interval = 0
+			end_interval = 0
+			score_interval = 0
+			for start, score in enumerate(genome_patho_dict[seq_name]):
+				if start == 0:
+					score_interval = score
+				
+				elif start == strain_len - 1 and score == score_interval:
+					end_interval = start
+					df.loc[c] = [seq_name, start_interval, end_interval, score_interval]
+					c += 1
+				
+				#new interval with different scores
+				elif score != score_interval:
+					end_interval = start	
+					df.loc[c] = [seq_name, start_interval, end_interval, score_interval]
+					c += 1
+					start_interval = start
+					score_interval = score
+			
+		#save results
+		out_file = args.out_dir + "/" + genome + "_pathogenicity.bedgraph"
+		df[['start', 'end']] = df[['start', 'end']].astype(int)
+		df.to_csv(out_file , sep = "\t", index = False, header = False)
+		
