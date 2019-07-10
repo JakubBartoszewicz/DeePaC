@@ -53,25 +53,44 @@ if not os.path.exists(args.out_dir):
     os.makedirs(args.out_dir)
 # Specify input and output of the network
 input_img = model.layers[0].input
-layer_output = layer_dict[output_layer].output
-iterate = K.function([input_img, K.learning_phase()], [layer_output])
+# layer_output = layer_dict[output_layer].output
+# iterate = K.function([input_img, K.learning_phase()], [layer_output])
+
+layer_output_fwd = layer_dict[output_layer].get_output_at(0)
+iterate_fwd = K.function([input_img, K.learning_phase()],
+                         [layer_output_fwd])
+
+layer_output_rc = layer_dict[output_layer].get_output_at(1)
+layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
+# index at fwd_output = output size - index at rc_output
+iterate_rc = K.function([input_img, K.learning_phase()],
+                        [layer_output_rc])
+
 
 print("Computing activations ...")
-chunk_size = 10000
+chunk_size = 1000
 n = 0
 while n < total_num_reads:
     print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
     samples_chunk = samples[n:n+chunk_size,:,:]
     reads_info_chunk = reads_info[n:n+chunk_size]
 
-    activations = iterate([samples_chunk, 0])[0] #activations.shape = [total_num_reads, len_reads, n_filters]
-    n_filters = activations.shape[-1]
+    # activations = iterate([samples_chunk, 0])[0] #activations.shape = [total_num_reads, len_reads, n_filters]
+
+    activations_fwd = iterate_fwd([samples_chunk, 0])[0]
+    activations_rc = iterate_rc([samples_chunk, 0])[0]
+    activations = activations_fwd + activations_rc
+
+    n_filters = activations_fwd.shape[-1]
     for filter_index in range(n_filters):
 
         print("Processing filter " + str(filter_index) + " ...")
         filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
 
-        pos_indices = np.where(activations[:,:,filter_index] > 0)
+        # pos_indices_fwd = np.where(activations_fwd[:, :, filter_index] > 0)
+        # pos_indices_rc = np.where(activations_rc[:, :, filter_index] > 0)
+        # pos_indices = np.union1d(pos_indices_fwd, pos_indices_rc)
+        pos_indices = np.where(activations_rc[:, :, filter_index] > 0)
         with open(filter_bed_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file, delimiter='\t')
             for i  in range(len(pos_indices[0])):
