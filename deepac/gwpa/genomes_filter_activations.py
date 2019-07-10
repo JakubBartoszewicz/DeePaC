@@ -84,13 +84,13 @@ while n < total_num_reads:
     n_filters = activations_fwd.shape[-1]
     for filter_index in range(n_filters):
 
-        print("Processing filter " + str(filter_index) + " ...")
+        #print("Processing filter " + str(filter_index) + " ...")
         filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
 
         # pos_indices_fwd = np.where(activations_fwd[:, :, filter_index] > 0)
         # pos_indices_rc = np.where(activations_rc[:, :, filter_index] > 0)
         # pos_indices = np.union1d(pos_indices_fwd, pos_indices_rc)
-        pos_indices = np.where(activations_rc[:, :, filter_index] > 0)
+        pos_indices = np.where(activations[:, :, filter_index] > 0)
         with open(filter_bed_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file, delimiter='\t')
             for i  in range(len(pos_indices[0])):
@@ -98,7 +98,10 @@ while n < total_num_reads:
                 neuron = pos_indices[1][i]
                 genomic_start = neuron - pad_left + reads_info_chunk[read][1]
                 genomic_end = genomic_start + motif_length
-                activation_score = activations[read, neuron, filter_index]
-                file_writer.writerow([reads_info_chunk[read][0], max(0, genomic_start), genomic_end, "filter_"+str(filter_index), '%.4g' % activation_score])
+                if genomic_start <= 0 and genomic_end <= 0:
+                    continue
+                else:
+                    activation_score = activations[read, neuron, filter_index]
+                    file_writer.writerow([reads_info_chunk[read][0], max(0, genomic_start), genomic_end, "filter_"+str(filter_index), '%.4g' % activation_score])
 
     n += chunk_size

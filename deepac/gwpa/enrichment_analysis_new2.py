@@ -86,7 +86,7 @@ min_overlap = 5
 #one bed file per filter motif
 print("Processing bed files ...")
 for bed_file in os.listdir(args.bed_dir):
-	if bed_file.endswith(".bed.gz") and os.stat(args.bed_dir + "/" + bed_file).st_size > 0:
+	if (bed_file.endswith(".bed.gz") or bed_file.endswith(".bed")) and os.stat(args.bed_dir + "/" + bed_file).st_size > 0:
 
 		filter = re.search("filter_[0-9]+", bed_file).group()		
 		print("Processing " + bed_file + " ...")
