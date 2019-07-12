@@ -275,12 +275,14 @@ class RCNet:
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if self.config.n_gpus > 0:
             x = Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
-                                        recurrent_initializer=orthogonal(self.ortho_gain, seed=self.config.seed),
+                                        recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                         seed=self.config.seed),
                                         kernel_regularizer=self.config.regularizer,
                                         return_sequences=return_sequences))(inputs)
         else:
             x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
-                                   recurrent_initializer=orthogonal(self.ortho_gain, seed=self.config.seed),
+                                   recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                    seed=self.config.seed),
                                    kernel_regularizer=self.config.regularizer,
                                    return_sequences=return_sequences,
                                    recurrent_activation='sigmoid'))(inputs)
@@ -291,13 +293,13 @@ class RCNet:
         if self.config.n_gpus > 0:
             shared_lstm = Bidirectional(CuDNNLSTM(units,
                                                   kernel_initializer=self.config.initializer,
-                                                  recurrent_initializer=orthogonal(self.ortho_gain,
+                                                  recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                                    seed=self.config.seed),
                                                   kernel_regularizer=self.config.regularizer,
                                                   return_sequences=return_sequences))
         else:
             shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
-                                             recurrent_initializer=orthogonal(gain=self.ortho_gain,
+                                             recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                               seed=self.config.seed),
                                              kernel_regularizer=self.config.regularizer,
                                              return_sequences=return_sequences,
