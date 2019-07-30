@@ -4,7 +4,7 @@
 
 DeePaC is a python package and a CLI tool for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
 reads) with reverse-complement neural networks. For details, see our preprint on bioRxiv: 
-<https://www.biorxiv.org/content/10.1101/535286v2>.
+<https://www.biorxiv.org/content/10.1101/535286v3> and the paper in *Bioinformatics*: <https://doi.org/10.1093/bioinformatics/btz541>.
 
 Documentation can be found here:
 <https://rki_bioinformatics.gitlab.io/DeePaC/>.
@@ -146,3 +146,20 @@ and a csv file with a number of DNA reads for each species in each of the classe
 ## Supplementary data and scripts
 
 In the supplement_paper directory you can find the R scripts and data files used in the paper for dataset preprocessing and benchmarking.
+
+## Cite us
+If you find DeePaC useful, please cite:
+
+```
+@article{10.1093/bioinformatics/btz541,
+    author = {Bartoszewicz, Jakub M and Seidel, Anja and Rentzsch, Robert and Renard, Bernhard Y},
+    title = "{DeePaC: predicting pathogenic potential of novel DNA with reverse-complement neural networks}",
+    journal = {Bioinformatics},
+    year = {2019},
+    month = {07},
+    issn = {1367-4803},
+    doi = {10.1093/bioinformatics/btz541},
+    url = {https://doi.org/10.1093/bioinformatics/btz541},
+    eprint = {http://oup.prod.sis.lan/bioinformatics/advance-article-pdf/doi/10.1093/bioinformatics/btz541/28971344/btz541.pdf},
+}
+```
