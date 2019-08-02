@@ -6,7 +6,7 @@ all.vhdbd <- all.vhdbd[!(all.vhdbd[,"host.name"] %in% c("Variola", "root", "", N
 all.vhdbd$ftp_path <- ""
 all.vhdbd$Pathogenic <- FALSE
 all.vhdbd$assembly_level <- ""
-all.vhdbd$assembly_accession <- all.vhdbd$refseq.id
+all.vhdbd$assembly_accession <- all.vhdbd$virus.tax.id
 all.vhdbd$Species <- all.vhdbd$virus.name
 
 # Get human viruses
