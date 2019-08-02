@@ -50,13 +50,16 @@ if (Do.Clean){
     cat(paste("###Cleaning###\n"))
     
     Check <- foreach(f = FastaFiles) %do% { 
-        tempFasta <- sub(paste0("[.]",FastaExtension),paste0(".temp.",FastaExtension),f) 
+        cat(paste(f, "\n"))
+        tempFasta <- sub(paste0("[.]",FastaExtension),paste0(".temp.",FastaExtension),f)
         # 6 std devs in NEAT
         if (pairedEnd){
-            system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            status = system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
         } else {
-
-            system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            status = system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+        }
+        if(status != 0){
+            cat(paste("ERROR\n"))
         }
         system(paste("cat", tempFasta, ">", f))
         file.remove(tempFasta)    
@@ -66,13 +69,17 @@ if (Do.Clean){
     # ignore old temp files
     test.FastaFiles <- test.FastaFiles[!grepl("\\.temp\\.", test.FastaFiles)]
     
-    Check <- foreach(f = test.FastaFiles) %do% {    
+    Check <- foreach(f = test.FastaFiles) %do% {
+        cat(paste(f, "\n"))
         tempFasta <- sub(paste0("[.]",FastaExtension),paste0(".temp.",FastaExtension),f) 
         # 6 std devs in NEAT
         if (test.pairedEnd){
-            system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            status = system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
         } else {
-            system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            status = system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+        }
+        if(status != 0){
+            cat(paste("ERROR\n"))
         }
         system(paste("cat", tempFasta, ">", f))
         file.remove(tempFasta)    
