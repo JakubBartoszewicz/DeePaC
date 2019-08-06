@@ -140,7 +140,7 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
     
 }    
 
-Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_") {
+Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10) {
   
     if(any(c(is.null(Members), is.null(TotalReadNumber),is.null(Proportional2GenomeSize ),is.null(FastaFileLocation  ),is.null(IMGdata ),is.null(TargetDirectory ) ))) stop("Please submit valid variables to function Simulate.Reads.fromMultipleGenomes")
     
@@ -160,10 +160,15 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
         }
     } else  if (Simulator == "Mason2" | Simulator == "Mason"){
         if( Proportional2GenomeSize == T){
-                ReadNumberPerGenome <- ceiling(IMGdata$Genome.Size[Members]/sum(IMGdata$Genome.Size[Members]) * TotalReadNumber )  
+            ReadNumberPerGenome <- ceiling(IMGdata$Genome.Size[Members]/sum(IMGdata$Genome.Size[Members]) * TotalReadNumber )
+            if (pairedEnd){
+                ReadNumberPerGenome <- sapply(ReadNumberPerGenome, function(x){max(2,x)})
             } else {
-                ReadNumberPerGenome <- rep(round(TotalReadNumber/length(Members)), length(Members))
+                ReadNumberPerGenome <- sapply(ReadNumberPerGenome, function(x){max(1,x)})
             }
+        } else {
+            ReadNumberPerGenome <- rep(round(TotalReadNumber/length(Members)), length(Members))
+        }
             
         if(Fix.Coverage == T) {
             if(TotalReadNumber > 10) stop("When computing ReadNumber from Coverage, please limit value of TotalReadNumber to 10.")
@@ -180,11 +185,31 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
     library(doParallel)
     registerDoParallel(Workers)
     print(paste("###Simulating using", Workers, "workers###"))
-    
+
+    MinFragmentSize <- MeanFragmentSize + 6 * FragmentStdDev + ReadMargin
+    # Set stddev for genomes shorter than minimum
+    StdDev.too.short <- 1
+
+    if(pairedEnd){
+        # If genome smaller than mean fragment size, accept smaller fragment size
+        MeanFragmentSizes <- sapply(IMGdata$Genome.Size[Members], function(x){min(x - 6 * StdDev.too.short, MeanFragmentSize)})
+        # If genome smaller than minimum, set stddev to zero so it gets
+        FragmentStdDevs <- sapply(IMGdata$Genome.Size[Members], function(x){if(MinFragmentSize > x) StdDev.too.short else FragmentStdDev})
+    } else {
+        MeanFragmentSizes <- rep(MeanFragmentSize, length(Members))
+        FragmentStdDevs <- rep(FragmentStdDev, length(Members))
+    }
+    ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
+
     Check <- foreach(i = 1:length(Members) ) %dopar% {
         
         # Find corresponding fasta file
         CurrentFasta <- grep(paste("\\/",IMGdata$assembly_accession[Members[i]],FilenamePostfixPattern,sep=""),FastaFiles,value=T)
+
+        if(MeanFragmentSize > MeanFragmentSizes[i] || FragmentStdDev > FragmentStdDevs[i] || ReadLength > ReadLengths[i]){
+            cat(paste("###WARNING: Genome smaller than fragment/read size (", basename(CurrentFasta), ")###\n### frag size:", MeanFragmentSizes[i], "stddev:", FragmentStdDevs[i], "read len:", ReadLengths[i], "###\n"))
+        }
+
         
         if(length(CurrentFasta) > 1) {
             stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
@@ -192,9 +217,9 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
             stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else {
             if(Simulator == "Neat"){
-                Simulate.Reads(CurrentFasta, ReadCoverage = ReadCoveragePerGenome[i] ,ReadLength = ReadLength, pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Simulator = Simulator, Cleaned = Cleaned)
+                Simulate.Reads(CurrentFasta, ReadCoverage = ReadCoveragePerGenome[i] ,ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], Simulator = Simulator, Cleaned = Cleaned)
             } else {
-                Simulate.Reads(CurrentFasta, ReadLength = ReadLength, pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Simulator = Simulator, ReadNumber =  ReadNumberPerGenome[i], Cleaned = Cleaned)
+                Simulate.Reads(CurrentFasta, ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], Simulator = Simulator, ReadNumber =  ReadNumberPerGenome[i], Cleaned = Cleaned)
             }         
         }
     }  

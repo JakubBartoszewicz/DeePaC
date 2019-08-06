@@ -28,16 +28,16 @@ test.pairedEnd <- T
 
 FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_assembled"
 test.FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_test"
-TrainingTargetDirectory <- "~/SCRATCH_NOBAK/CHORDATA/trainingReads"
-ValidationTargetDirectory <- "~/SCRATCH_NOBAK/CHORDATA/validationReads"
-TestTargetDirectory <- "~/SCRATCH_NOBAK/CHORDATA/testReads"
+TrainingTargetDirectory <- "~/SCRATCH_NOBAK/ALL/trainingReads"
+ValidationTargetDirectory <- "~/SCRATCH_NOBAK/ALL/validationReads"
+TestTargetDirectory <- "~/SCRATCH_NOBAK/ALL/testReads"
 FastaExtension <- "fa"
 FilenamePostfixPattern <- "\\."
 
 HomeFolder <- "~/"
 ProjectFolder <- "folddata/"
-IMGFile <- "VHDB_1_folds_chordata_nhuman.rds"
-IMGFile.new <- "VHDB_1_folds_chordata_nhuman_sizes.rds"
+IMGFile <- "VHDB_1_folds_all_nhuman.rds"
+IMGFile.new <- "VHDB_1_folds_all_nhuman_sizes.rds"
 
 if (Do.Clean){
 
@@ -53,14 +53,20 @@ if (Do.Clean){
         tempFasta <- sub(paste0("[.]",FastaExtension),paste0(".temp.",FastaExtension),f)
         # 6 std devs in NEAT
         if (pairedEnd){
-            status = system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            min.contig <- MeanFragmentSize + 6 * FragmentStdDev + ReadMargin
         } else {
-            status = system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            min.contig <- ReadLength + ReadMargin
         }
+        status = system(paste("bioawk -cfastx '{if(length($seq) > ", min.contig," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+
         if(status != 0){
             cat(paste("ERROR\n"))
         }
-        system(paste("cat", tempFasta, ">", f))
+        if (file.info(tempFasta)$size > 0){
+            system(paste("cat", tempFasta, ">", f))
+        } else {
+            cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the original file.\n"))
+        }
         file.remove(tempFasta)    
     }
     
@@ -73,14 +79,20 @@ if (Do.Clean){
         tempFasta <- sub(paste0("[.]",FastaExtension),paste0(".temp.",FastaExtension),f) 
         # 6 std devs in NEAT
         if (test.pairedEnd){
-            status = system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            min.contig <- MeanFragmentSize + 6 * FragmentStdDev + ReadMargin
         } else {
-            status = system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+            min.contig <- ReadLength + ReadMargin
         }
+        status = system(paste("bioawk -cfastx '{if(length($seq) > ", min.contig," ) {print \">\"$name \" \" $comment;print $seq}}'",f,">",tempFasta ) )
+
         if(status != 0){
             cat(paste("ERROR\n"))
         }
-        system(paste("cat", tempFasta, ">", f))
+        if (file.info(tempFasta)$size > 0){
+            system(paste("cat", tempFasta, ">", f))
+        } else {
+            cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the original file.\n"))
+        }
         file.remove(tempFasta)    
     }
     cat(paste("###Cleaning done###\n"))
