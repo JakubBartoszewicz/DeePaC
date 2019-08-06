@@ -16,7 +16,7 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
     if(!file.exists(InputFastaFile)) stop(paste("Please submit a valid input Fasta file.", InputFastaFile, "does not exist."))    
    
     FilePrefix <- tools::file_path_sans_ext(tail(strsplit(InputFastaFile,"/")[[1]],1))
-    FilePrefix <- paste0(strsplit(FilePrefix,"_")[[1]][1:2], collapse="_")
+    #FilePrefix <- paste0(strsplit(FilePrefix,"_")[[1]][1:2], collapse="_")
     FileExtension <- ".fq"
     
     InputFileExtension <- tools::file_ext(tail(strsplit(InputFastaFile,"/")[[1]],1))
@@ -99,7 +99,7 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
                 InputFastaFile <- tempFasta
             }
             
-            if(Simulator == "Mason"){
+            if(Simulator == "Mason" && InputFileExtension != "fa"){
                 # change file extension to .fa for Mason v0.
                 tempFasta.fa <- sub(paste0("[.]",InputFileExtension),paste0(".fa"),InputFastaFile)
                 file.copy(InputFastaFile, tempFasta.fa)
@@ -130,7 +130,7 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
             if(!Cleaned){
                 file.remove(tempFasta) 
             }       
-            if(Simulator == "Mason"){
+            if(Simulator == "Mason" && InputFileExtension != "fa"){
                 file.remove(tempFasta.fa) 
             }            
             cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))         
@@ -184,12 +184,12 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
     Check <- foreach(i = 1:length(Members) ) %dopar% {
         
         # Find corresponding fasta file
-        CurrentFasta <- grep(paste(IMGdata$assembly_accession[Members[i]],FilenamePostfixPattern,sep=""),FastaFiles,value=T)
+        CurrentFasta <- grep(paste("\\/",IMGdata$assembly_accession[Members[i]],FilenamePostfixPattern,sep=""),FastaFiles,value=T)
         
         if(length(CurrentFasta) > 1) {
-            stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" ")))      
+            stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else if(length(CurrentFasta) == 0) {
-            stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" ")))
+            stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else {
             if(Simulator == "Neat"){
                 Simulate.Reads(CurrentFasta, ReadCoverage = ReadCoveragePerGenome[i] ,ReadLength = ReadLength, pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Simulator = Simulator, Cleaned = Cleaned)
