@@ -2,6 +2,8 @@
 all.vhdbd <- read.delim("virushostdb.daily.tsv")
 # Delete record(s) with Variola as host name (Variola is both the virus and a fish), with "root" and empty host info
 all.vhdbd <- all.vhdbd[!(all.vhdbd[,"host.name"] %in% c("Variola", "root", "", NA)), ]
+# Delete viroids
+all.vhdbd <- all.vhdbd[!grepl(xall.vhdbd[,"virus.name"], pattern = "viroid"),]
 # For compatibility with old IMG scripts
 all.vhdbd$ftp_path <- ""
 all.vhdbd$Pathogenic <- FALSE
