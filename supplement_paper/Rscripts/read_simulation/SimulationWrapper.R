@@ -1,6 +1,6 @@
 # ---
 # Functions for simulating reads, based on simulation with Mason by Carlus Deneke (modified: NEAT, mason2, recurrent filesearch, genbank accessions, bugfixes, fragment distrib, coverage settings)
-Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLength = 250, pairedEnd = F, TargetDirectory = NULL, MeanFragmentSize = 600, FragmentStdDev = 60, ReadMargin = 10, Simulator = c("Neat", "Mason", "Mason2"), ReadNumber = NULL, Cleaned = T) {
+Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLength = 250, pairedEnd = F, TargetDirectory = NULL, MeanFragmentSize = 600, FragmentStdDev = 60, ReadMargin = 10, Simulator = c("Neat", "Mason", "Mason2"), ReadNumber = NULL, Cleaned = T, AllowNsFromGenome = F) {
     # run read simulator
 
     # make sure you are on a linux machine
@@ -13,35 +13,39 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
     # MeanFragmentSize should be between 300 and 800 for paired end /short-insert library simulation. More than 1kb is not feasible https://www.ecseq.com/support/ngs/what-is-mate-pair-sequencing-useful-for
     # should not exceed 600 http://dnatech.genomecenter.ucdavis.edu/illumina-sequencing-all-about-libraries/
 
-    if(!file.exists(InputFastaFile)) stop(paste("Please submit a valid input Fasta file.", InputFastaFile, "does not exist."))    
-   
+    if(!file.exists(InputFastaFile)) stop(paste("Please submit a valid input Fasta file.", InputFastaFile, "does not exist."))
+
     FilePrefix <- tools::file_path_sans_ext(tail(strsplit(InputFastaFile,"/")[[1]],1))
     #FilePrefix <- paste0(strsplit(FilePrefix,"_")[[1]][1:2], collapse="_")
     FileExtension <- ".fq"
-    
+
     InputFileExtension <- tools::file_ext(tail(strsplit(InputFastaFile,"/")[[1]],1))
 
     PathPrefix <- file.path(TargetDirectory,paste0(FilePrefix))
-   
-          
-    if(Simulator == "Neat"){ 
-        OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,"_read1.fq")) 
-        OutputFile.Right <- file.path(TargetDirectory,paste0(FilePrefix,"_read2.fq"))         
-        
-        if(file.exists(OutputFile.Left) & file.info(OutputFile.Left)$size > 0) {    
+    if (AllowNsFromGenome) {
+        aNg.option <- "-aNg"
+    } else {
+        aNg.option <- ""
+    }
+
+    if(Simulator == "Neat"){
+        OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,"_read1.fq"))
+        OutputFile.Right <- file.path(TargetDirectory,paste0(FilePrefix,"_read2.fq"))
+
+        if(file.exists(OutputFile.Left) & file.info(OutputFile.Left)$size > 0) {
             return(1)
         } else {
             # clean after any previous errors
             if(file.exists(OutputFile.Left)){
                 file.remove(OutputFile.Left)
             }
-        
+
             cat(paste0("###SIMULATING ACCESSION: ", FilePrefix, "###\n"))
             cat(paste0("###COVERAGE: ", ReadCoverage, "###\n"))
-            
+
             if(!Cleaned){
                 # remove contigs smaller than fragment length + create temp fasta
-                tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)                 
+                tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)
                 cat(paste0("###creating temp", tempFasta, "###\n"))
                 if (pairedEnd){
                     system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ) )
@@ -50,47 +54,47 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
                 }
                 InputFastaFile <- tempFasta
             }
-            
+
             if(pairedEnd == F){
                 cat(paste0("###UNPAIRED READS###\n"))
-                # python2 genReads.py -R 250 -o out/GCA_01  -r TEST.fa -c 1 -M 0 -p 1 --rng 0 --bam 
-                system(paste("python2 genReads.py -R", ReadLength, "-o", PathPrefix, "-r", InputFastaFile, "-c", ReadCoverage, "-M 0 -p 1 --rng 0 --bam"))    
-            } else {            
+                # python2 genReads.py -R 250 -o out/GCA_01  -r TEST.fa -c 1 -M 0 -p 1 --rng 0 --bam
+                system(paste("python2 genReads.py -R", ReadLength, "-o", PathPrefix, "-r", InputFastaFile, "-c", ReadCoverage, "-M 0 -p 1 --rng 0 --bam"))
+            } else {
                 cat(paste0("###PAIRED READS###\n"))
                 system(paste("python2 genReads.py -R", ReadLength, "-o", PathPrefix, "-r", InputFastaFile, "-c", ReadCoverage, "--pe", MeanFragmentSize, FragmentStdDev, "-M 0 -p 1 --rng 0 --bam"))
-            } 
-            
+            }
+
             # remove temp fasta
             if(!Cleaned){
-                file.remove(tempFasta) 
+                file.remove(tempFasta)
             }
-            cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))         
+            cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))
             return(1)
-        }            
+        }
     } else  if (Simulator == "Mason2" | Simulator == "Mason"){
-        # MASON            
+        # MASON
         # output paths
-        OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,FileExtension))                    
+        OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,FileExtension))
         if(pairedEnd){
-            OutputFile.Base <- OutputFile.Left 
-            OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,"_l",FileExtension)) 
-            OutputFile.Right <- file.path(TargetDirectory,paste0(FilePrefix,"_r",FileExtension))   
+            OutputFile.Base <- OutputFile.Left
+            OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,"_l",FileExtension))
+            OutputFile.Right <- file.path(TargetDirectory,paste0(FilePrefix,"_r",FileExtension))
         }
         OutputFile.BAM <- file.path(TargetDirectory,paste0(FilePrefix,".bam"))
-        
-        if(file.exists(OutputFile.Left) & file.info(OutputFile.Left)$size > 0) {    
+
+        if(file.exists(OutputFile.Left) & file.info(OutputFile.Left)$size > 0) {
             return(1)
         } else{
             cat(paste0("###SIMULATING ACCESSION: ", FilePrefix, "###\n"))
-            cat(paste0("###READ NUMBER: ", ReadNumber, "###\n"))    
+            cat(paste0("###READ NUMBER: ", ReadNumber, "###\n"))
             # clean after any previous errors
             if(file.exists(OutputFile.Left)){
                 file.remove(OutputFile.Left)
             }
-        
+
             if(!Cleaned){
                 # remove contigs smaller than fragment length + create temp fasta
-                tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)              
+                tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)
                 if (pairedEnd | Simulator == "Mason2"){
                     system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ) )
                 } else {
@@ -98,54 +102,54 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
                 }
                 InputFastaFile <- tempFasta
             }
-            
+
             if(Simulator == "Mason" && InputFileExtension != "fa"){
                 # change file extension to .fa for Mason v0.
                 tempFasta.fa <- sub(paste0("[.]",InputFileExtension),paste0(".fa"),InputFastaFile)
                 file.copy(InputFastaFile, tempFasta.fa)
                 InputFastaFile <- tempFasta.fa
             }
-            
+
             # delete old indices
             if(file.exists(paste0(InputFastaFile, ".fai"))){
                 file.remove(paste0(InputFastaFile, ".fai"))
-            }   
-            
+            }
+
             if(pairedEnd == F){
                 cat(paste0("###UNPAIRED READS###\n"))
                 if (Simulator == "Mason2"){
-                    system(paste("./mason2 --illumina-read-length", ReadLength, "--fragment-mean-size", MeanFragmentSize, "--fragment-size-std-dev", FragmentStdDev, "--read-name-prefix", FilePrefix, "-oa", OutputFile.BAM, "-ir", InputFastaFile, "-n", ReadNumber, "-o", OutputFile.Left))    
+                    system(paste("./mason2 --illumina-read-length", ReadLength, "--fragment-mean-size", MeanFragmentSize, "--fragment-size-std-dev", FragmentStdDev, "--read-name-prefix", FilePrefix, "-oa", OutputFile.BAM, "-ir", InputFastaFile, "-n", ReadNumber, "-o", OutputFile.Left))
                 } else if (Simulator == "Mason") {
-                    system(paste("./mason illumina --read-length", ReadLength, "--num-reads", ReadNumber,"-sq -o", OutputFile.Left, InputFastaFile))
+                    system(paste("./mason illumina --read-length", ReadLength, "--num-reads", ReadNumber, aNg.option,"-sq -o", OutputFile.Left, InputFastaFile))
                 }
             } else {
                 cat(paste0("###PAIRED READS###\n"))
                 if (Simulator == "Mason2"){
                     system(paste("./mason2 --illumina-read-length", ReadLength, "--fragment-mean-size", MeanFragmentSize, "--fragment-size-std-dev", FragmentStdDev, "--read-name-prefix", FilePrefix, "-oa", OutputFile.BAM, "-ir", InputFastaFile, "-n", ReadNumber, "-o", OutputFile.Left, "-or", OutputFile.Right))
                 } else if (Simulator == "Mason") {
-                    system(paste("./mason illumina --mate-pairs --read-length", ReadLength, "--num-reads", ceiling(ReadNumber/2), "-ll", MeanFragmentSize, "-le", FragmentStdDev, "-sq -o", OutputFile.Base, InputFastaFile)) 
+                    system(paste("./mason illumina --mate-pairs --read-length", ReadLength, "--num-reads", ceiling(ReadNumber/2), aNg.option, "-ll", MeanFragmentSize, "-le", FragmentStdDev, "-sq -o", OutputFile.Base, InputFastaFile))
                 }
-            }            
+            }
             # remove temp fasta
             if(!Cleaned){
-                file.remove(tempFasta) 
-            }       
+                file.remove(tempFasta)
+            }
             if(Simulator == "Mason" && InputFileExtension != "fa"){
-                file.remove(tempFasta.fa) 
-            }            
-            cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))         
+                file.remove(tempFasta.fa)
+            }
+            cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))
             return(1)
         }
     }
-    
-}    
 
-Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10) {
-  
+}
+
+Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10, AllowNsFromGenome = F) {
+
     if(any(c(is.null(Members), is.null(TotalReadNumber),is.null(Proportional2GenomeSize ),is.null(FastaFileLocation  ),is.null(IMGdata ),is.null(TargetDirectory ) ))) stop("Please submit valid variables to function Simulate.Reads.fromMultipleGenomes")
-    
+
     dir.create(file.path(TargetDirectory), showWarnings = FALSE)
-    
+
     if(Simulator == "Neat"){
         if( Proportional2GenomeSize == T){
             # number of reads per genome length = coverage
@@ -154,7 +158,7 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
              # number of reads per genome length = coverage
             ReadCoveragePerGenome <- ((TotalReadNumber/length(Members))*ReadLength)/ IMGdata$Genome.Size[Members]
         }
-        
+
         if(Fix.Coverage == T) {
             ReadCoveragePerGenome <- rep(TotalReadNumber, length(Members))
         }
@@ -169,19 +173,19 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
         } else {
             ReadNumberPerGenome <- rep(round(TotalReadNumber/length(Members)), length(Members))
         }
-            
+
         if(Fix.Coverage == T) {
             if(TotalReadNumber > 10) stop("When computing ReadNumber from Coverage, please limit value of TotalReadNumber to 10.")
             ReadNumberPerGenome <- ceiling(TotalReadNumber/ReadLength*IMGdata$Genome.Size[Members])
         }
     }
-    
+
     # Get members' fasta file locations
     FastaFiles <- system(paste0("find ", file.path(FastaFileLocation), " -type f -name '*", FastaExtension, "'"), intern=T)
     # ignore old temp files
     FastaFiles <- FastaFiles[!grepl("\\.temp\\.", FastaFiles)]
-    
-    library(foreach)  
+
+    library(foreach)
     library(doParallel)
     registerDoParallel(Workers)
     print(paste("###Simulating using", Workers, "workers###"))
@@ -202,7 +206,7 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
     ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
 
     Check <- foreach(i = 1:length(Members) ) %dopar% {
-        
+
         # Find corresponding fasta file
         CurrentFasta <- grep(paste("\\/",IMGdata$assembly_accession[Members[i]],FilenamePostfixPattern,sep=""),FastaFiles,value=T)
 
@@ -210,16 +214,16 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
             cat(paste("###WARNING: Genome smaller than fragment/read size (", basename(CurrentFasta), ")###\n### frag size:", MeanFragmentSizes[i], "stddev:", FragmentStdDevs[i], "read len:", ReadLengths[i], "###\n"))
         }
 
-        
+
         if(length(CurrentFasta) > 1) {
             stop(paste0("More than one match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else if(length(CurrentFasta) == 0) {
             stop(paste0("No match for given Accession: ", IMGdata$assembly_accession[Members[i]],": ", paste0(CurrentFasta, collapse=" "), " in ", paste(file.path(FastaFileLocation))))
         } else {
             if(Simulator == "Neat"){
-                Simulate.Reads(CurrentFasta, ReadCoverage = ReadCoveragePerGenome[i] ,ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], Simulator = Simulator, Cleaned = Cleaned)
+                Simulate.Reads(CurrentFasta, ReadCoverage = ReadCoveragePerGenome[i] ,ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], Simulator = Simulator, Cleaned = Cleaned, AllowNsFromGenome = AllowNsFromGenome)
             } else {
-                Simulate.Reads(CurrentFasta, ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], Simulator = Simulator, ReadNumber =  ReadNumberPerGenome[i], Cleaned = Cleaned)
+                Simulate.Reads(CurrentFasta, ReadLength = ReadLengths[i], pairedEnd = pairedEnd, TargetDirectory = TargetDirectory, MeanFragmentSize = MeanFragmentSizes[i], FragmentStdDev = FragmentStdDevs[i], ReadMargin = ReadMargin, Simulator = Simulator, ReadNumber =  ReadNumberPerGenome[i], Cleaned = Cleaned, AllowNsFromGenome = AllowNsFromGenome)
             }         
         }
     }  
