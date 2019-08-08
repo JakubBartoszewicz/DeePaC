@@ -7,6 +7,8 @@ import numpy as np
 from keras.models import load_model
 from keras import backend as K
 from Bio import SeqIO
+from operator import itemgetter
+from itertools import groupby
 
 '''
 Compute activation values genome-wide.
@@ -91,17 +93,28 @@ while n < total_num_reads:
         # pos_indices_rc = np.where(activations_rc[:, :, filter_index] > 0)
         # pos_indices = np.union1d(pos_indices_fwd, pos_indices_rc)
         pos_indices = np.where(activations[:, :, filter_index] > 0)
+        rows = []
+        for i in range(len(pos_indices[0])):
+            read = pos_indices[0][i]
+            neuron = pos_indices[1][i]
+            genomic_start = neuron - pad_left + reads_info_chunk[read][1]
+            genomic_end = genomic_start + motif_length
+            if genomic_start <= 0 and genomic_end <= 0:
+                continue
+            else:
+                activation_score = activations[read, neuron, filter_index]
+                rows.append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end, "filter_"+str(filter_index),
+                             '%.4g' % activation_score])
+
+        # sort by sequence and filter start position
+        rows.sort(key=itemgetter(0, 1))
+        # remove duplicates (due to overlapping reads) or take max of two scores at the same genomic position
+        # (can occur if filter motif is recognized at the border of one read)
+        rows = [max(g, key=itemgetter(4)) for k, g in groupby(rows, itemgetter(0, 1))]
+
         with open(filter_bed_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file, delimiter='\t')
-            for i  in range(len(pos_indices[0])):
-                read = pos_indices[0][i]
-                neuron = pos_indices[1][i]
-                genomic_start = neuron - pad_left + reads_info_chunk[read][1]
-                genomic_end = genomic_start + motif_length
-                if genomic_start <= 0 and genomic_end <= 0:
-                    continue
-                else:
-                    activation_score = activations[read, neuron, filter_index]
-                    file_writer.writerow([reads_info_chunk[read][0], max(0, genomic_start), genomic_end, "filter_"+str(filter_index), '%.4g' % activation_score])
+            for r in rows:
+                file_writer.writerow(r)
 
     n += chunk_size
