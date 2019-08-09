@@ -6,6 +6,7 @@ from keras.preprocessing.text import Tokenizer
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
+from operator import itemgetter
 
 '''
 Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions.
@@ -23,6 +24,7 @@ args = parser.parse_args()
 if not os.path.exists(args.out_dir):
     os.makedirs(args.out_dir)
 
+mean_scores = []
 
 #for each fragmented genome do
 for fragments_file in os.listdir(args.dir_fragmented_genomes):
@@ -109,3 +111,10 @@ for fragments_file in os.listdir(args.dir_fragmented_genomes):
         df[['start', 'end']] = df[['start', 'end']].astype(int)
         df.to_csv(out_file , sep = "\t", index = False, header = False)
 
+        mean_score = sum(x * y for x, y in zip(df[['score']], df[['end']]-df[['start']])) / sum(df[['end']]-df[['start']])
+        mean_scores.append((genome.replace("_fragmented_genomes", ""), mean_score))
+
+    mean_scores.sort(key=itemgetter(1))
+    with open(args.out_dir + "/mean_patho.txt", 'w') as f:
+        for name, score in mean_scores:
+            f.write("{n}\t{s}\n".format(n=name, s=score))
