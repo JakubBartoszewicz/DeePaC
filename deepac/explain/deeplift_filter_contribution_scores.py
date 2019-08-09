@@ -28,6 +28,7 @@ def main():
     # parse command line arguments
     args = parse_arguments()
     model = load_model(args.model)
+    max_only = args.max_only
     if args.w_norm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -120,12 +121,13 @@ def main():
         print("Saving data ...")
         # for each filter do:
         p.map(partial(get_filter_data, scores_filter_avg=scores_filter, input_reads=reads_chunk,
-                      out_dir=args.out_dir, data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters))
+                      out_dir=args.out_dir, data_set_name=test_data_set_name, motif_len=motif_length,
+                      max_only=max_only), range(n_filters))
 
         i += chunk_size
 
 
-def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, out_dir, data_set_name):
+def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, out_dir, data_set_name, max_only):
     # determine non-zero contribution scores per read and filter
     # and extract DNA-sequence of corresponding subreads
     num_reads = len(input_reads)
@@ -133,7 +135,10 @@ def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, out_di
     motifs = []
     for seq_id in range(num_reads):
         if np.any(scores_filter_avg[seq_id, :, filter_id]):
-            non_zero_neurons = np.nonzero(scores_filter_avg[seq_id, :, filter_id])[0]
+            if max_only:
+                non_zero_neurons = [np.argmax(scores_filter_avg[seq_id, :, filter_id])]
+            else:
+                non_zero_neurons = np.nonzero(scores_filter_avg[seq_id, :, filter_id])[0]
             scores = scores_filter_avg[seq_id, non_zero_neurons, filter_id]
             # contribution_scores.append((reads_chunk[seq_id].id,
             #                             non_zero_neurons,['%.4g' % n for n in scores]))
@@ -180,6 +185,8 @@ def parse_arguments():
     parser.add_argument("-f", "--ref_seqs",
                         help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
     parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=8, type=int, help="Number of CPU cores")
+    parser.add_argument("-M", "--max_only", dest="max_only", action="store_true",
+                        help="Extract only the maximum contribution per filter per read")
     args = parser.parse_args()
     if args.ref_mode == "GC" and args.train_data is None:
         raise ValueError(
