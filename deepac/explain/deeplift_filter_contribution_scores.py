@@ -28,7 +28,7 @@ def main():
     # parse command line arguments
     args = parse_arguments()
     model = load_model(args.model)
-    max_only = args.max_only
+    max_only = args.partial or not args.all_occurences
     if args.w_norm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -81,6 +81,8 @@ def main():
         os.makedirs(args.out_dir + "/filter_scores/")
     if not os.path.exists(args.out_dir + "/fasta/"):
         os.makedirs(args.out_dir + "/fasta/")
+    if args.partial and not os.path.exists(args.out_dir + "/nuc_scores/"):
+        os.makedirs(args.out_dir + "/nuc_scores/")
 
     # load or create reference sequences
     ref_samples = get_reference_seqs(args, len_reads)
@@ -94,12 +96,35 @@ def main():
         feed_dict = dict(zip([model.get_layer(index=0).input], [x]))
         return K.get_session().run(model.get_layer(index=layer).get_output_at(out_node), feed_dict)
 
+    intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
+    intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+
+
     explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                 model.get_layer(index=conv_layer_idx).get_output_at(1)],
                                model.layers[-1].output),
-                              [map2layer(ref_samples, conv_layer_idx, 0),
-                               map2layer(ref_samples, conv_layer_idx, 1)])
+                              [intermediate_ref_fwd,
+                               intermediate_ref_rc])
 
+    #if (args.partial):
+        # outfwd = K.reshape(model.get_layer(index=conv_layer_idx).get_output_at(0),
+        #                    (K.shape(model.get_layer(index=conv_layer_idx).get_output_at(0))[0],
+        #                     n_filters*ref_samples.shape[1]))[:,0:250]
+        # outrc = K.reshape(model.get_layer(index=conv_layer_idx).get_output_at(1),
+        #                    (K.shape(model.get_layer(index=conv_layer_idx).get_output_at(1))[0],
+        #                     n_filters*ref_samples.shape[1]))[:,0:250]
+        #
+        # explainer_nt_fwd = DeepExplainer((model.get_layer(index=0).input,
+        #                                     outfwd), ref_samples)
+        # explainer_nt_rc = DeepExplainer((model.get_layer(index=0).input,
+        #                                    outrc), ref_samples)
+        #outfwd = model.get_layer(index=conv_layer_idx).get_output_at(0)[:, :, 0]
+        #outrc = model.get_layer(index=conv_layer_idx).get_output_at(1)[:, :, 0]
+
+        #explainer_nt_fwd = DeepExplainer((model.get_layer(index=0).input,
+        #                                  outfwd), ref_samples)
+        #explainer_nt_rc = DeepExplainer((model.get_layer(index=0).input,
+        #                                outrc), ref_samples)
 
 
     cores = args.n_cpus
@@ -111,59 +136,243 @@ def main():
         samples_chunk = samples[i:i+chunk_size, :, :]
         reads_chunk = reads[i:i+chunk_size]
 
-        scores_filter = explainer.shap_values([map2layer(samples_chunk, conv_layer_idx, 0),
-                                               map2layer(samples_chunk, conv_layer_idx, 1)])
+        intermediate_fwd = map2layer(samples_chunk, conv_layer_idx, 0)
+        intermediate_rc = map2layer(samples_chunk, conv_layer_idx, 1)
+        inter_diff_fwd = intermediate_fwd - intermediate_ref_fwd
+        inter_diff_rc = intermediate_rc - intermediate_ref_rc
+
+        scores_filter = explainer.shap_values([intermediate_fwd,
+                                               intermediate_rc])
         scores_fwd, scores_rc = scores_filter[0]
-        scores_filter = scores_fwd + scores_rc
 
         # shape: [num_reads, len_reads, n_filters]
 
-        print("Saving data ...")
+        print("Getting data ...")
+        io = True
         # for each filter do:
-        p.map(partial(get_filter_data, scores_filter_avg=scores_filter, input_reads=reads_chunk,
-                      out_dir=args.out_dir, data_set_name=test_data_set_name, motif_len=motif_length,
-                      max_only=max_only), range(n_filters))
+        if cores > 1:
+            dat_fwd = p.map(partial(get_filter_data, scores_filter_avg=scores_fwd,
+                                                    input_reads=reads_chunk, motif_len=motif_length,
+                                                    max_only=max_only), range(n_filters))
+            dat_rc = p.map(partial(get_filter_data, scores_filter_avg=scores_rc,
+                                                    input_reads=reads_chunk, motif_len=motif_length, rc=True,
+                                                    max_only=max_only), range(n_filters))
+            dat_max = p.map(partial(get_max_strand, dat_fwd=dat_fwd, dat_rc=dat_rc), range(n_filters))
+        else:
+            dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
+                                       input_reads=reads_chunk, motif_len=motif_length,
+                                       max_only=max_only) for i in range(n_filters)]
+            dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
+                                      input_reads=reads_chunk, motif_len=motif_length, rc=True,
+                                      max_only=max_only) for i in range(n_filters)]
+            dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in range(n_filters)]
 
+        contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
+
+        print("Saving data ...")
+        if contrib_dat_fwd and io:
+            list(map(partial(write_filter_data, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
+                          out_dir=args.out_dir, data_set_name=test_data_set_name), range(n_filters)))
+        if contrib_dat_rc and io:
+            list(map(partial(write_filter_data, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
+                          out_dir=args.out_dir, data_set_name=test_data_set_name), range(n_filters)))
+
+        print("Getting partial data ...")
+        if args.partial:
+            if cores > 1:
+                partials_nt_fwd = p.map(partial(get_partials, model=model, conv_layer_idx=conv_layer_idx,
+                                                            node=0, ref_samples=ref_samples,
+                                                            contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
+                                                            input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
+                                                            pad_left=pad_left, pad_right=pad_right), range(n_filters))
+
+                partials_nt_rc = p.map(partial(get_partials, model=model, conv_layer_idx=conv_layer_idx,
+                                                          node=1, ref_samples=ref_samples,
+                                                          contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
+                                                          input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
+                                                          pad_left=pad_left, pad_right=pad_right), range(n_filters))
+            else:
+                partials_nt_fwd = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
+                                              node=0, ref_samples=ref_samples,
+                                              contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
+                                              input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
+                                              pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+
+                partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
+                                             node=1, ref_samples=ref_samples,
+                                             contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
+                                             input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
+                                             pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+            scores_nt_fwd, read_ids_fwd = list(zip(*partials_nt_fwd))
+            scores_nt_rc, read_ids_rc = list(zip(*partials_nt_rc))
+            print("Saving partial data ...")
+            if scores_nt_fwd:
+                list(map(partial(write_partial_data, read_ids = read_ids_fwd ,contribution_data=contrib_dat_fwd,
+                              scores_input_pad = scores_nt_fwd, out_dir=args.out_dir,
+                              data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters)))
+            if scores_nt_rc:
+                list(map(partial(write_partial_data, read_ids = read_ids_rc ,contribution_data=contrib_dat_rc,
+                              scores_input_pad = scores_nt_rc, out_dir=args.out_dir,
+                              data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters)))
         i += chunk_size
 
 
-def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, out_dir, data_set_name, max_only):
+def get_max_strand(filter_id, dat_fwd, dat_rc):
+    i = filter_id
+    contrib_dat_fwd = []
+    motif_dat_fwd = []
+    contrib_dat_rc = []
+    motif_dat_rc = []
+    print(filter_id)
+    for seq_id in range(len(dat_fwd[i][0])):
+        record_fwd = dat_fwd[i]
+        record_rc = dat_rc[i]
+        # if any contributions at all
+        if len(record_fwd[0][seq_id][1]) > 0 and len(record_rc[0][seq_id][1]) > 0:
+            # if abs score on fwd higher than on rc
+            if np.abs(record_fwd[0][seq_id][2]) >= np.abs(record_fwd[0][seq_id][2]):
+                contrib_dat_fwd.append(record_fwd[0][seq_id])
+                motif_dat_fwd.append(record_fwd[1][seq_id])
+                contrib_dat_rc.append([])
+                motif_dat_rc.append("")
+            else:
+                contrib_dat_rc.append(record_rc[0][seq_id])
+                motif_dat_rc.append(record_rc[1][seq_id])
+                contrib_dat_fwd.append([])
+                motif_dat_fwd.append("")
+        elif len(record_fwd[0][seq_id][1]) > 0 and not (len(record_rc[0][seq_id][1]) > 0):
+            contrib_dat_fwd.append(record_fwd[0][seq_id])
+            motif_dat_fwd.append(record_fwd[1][seq_id])
+            contrib_dat_rc.append([])
+            motif_dat_rc.append("")
+        elif not (len(record_fwd[0][seq_id][1]) > 0) and len(record_rc[0][seq_id][1]) > 0:
+            contrib_dat_rc.append(record_rc[0][seq_id])
+            motif_dat_rc.append(record_rc[1][seq_id])
+            contrib_dat_fwd.append([])
+            motif_dat_fwd.append("")
+        else:
+            contrib_dat_rc.append([])
+            motif_dat_rc.append("")
+            contrib_dat_fwd.append([])
+            motif_dat_fwd.append("")
+    return contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc
+
+def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False, max_only=True):
     # determine non-zero contribution scores per read and filter
     # and extract DNA-sequence of corresponding subreads
     num_reads = len(input_reads)
-    contribution_scores = []
+    contribution_data = []
     motifs = []
+    print(filter_id)
     for seq_id in range(num_reads):
         if np.any(scores_filter_avg[seq_id, :, filter_id]):
             if max_only:
-                non_zero_neurons = [np.argmax(scores_filter_avg[seq_id, :, filter_id])]
+                max_id = np.argmax(np.abs(scores_filter_avg[seq_id, :, filter_id]))
+                non_zero_neurons = np.asarray([max_id]) if scores_filter_avg[seq_id, max_id, filter_id] \
+                    else np.empty((0,), dtype=int)
             else:
                 non_zero_neurons = np.nonzero(scores_filter_avg[seq_id, :, filter_id])[0]
+
             scores = scores_filter_avg[seq_id, non_zero_neurons, filter_id]
-            # contribution_scores.append((reads_chunk[seq_id].id,
-            #                             non_zero_neurons,['%.4g' % n for n in scores]))
-            # save scores with less precison to save memory
-            contribution_scores.append((input_reads[seq_id].id, non_zero_neurons, scores))
-            motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
-                           for non_zero_neuron in non_zero_neurons])
+            contribution_data.append((input_reads[seq_id].id, non_zero_neurons, scores))
+            if len(non_zero_neurons) > 0:
+                if not rc:
+                    motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                                   for non_zero_neuron in non_zero_neurons])
+                else:
+                    ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                          for non_zero_neuron in non_zero_neurons]
+                    motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
+                                   for m in ms])
+            else:
+                motifs.append("")
+        else:
+            contribution_data.append((input_reads[seq_id].id, [], []))
+            motifs.append("")
+    return contribution_data, motifs
 
-    if contribution_scores:
 
+def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
+    print(filter_id)
+    if contribution_data[filter_id] is not None and motifs[filter_id] is not None and \
+            len(contribution_data[filter_id]) > 0 and len(motifs[filter_id]) > 0:
         # save filter contribution scores
         filter_rel_file = \
             out_dir + "/filter_scores/" + data_set_name + "_rel_filter_%d.csv" % filter_id
         with open(filter_rel_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file)
-            for dat in contribution_scores:
-                file_writer.writerow([">" + dat[0]])
-                file_writer.writerow(dat[1])
-                file_writer.writerow(dat[2])
+            for dat in contribution_data[filter_id]:
+                if len(dat)>0:
+                    file_writer.writerow([">" + dat[0]])
+                    file_writer.writerow(dat[1])
+                    file_writer.writerow(dat[2])
 
         # save subreads which cause non-zero contribution scores
         filter_motifs_file = \
             out_dir + "/fasta/" + data_set_name + "_motifs_filter_%d.fasta" % filter_id
         with open(filter_motifs_file, "a") as output_handle:
-            SeqIO.write([subread for motif in motifs for subread in motif], output_handle, "fasta")
+            SeqIO.write([subread for motif in motifs[filter_id] for subread in motif], output_handle, "fasta")
+
+
+def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contribution_data, samples_chunk,
+                 input_reads, intermediate_diff, pad_left, pad_right):
+    num_reads = len(input_reads)
+    read_ids = []
+    scores_pt_all = []
+    print(filter_id)
+    if contribution_data[filter_id] is None or not (len(contribution_data[filter_id]) > 0):
+        return None
+    for seq_id in range(num_reads):
+        if num_reads >= 10 and (seq_id % (num_reads // 10)) == 0:
+            print("|", end="", flush=True)
+        if num_reads >= 100 and (seq_id % (num_reads // 100.0)) == 0:
+            print(".", end="", flush=True)
+        if seq_id == (num_reads-1):
+            print("|", flush=True)
+        read_id = re.search("seq_[0-9]+", input_reads[seq_id].id).group()
+        read_id = int(read_id.replace("seq_", ""))
+        read_ids.append(read_id)
+
+        if contribution_data[filter_id][seq_id] is None or not (len(contribution_data[filter_id][seq_id]) > 0):
+            scores_pt_all.append(None)
+            continue
+
+        out = model.get_layer(index=conv_layer_idx).get_output_at(node)
+        out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
+
+        explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
+
+        sample = samples_chunk[seq_id,:,:].reshape((1,ref_samples.shape[1], ref_samples.shape[2]))
+        # Get difference in activation of the intemediate neuron
+        diff = intermediate_diff[seq_id,contribution_data[filter_id][seq_id][1][0], filter_id]
+        scores_nt = explainer_nt.shap_values(sample)
+        partial = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
+
+        # Sum along the channel (nt) axis and pad
+        scores_pt_pad = np.sum(partial, axis=2)
+        scores_pt_pad = np.pad(scores_pt_pad, ((0, 0), (pad_left, pad_right)), 'constant', constant_values=(0.0, 0.0))
+        scores_pt_all.append(scores_pt_pad)
+
+    return scores_pt_all, read_ids
+
+
+
+
+def write_partial_data(filter_id, read_ids, contribution_data, scores_input_pad, out_dir, data_set_name, motif_len):
+    # save contribution scores for each nucleotide per filter motif
+    with open(out_dir + "/nuc_scores/" + data_set_name + "_rel_filter_%d_nucleotides.csv" % filter_id, 'a') \
+            as csv_file:
+        file_writer = csv.writer(csv_file)
+        for ind, seq_id in enumerate(read_ids[filter_id]):
+            # contribution_data[filter_id][ind][1][0] is the motif start
+            if len(contribution_data[filter_id][ind]) > 0 and len(scores_input_pad[filter_id][ind]) > 0:
+                scores = scores_input_pad[filter_id][ind]
+                scores = scores.reshape(scores.shape[1]).tolist()
+                scores = scores[contribution_data[filter_id][ind][1][0]:(contribution_data[filter_id][ind][1][0] + motif_len)]
+                row = ['%.4g' % s for s in scores]
+                file_writer.writerow([">" + contribution_data[filter_id][ind][0]])
+                file_writer.writerow(row)
+
 
 def parse_arguments():
     """
@@ -185,8 +394,10 @@ def parse_arguments():
     parser.add_argument("-f", "--ref_seqs",
                         help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
     parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=8, type=int, help="Number of CPU cores")
-    parser.add_argument("-M", "--max_only", dest="max_only", action="store_true",
-                        help="Extract only the maximum contribution per filter per read")
+    parser.add_argument("-A", "--all-occurences", dest="all_occurences", action="store_true",
+                        help="Extract contributions for all occurances of a filter per read (Default: max only)")
+    parser.add_argument("-p", "--partial", dest="partial", action="store_true",
+                        help="Calculate partial nucleotide contributions per filter")
     args = parser.parse_args()
     if args.ref_mode == "GC" and args.train_data is None:
         raise ValueError(

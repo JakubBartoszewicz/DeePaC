@@ -72,23 +72,22 @@ iterate_fwd = K.function([input_img, K.learning_phase()],
 
 layer_output_rc = layer_dict[output_layer].get_output_at(1)
 layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
-# index at fwd_output = output size - index at rc_output
+# index at fwd_output = output size - index at rc_output. returns index at FWD!
 iterate_rc = K.function([input_img, K.learning_phase()],
-                        [K.max(layer_output_rc, axis=1), K.argmax(layer_output_shape[1] - layer_output_rc, axis=1)])
+                        [K.max(layer_output_rc, axis=1), layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
 
 start_time = time.time()
 
 # number of reads per chunk
-chunk_size = 10000
+chunk_size = 1000
 n = 0
 cores = args.n_cpus
 
-def get_filter_data(filter_id, activation_list, motif_start_list):
+def get_filter_data(filter_id, activation_list, motif_start_list, rc=False,):
     filter_activations = activation_list[:, filter_id]
     filter_motif_starts = motif_start_list[:, filter_id]
 
     pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
-    pos_act_ids = [i % len(pos_act_ids)//2 for i in pos_act_ids]
     motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i] + motif_length] for i in pos_act_ids]
     activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
     # save filter contribution scores
@@ -103,8 +102,19 @@ def get_filter_data(filter_id, activation_list, motif_start_list):
 
     filename = args.out_dir + "/fasta/deepbind_" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_id
     with open(filename, "a") as output_handle:
-        SeqIO.write(motifs, output_handle, "fasta")
+        if rc:
+            SeqIO.write([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc") for m in motifs],
+                        output_handle, "fasta")
+        else:
+            SeqIO.write(motifs, output_handle, "fasta")
 
+def get_max_strand(filter_id, dat_fwd, dat_rc):
+    for seq_id in range(dat_fwd[0].shape[0]):
+        # if abs score on fwd higher than on rc
+        if dat_fwd[0][seq_id, filter_id] >= dat_rc[0][seq_id, filter_id]:
+            dat_rc[0][seq_id, filter_id] = 0.0
+        else:
+            dat_fwd[0][seq_id, filter_id] = 0.0
 
 # for each read do:
 while n < total_num_reads:
@@ -114,14 +124,22 @@ while n < total_num_reads:
     reads_chunk = reads[n:n+chunk_size]
     results_fwd = iterate_fwd([samples_chunk, 0])
     results_rc = iterate_rc([samples_chunk, 0])
-    activations = np.concatenate((results_fwd[0], results_rc[0]))
+    #activations = np.concatenate((results_fwd[0], results_rc[0]))
     # activations.shape = [total_num_reads, n_filters]
-    motif_starts = np.concatenate((results_fwd[1], results_rc[1]))
-    n_filters = activations.shape[-1]
+    # results shape: ([total_num_reads, n_filters], [total_num_reads, n_filters])
+    #motif_starts = np.concatenate((results_fwd[1], results_rc[1]))
+    n_filters = results_fwd[0].shape[-1]
 
     # for each filter do:
-    p = Pool(processes=cores)
-    p.map(partial(get_filter_data, activation_list=activations, motif_start_list=motif_starts), range(n_filters))
+    if cores > 1:
+        p = Pool(processes=cores)
+        p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
+        p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1]), range(n_filters))
+        p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1], rc=True), range(n_filters))
+    else:
+        list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
+        list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1]), range(n_filters)))
+        list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1], rc=True), range(n_filters)))
 
     n += chunk_size
 
