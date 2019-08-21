@@ -12,8 +12,6 @@ import keras.backend as K
 
 from Bio import SeqIO
 
-from multiprocessing import Pool
-from functools import partial
 from shap.explainers.deep import DeepExplainer
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -103,6 +101,11 @@ def main():
                                model.layers[-1].output),
                               [intermediate_ref_fwd,
                                intermediate_ref_rc])
+    filter_range = range(n_filters)
+    if args.inter_neuron is not None:
+        filter_range = [None]*n_filters
+        for n in args.inter_neuron:
+            filter_range[n] = n
 
     while i < total_num_reads:
 
@@ -130,7 +133,7 @@ def main():
                                   input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                   max_only=max_only) for i in range(n_filters)]
         if max_only:
-            dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in range(n_filters)]
+            dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
 
         if max_only:
             contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
@@ -140,11 +143,13 @@ def main():
 
         print("Saving data ...")
         if contrib_dat_fwd:
-            list(map(partial(write_filter_data, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
-                             out_dir=args.out_dir, data_set_name=test_data_set_name), range(n_filters)))
+            for f in filter_range:
+                write_filter_data(f, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
+                                  out_dir=args.out_dir, data_set_name=test_data_set_name)
         if contrib_dat_rc:
-            list(map(partial(write_filter_data, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
-                             out_dir=args.out_dir, data_set_name=test_data_set_name), range(n_filters)))
+            for f in filter_range:
+                write_filter_data(f, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
+                                  out_dir=args.out_dir, data_set_name=test_data_set_name)
 
         if args.partial:
             print("Getting partial data ...")
@@ -152,40 +157,44 @@ def main():
                                             node=0, ref_samples=ref_samples,
                                             contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                             input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                            pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+                                            pad_left=pad_left, pad_right=pad_right) for i in filter_range]
 
             partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
                                            node=1, ref_samples=ref_samples,
                                            contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                            input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                           pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+                                           pad_left=pad_left, pad_right=pad_right) for i in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
             partials_nt_fwd = [get_easy_partials(i, model=model, conv_layer_idx=conv_layer_idx, node=0,
                                                  contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                                  input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                                 pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+                                                 pad_left=pad_left, pad_right=pad_right) for i in filter_range]
 
             partials_nt_rc = [get_easy_partials(i, model=model, conv_layer_idx=conv_layer_idx, node=1,
                                                 contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                                 input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                                pad_left=pad_left, pad_right=pad_right) for i in range(n_filters)]
+                                                pad_left=pad_left, pad_right=pad_right) for i in filter_range]
         if args.partial or args.easy_partial:
             scores_nt_fwd, read_ids_fwd = list(zip(*partials_nt_fwd))
             scores_nt_rc, read_ids_rc = list(zip(*partials_nt_rc))
             print("Saving partial data ...")
             if scores_nt_fwd:
-                list(map(partial(write_partial_data, read_ids = read_ids_fwd ,contribution_data=contrib_dat_fwd,
-                              scores_input_pad = scores_nt_fwd, out_dir=args.out_dir,
-                              data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters)))
+                for f in filter_range:
+                    write_partial_data(f, read_ids = read_ids_fwd ,contribution_data=contrib_dat_fwd,
+                                       scores_input_pad = scores_nt_fwd, out_dir=args.out_dir,
+                                       data_set_name=test_data_set_name, motif_len=motif_length)
             if scores_nt_rc:
-                list(map(partial(write_partial_data, read_ids = read_ids_rc ,contribution_data=contrib_dat_rc,
-                              scores_input_pad = scores_nt_rc, out_dir=args.out_dir,
-                              data_set_name=test_data_set_name, motif_len=motif_length), range(n_filters)))
+                for f in filter_range:
+                    write_partial_data(f, read_ids = read_ids_rc ,contribution_data=contrib_dat_rc,
+                                       scores_input_pad = scores_nt_rc, out_dir=args.out_dir,
+                                       data_set_name=test_data_set_name, motif_len=motif_length)
         i += chunk_size
     print("Done "+str(i)+" from "+str(total_num_reads)+" sequences")
 
 def get_max_strand(filter_id, dat_fwd, dat_rc):
+    if filter_id is None:
+        return [], [], [], []
     i = filter_id
     contrib_dat_fwd = []
     motif_dat_fwd = []
@@ -224,9 +233,12 @@ def get_max_strand(filter_id, dat_fwd, dat_rc):
             motif_dat_fwd.append("")
     return contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc
 
+
 def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False, max_only=True):
     # determine non-zero contribution scores per read and filter
     # and extract DNA-sequence of corresponding subreads
+    if filter_id is None:
+        return [], []
     num_reads = len(input_reads)
     contribution_data = []
     motifs = []
@@ -259,6 +271,8 @@ def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=Fal
 
 
 def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
+    if filter_id is None:
+        return
     if contribution_data[filter_id] is not None and motifs[filter_id] is not None and \
             len(contribution_data[filter_id]) > 0 and len(motifs[filter_id]) > 0:
         # save filter contribution scores
@@ -282,11 +296,13 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
 def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contribution_data, samples_chunk,
                  input_reads, intermediate_diff, pad_left, pad_right):
     num_reads = len(input_reads)
+    if filter_id is None:
+        return [], []
     read_ids = []
     scores_pt_all = []
     print(filter_id)
     if contribution_data[filter_id] is None or not (len(contribution_data[filter_id]) > 0):
-        return None
+        return [], []
     for seq_id in range(num_reads):
         if num_reads >= 10 and (seq_id % (num_reads // 10)) == 0:
             print("|", end="", flush=True)
@@ -325,11 +341,13 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
 
 def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data, samples_chunk,
                  input_reads, intermediate_diff, pad_left, pad_right):
+    if filter_id is None:
+        return [], []
     num_reads = len(input_reads)
     read_ids = []
     scores_pt_all = []
     if contribution_data[filter_id] is None or not (len(contribution_data[filter_id]) > 0):
-        return None
+        return [], []
     for seq_id in range(num_reads):
         read_id = re.search("seq_[0-9]+", input_reads[seq_id].id).group()
         read_id = int(read_id.replace("seq_", ""))
@@ -368,6 +386,8 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
 
 
 def write_partial_data(filter_id, read_ids, contribution_data, scores_input_pad, out_dir, data_set_name, motif_len):
+    if filter_id is None:
+        return
     # save contribution scores for each nucleotide per filter motif
     with open(out_dir + "/nuc_scores/" + data_set_name + "_rel_filter_%d_nucleotides.csv" % filter_id, 'a') \
             as csv_file:
@@ -402,6 +422,10 @@ def parse_arguments():
                         help="Train data (.npy), necessary to calculate reference sequences if ref_mode is 'GC'")
     parser.add_argument("-f", "--ref_seqs",
                         help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
+    parser.add_argument("-i", "--inter_neuron", nargs='*', dest="inter_neuron", type=int,
+                        help="Perform calculations for this intermediate neuron only")
+    parser.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
+                        help="Perform calculations for this intermediate layer")
     parser.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
                         help="Sequence chunk size")
     parser.add_argument("-A", "--all-occurrences", dest="all_occurrences", action="store_true",
