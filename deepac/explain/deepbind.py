@@ -23,21 +23,34 @@ parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
 parser.add_argument("-N", "--nonpatho_test", required=True, help="Nonpathogenic reads of the test data set (.fasta)")
 parser.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
 parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
-parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=8, type=int, help="Number of CPU cores")
+parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=1, type=int, help="Number of CPU cores")
+parser.add_argument("-r", "--recurrent", action="store_true",
+                    help="Visualize elements of the LSTM output")
 
 args = parser.parse_args()
 
 
 # Creates the model and loads weights
 model = load_model(args.model)
-conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
-motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
-pad_left = (motif_length - 1) // 2
-pad_right = motif_length - 1 - pad_left
+print(model.summary())
+do_lstm = True
+if do_lstm:
+    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Bidirectional" in str(layer)][0]
+    motif_length = 250
+    pad_left = 0
+    pad_right = 0
+else:
+    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
+    motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+    pad_left = (motif_length - 1) // 2
+    pad_right = motif_length - 1 - pad_left
 
 
 layer_dict = dict([(layer.name, layer) for layer in model.layers])
-output_layer = 'conv1d_1'
+if do_lstm:
+    output_layer = 'bidirectional_1'
+else:
+    output_layer = 'conv1d_1'
 
 print("Loading test data (.npy) ...")
 test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
@@ -67,14 +80,24 @@ if not os.path.exists(args.out_dir + "/fasta/"):
 # Specify input and output of the network
 input_img = model.layers[0].input
 layer_output_fwd = layer_dict[output_layer].get_output_at(0)
-iterate_fwd = K.function([input_img, K.learning_phase()],
-                         [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
-
 layer_output_rc = layer_dict[output_layer].get_output_at(1)
-layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
-# index at fwd_output = output size - index at rc_output. returns index at FWD!
-iterate_rc = K.function([input_img, K.learning_phase()],
-                        [K.max(layer_output_rc, axis=1), layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
+
+if do_lstm:
+    iterate_fwd = K.function([input_img, K.learning_phase()],
+                             [layer_output_fwd])
+
+    layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
+    # index at fwd_output = output size - index at rc_output. returns index at FWD!
+    iterate_rc = K.function([input_img, K.learning_phase()],
+                            [layer_output_rc])
+else:
+    iterate_fwd = K.function([input_img, K.learning_phase()],
+                             [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
+
+    layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
+    # index at fwd_output = output size - index at rc_output. returns index at FWD!
+    iterate_rc = K.function([input_img, K.learning_phase()],
+                            [K.max(layer_output_rc, axis=1), layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
 
 start_time = time.time()
 
@@ -122,13 +145,22 @@ while n < total_num_reads:
     print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
     samples_chunk = samples[n:n+chunk_size, :, :]
     reads_chunk = reads[n:n+chunk_size]
-    results_fwd = iterate_fwd([samples_chunk, 0])
-    results_rc = iterate_rc([samples_chunk, 0])
+    if do_lstm:
+        act_fwd = iterate_fwd([samples_chunk, 0])[0]
+        act_rc = iterate_rc([samples_chunk, 0])[0]
+        n_filters = act_fwd.shape[-1]
+        mot_fwd = np.zeros((chunk_size,n_filters), dtype="int32")
+        mot_rc = np.zeros((chunk_size,n_filters), dtype="int32") + len_reads - 1
+        results_fwd = [act_fwd, mot_fwd]
+        results_rc = [act_rc, mot_rc]
+    else:
+        results_fwd = iterate_fwd([samples_chunk, 0])
+        results_rc = iterate_rc([samples_chunk, 0])
+        n_filters = results_fwd[0].shape[-1]
     #activations = np.concatenate((results_fwd[0], results_rc[0]))
     # activations.shape = [total_num_reads, n_filters]
     # results shape: ([total_num_reads, n_filters], [total_num_reads, n_filters])
     #motif_starts = np.concatenate((results_fwd[1], results_rc[1]))
-    n_filters = results_fwd[0].shape[-1]
 
     # for each filter do:
     if cores > 1:
