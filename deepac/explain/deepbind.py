@@ -24,33 +24,41 @@ parser.add_argument("-N", "--nonpatho_test", required=True, help="Nonpathogenic 
 parser.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
 parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
 parser.add_argument("-n", "--n_cpus", dest="n_cpus", default=1, type=int, help="Number of CPU cores")
-parser.add_argument("-r", "--recurrent", action="store_true",
-                    help="Visualize elements of the LSTM output")
+parser.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
+                    help="Interpret elements of the LSTM output")
+parser.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
+                    help="Perform calculations for this intermediate layer")
 
 args = parser.parse_args()
 
+def get_rf_size(mdl, idx, conv_ids, pool = 2, cstride = 1):
+    if idx == 0:
+        rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
+    else:
+        rf = get_rf_size(mdl, idx-1, conv_ids) + (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
+    return rf
 
 # Creates the model and loads weights
 model = load_model(args.model)
 print(model.summary())
-do_lstm = True
+do_lstm = args.do_lstm
 if do_lstm:
-    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Bidirectional" in str(layer)][0]
     motif_length = 250
     pad_left = 0
     pad_right = 0
 else:
-    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
-    motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+    conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+    conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
+    motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids)
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
 
 
 layer_dict = dict([(layer.name, layer) for layer in model.layers])
 if do_lstm:
-    output_layer = 'bidirectional_1'
+    output_layer = 'bidirectional_'+str(args.inter_layer)
 else:
-    output_layer = 'conv1d_1'
+    output_layer = 'conv1d_'+str(args.inter_layer)
 
 print("Loading test data (.npy) ...")
 test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
@@ -150,7 +158,7 @@ while n < total_num_reads:
         act_rc = iterate_rc([samples_chunk, 0])[0]
         n_filters = act_fwd.shape[-1]
         mot_fwd = np.zeros((chunk_size,n_filters), dtype="int32")
-        mot_rc = np.zeros((chunk_size,n_filters), dtype="int32") + len_reads - 1
+        mot_rc = np.zeros((chunk_size,n_filters), dtype="int32")
         results_fwd = [act_fwd, mot_fwd]
         results_rc = [act_rc, mot_rc]
     else:

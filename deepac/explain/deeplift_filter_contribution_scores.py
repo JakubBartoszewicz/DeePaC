@@ -16,6 +16,12 @@ from shap.explainers.deep import DeepExplainer
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
+def get_rf_size(mdl, idx, conv_ids, pool = 2, cstride = 1):
+    if idx == 0:
+        rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
+    else:
+        rf = get_rf_size(mdl, idx-1, conv_ids) + (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
+    return rf
 
 def main():
     """
@@ -27,7 +33,7 @@ def main():
     args = parse_arguments()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurences
-    if args.w_norm:
+    if args.w_norm and not args.do_lstm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
         kernel_normed, bias_normed = normalize_filter_weights(model.get_layer(index=conv_layer_idx).get_weights()[0],
@@ -43,11 +49,19 @@ def main():
 
 
     # extract some model information
-    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
-    n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
-    motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
-    pad_left = (motif_length - 1) // 2
-    pad_right = motif_length - 1 - pad_left
+    if args.do_lstm:
+        conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Bidirectional" in str(layer)][args.inter_layer - 1]
+        n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[-1]
+        motif_length = 250
+        pad_left = 0
+        pad_right = 0
+    else:
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+        conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
+        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids)
+        n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
+        pad_left = (motif_length - 1) // 2
+        pad_right = motif_length - 1 - pad_left
 
     print(model.summary())
 
@@ -126,12 +140,19 @@ def main():
 
         print("Getting data ...")
         # for each filter do:
-        dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
-                                   input_reads=reads_chunk, motif_len=motif_length,
-                                   max_only=max_only) for i in range(n_filters)]
-        dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
-                                  input_reads=reads_chunk, motif_len=motif_length, rc=True,
-                                  max_only=max_only) for i in range(n_filters)]
+        if args.do_lstm:
+            dat_fwd = [get_lstm_data(i, scores_filter_avg=scores_fwd,
+                                     input_reads=reads_chunk, motif_len=motif_length) for i in range(n_filters)]
+            dat_rc = [get_lstm_data(i, scores_filter_avg=scores_rc,
+                                    input_reads=reads_chunk, motif_len=motif_length,
+                                    rc=True) for i in range(n_filters)]
+        else:
+            dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
+                                       input_reads=reads_chunk, motif_len=motif_length,
+                                       max_only=max_only) for i in range(n_filters)]
+            dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
+                                      input_reads=reads_chunk, motif_len=motif_length, rc=True,
+                                      max_only=max_only) for i in range(n_filters)]
         if max_only:
             dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
 
@@ -157,13 +178,13 @@ def main():
                                             node=0, ref_samples=ref_samples,
                                             contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                             input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                            pad_left=pad_left, pad_right=pad_right) for i in filter_range]
+                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm) for i in filter_range]
 
             partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
                                            node=1, ref_samples=ref_samples,
                                            contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                            input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                           pad_left=pad_left, pad_right=pad_right) for i in filter_range]
+                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm) for i in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
             partials_nt_fwd = [get_easy_partials(i, model=model, conv_layer_idx=conv_layer_idx, node=0,
@@ -191,6 +212,7 @@ def main():
                                        data_set_name=test_data_set_name, motif_len=motif_length)
         i += chunk_size
     print("Done "+str(i)+" from "+str(total_num_reads)+" sequences")
+
 
 def get_max_strand(filter_id, dat_fwd, dat_rc):
     if filter_id is None:
@@ -253,22 +275,45 @@ def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=Fal
 
             scores = scores_filter_avg[seq_id, non_zero_neurons, filter_id]
             contribution_data.append((input_reads[seq_id].id, non_zero_neurons, scores))
-            if len(non_zero_neurons) > 0:
-                if not rc:
-                    motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
-                                   for non_zero_neuron in non_zero_neurons])
-                else:
-                    ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
-                          for non_zero_neuron in non_zero_neurons]
-                    motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
-                                   for m in ms])
+            if not rc:
+                motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                               for non_zero_neuron in non_zero_neurons])
             else:
-                motifs.append("")
+                ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                      for non_zero_neuron in non_zero_neurons]
+                motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
+                               for m in ms])
         else:
             contribution_data.append((input_reads[seq_id].id, [], []))
             motifs.append("")
     return contribution_data, motifs
 
+
+def get_lstm_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False):
+    # determine non-zero contribution scores per read and filter
+    # and extract DNA-sequence of corresponding subreads
+    if filter_id is None:
+        return [], []
+    num_reads = len(input_reads)
+    contribution_data = []
+    motifs = []
+    for seq_id in range(num_reads):
+        if scores_filter_avg[seq_id, filter_id] != 0:
+            non_zero_neurons = [0]
+            scores = [scores_filter_avg[seq_id, filter_id]]
+            contribution_data.append((input_reads[seq_id].id, non_zero_neurons, scores))
+            if not rc:
+                motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                               for non_zero_neuron in non_zero_neurons])
+            else:
+                ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
+                      for non_zero_neuron in non_zero_neurons]
+                motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
+                               for m in ms])
+        else:
+            contribution_data.append((input_reads[seq_id].id, [], []))
+            motifs.append("")
+    return contribution_data, motifs
 
 def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
     if filter_id is None:
@@ -294,7 +339,7 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
 
 
 def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contribution_data, samples_chunk,
-                 input_reads, intermediate_diff, pad_left, pad_right):
+                 input_reads, intermediate_diff, pad_left, pad_right, lstm=False):
     num_reads = len(input_reads)
     if filter_id is None:
         return [], []
@@ -319,13 +364,19 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
             continue
 
         out = model.get_layer(index=conv_layer_idx).get_output_at(node)
-        out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
+        if lstm:
+            out = out[:, filter_id]
+        else:
+            out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
 
         explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id,:,:].reshape((1,ref_samples.shape[1], ref_samples.shape[2]))
         # Get difference in activation of the intemediate neuron
-        diff = intermediate_diff[seq_id,contribution_data[filter_id][seq_id][1][0], filter_id]
+        if lstm:
+            diff = intermediate_diff[seq_id, filter_id]
+        else:
+            diff = intermediate_diff[seq_id,contribution_data[filter_id][seq_id][1][0], filter_id]
         scores_nt = explainer_nt.shap_values(sample)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
@@ -430,6 +481,8 @@ def parse_arguments():
                         help="Sequence chunk size")
     parser.add_argument("-A", "--all-occurrences", dest="all_occurrences", action="store_true",
                         help="Extract contributions for all occurrences of a filter per read (Default: max only)")
+    parser.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
+                        help="Interpret elements of the LSTM output")
     partial_group = parser.add_mutually_exclusive_group(required=False)
     partial_group.add_argument("-p", "--partial", dest="partial", action="store_true",
                         help="Calculate partial nucleotide contributions per filter")
