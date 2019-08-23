@@ -471,7 +471,7 @@ def parse_arguments():
                         help="Modus to calculate reference sequences")
     parser.add_argument("-a", "--train_data",
                         help="Train data (.npy), necessary to calculate reference sequences if ref_mode is 'GC'")
-    parser.add_argument("-f", "--ref_seqs",
+    parser.add_argument("-F", "--ref_seqs",
                         help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
     parser.add_argument("-i", "--inter_neuron", nargs='*', dest="inter_neuron", type=int,
                         help="Perform calculations for this intermediate neuron only")
