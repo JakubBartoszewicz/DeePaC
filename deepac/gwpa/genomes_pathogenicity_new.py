@@ -83,6 +83,7 @@ for fragments_file in os.listdir(args.dir_fragmented_genomes):
 
             #compute mean pathogenicity score per nucleotide
             genome_patho_dict[seq_name] /= genome_read_counter
+            genome_patho_dict[seq_name] = genome_patho_dict[seq_name] - 0.5
 
             #convert array of nucelotde pathogenicity scores to intervals (-> bedgraph format)
             strain_len = int(genome_info.loc[seq_name])
