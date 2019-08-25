@@ -50,9 +50,13 @@ for file in os.listdir(args.scores_dir):
                 if ind % 3 == 0:
                     read_id = re.search("seq_[0-9]+", row[0]).group()
                     read_id = int(read_id.replace("seq_", ""))
-                    read_ids[filter].append(read_id)
                 elif ind % 3 == 2:
-                    score = float(row[0])
+                    try:
+                        # if score non-empty
+                        score = float(row[0])
+                    except:
+                        continue
+                    read_ids[filter].append(read_id)
                     filter_scores[filter].append(score)
             read_ids[filter] = np.array(read_ids[filter])
             filter_scores[filter] = np.array(filter_scores[filter])
@@ -60,6 +64,10 @@ for file in os.listdir(args.scores_dir):
                 filter_scores[filter][y_pred[read_ids[filter]] == 0] *= -1
             if args.mode == "rel_true_class":
                 filter_scores[filter][y_truth[read_ids[filter]] == 0] *= -1
+
+            if len(filter_scores[filter]) == 0:
+                print("Skipping " + filter + ' ... (no data)')
+                continue
 
             #plot distribution of contribution scores per filter (excluding zeros) as histograms
             print("Plotting the distribution of the contribution scores of " + filter + ' ...')
@@ -100,6 +108,10 @@ if args.mode == "original":
         file_writer.writerow(["filter", "mean_score_wo_zeros", "mean_score_w_zeros", "min", "max", "sensitivity", "specificity", "accuracy", "TP", "FP", "TN", "FN", "perc_nonzero_reads"])
 
     for filter, scores in filter_scores.items():
+
+        if len(filter_scores[filter]) == 0:
+            print("Skipping " + filter + ' ... (no data)')
+            continue
 
         mean_scores_wo_zeros = np.mean(scores)
         scores_all_reads = np.zeros(len(y_truth))

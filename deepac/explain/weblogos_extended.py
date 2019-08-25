@@ -79,8 +79,12 @@ for filter_index in range(512):
                     contribution_scores.append(scores)
 
         #load motifs from fasta file
-        fin = open(args.fasta_dir + "/" + file_fasta[0])
-        seqs = read_seq_data(fin)
+        try:
+            fin = open(args.fasta_dir + "/" + file_fasta[0])
+            seqs = read_seq_data(fin)
+        except:
+            print("No data, skipping.")
+            continue
 
         #load weighted count matrix from transfac file
         if args.logo_dir:
@@ -99,7 +103,7 @@ for filter_index in range(512):
         seen = set()
         seqs_unique =  [seqs[idx] for idx, seq_name in enumerate(seq_names) if seq_name not in seen and not seen.add(seq_name)]
 
-        assert len(contribution_scores) == len(seqs_unique), "ERROR"
+        assert len(contribution_scores) == len(seqs_unique), "Numbers of contribution scores and sequences differ."
 
         #compute mean contribution score per nucleotide and logo position
         mean_scores = np.zeros((len(seqs_unique[0]), len(seqs.alphabet)))

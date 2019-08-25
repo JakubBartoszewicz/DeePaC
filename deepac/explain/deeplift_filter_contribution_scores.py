@@ -32,7 +32,7 @@ def main():
     # parse command line arguments
     args = parse_arguments()
     model = load_model(args.model)
-    max_only = args.partial or args.easy_partial or not args.all_occurences
+    max_only = args.partial or args.easy_partial or not args.all_occurrences
     if args.w_norm and not args.do_lstm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -316,6 +316,7 @@ def get_lstm_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False
     return contribution_data, motifs
 
 def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
+    #TODO: correct empty data saving when all_occurrences==True. Handled in filter ranking now.
     if filter_id is None:
         return
     if contribution_data[filter_id] is not None and motifs[filter_id] is not None and \

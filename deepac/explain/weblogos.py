@@ -14,7 +14,7 @@ Build standard weblogos per convolutional filter.
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--in_dir", required=True, help="Directory containing motifs per filter")
 parser.add_argument("-f", "--file_ext", default=".transfac", choices=['.fasta', '.transfac'], help="Extension of file format of input files (.fasta or .transfac)")
-parser.add_argument("-t", "--train_data", help="Training data set (.npy) to compute GC-content")
+parser.add_argument("-t", "--train_data", help="Training data set (.npy) to compute GC-content. N-padding lowers GC!")
 parser.add_argument("-o", "--out_dir", required=True, help="Output directory")
 args = parser.parse_args()
 
