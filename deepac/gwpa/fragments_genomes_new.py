@@ -12,7 +12,7 @@ from keras.preprocessing.text import Tokenizer
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--genomes_dir", required=True, help="Directory containing genomes in .fasta")
 parser.add_argument("-r", "--read_len", default=250, type=int, help="Length of extracted reads/fragments (default: 250)")
-parser.add_argument("-s", "--shift", default=125, type=int, help="Shift to start with the next fragment (default:125)")
+parser.add_argument("-s", "--shift", default=50, type=int, help="Shift to start with the next fragment (default:50)")
 parser.add_argument("-o", "--out_dir", default = ".", help="Output directory")
 args = parser.parse_args()
 

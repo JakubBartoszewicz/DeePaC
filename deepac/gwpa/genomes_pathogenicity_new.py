@@ -112,7 +112,7 @@ for fragments_file in os.listdir(args.dir_fragmented_genomes):
         df[['start', 'end']] = df[['start', 'end']].astype(int)
         df.to_csv(out_file , sep = "\t", index = False, header = False)
 
-        mean_score = sum(x * y for x, y in zip(df[['score']], df[['end']]-df[['start']])) / sum(df[['end']]-df[['start']])
+        mean_score = 0.5 + sum(x * y for x, y in zip(df.score, df.end-df.start)) / sum(df.end-df.start)
         mean_scores.append((genome.replace("_fragmented_genomes", ""), mean_score))
 
     mean_scores.sort(key=itemgetter(1))
