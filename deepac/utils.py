@@ -60,7 +60,7 @@ class ReadSequence(Sequence):
     def __getitem__(self, idx):
         """Get a batch at index"""
         batch_indices = self.indices[idx*self.batch_size:(idx+1)*self.batch_size]
-        batch_x = np.copy(self.X[batch_indices])
+        batch_x = self.X[batch_indices]
         batch_y = self.y[batch_indices]
         """Randomly shorten reads"""
         for matrix in batch_x:
