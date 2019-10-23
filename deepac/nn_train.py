@@ -65,6 +65,11 @@ class RCConfig:
         self.seq_length = config['InputData'].getint('SeqLength')
         self.alphabet = "ACGT"
         self.seq_dim = len(self.alphabet)
+        # subread settings (subread = first k nucleotides of a read)
+        self.use_subreads = config['DataLoad'].getboolean('use_subreads')
+        self.min_subread_length = config['DataLoad'].getboolean('min_subread_length')
+        self.max_subread_length = config['DataLoad'].getboolean('max_subread_length')
+        self.dist_subread = config['DataLoad'].getboolean('dist_subread')
 
         # Architecture Config #
         # Set the seed
@@ -247,7 +252,8 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
-            self.training_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size)
+            self.training_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size, \
+                                                  self.config.use_subreads, self.config.min_subread_length, self.config.max_subread_length, self.config.dist_subread)
             self.length_train = len(self.x_train)
         else:
             # ... or load all the data to memory
@@ -358,7 +364,7 @@ class RCNet:
     def __add_siam_batchnorm(self, inputs_fwd, inputs_rc):
         input_shape = inputs_rc._keras_shape
         if len(input_shape) != 3:
-            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
         rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
                        name="reverse_complement_batchnorm_input_{n}".format(n=self.__current_bn+1))
@@ -385,7 +391,7 @@ class RCNet:
     def __add_rc_batchnorm(self, inputs):
         input_shape = inputs._keras_shape
         if len(input_shape) != 3:
-            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
         split_shape = inputs._keras_shape[-1] // 2
         new_shape = [input_shape[1], split_shape]

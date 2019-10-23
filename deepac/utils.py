@@ -46,11 +46,15 @@ class ReadSequence(Sequence):
 
     """
 
-    def __init__(self, x_set, y_set, batch_size):
+    def __init__(self, x_set, y_set, batch_size, use_subreads, min_subread_length, max_subread_length, dist_subread):
         """PaPrSequence constructor"""
         self.X, self.y = x_set, y_set
         self.batch_size = batch_size
         self.indices = np.arange(len(self.y))
+        self.use_subreads = use_subreads
+        self.min_subread_length = min_subread_length
+        self.max_subread_length = max_subread_length
+        self.dist_subread = dist_subread
         self.on_epoch_end()
 
     def __len__(self):
@@ -60,12 +64,16 @@ class ReadSequence(Sequence):
     def __getitem__(self, idx):
         """Get a batch at index"""
         batch_indices = self.indices[idx*self.batch_size:(idx+1)*self.batch_size]
-        batch_x = np.copy(self.X[batch_indices])
+        if self.use_subreads:
+            batch_x = np.copy(self.X[batch_indices])
+            """Randomly shorten reads"""
+            for matrix in batch_x:
+                random_length = np.random.randint(self.min_subread_length,self.max_subread_length)
+                matrix[random_length:,:] = 0
+        else:
+            batch_x = self.X[batch_indices]
         batch_y = self.y[batch_indices]
-        """Randomly shorten reads"""
-        for matrix in batch_x:
-            random_length = np.random.randint(150,250)
-            matrix[random_length:,:] = 0
+
 
         return np.array(batch_x), np.array(batch_y)
 
