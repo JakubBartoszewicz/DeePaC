@@ -12,7 +12,7 @@ Documentation can be found here:
 
 ## Installation
 
-### Recommended: virtual environment
+### Recommended: set up an environment
 
 We recomment setting up an isolated `conda` environment:
 ```
@@ -20,14 +20,14 @@ conda create -n my_env
 conda activate my_env
 ```
 
-or a `virtualenv`:
+or, alternatively, a `virtualenv`:
 ```
 virtualenv --system-site-packages my_env
 source my_env/bin/activate
 ```
 
 
-### With conda
+### With conda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
  
 You can install DeePaC with `bioconda`. Set up the [bioconda channel](
@@ -42,21 +42,23 @@ You can also install DeePaC with `pip`:
 ```
 pip install deepac
 ```
+Note: TensorFlow 2.0 is not yet supported.
 
 ### GPU support
 
 To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu from the `defaults` channel before deepac:
 ```
 conda remove tensorflow
-conda install -c defaults tensorflow-gpu 
+conda install -c defaults tensorflow-gpu=1.* 
 conda install deepac
 ```
+Note: TensorFlow 2.0 is not yet supported.
 
 If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
 you can do the same as above:
 ```
 pip uninstall tensorflow
-pip install tensorflow-gpu
+pip install tensorflow-gpu==1.*
 ```
 
 ### Optional: run tests
@@ -90,7 +92,7 @@ deepac predict -s -g 1 input.fasta
 ```
 
 The rapid and the sensitive models are trained to predict pathogenic potentials of novel bacterial species.
-For details, see <https://www.biorxiv.org/content/10.1101/535286v2>.
+For details, see <https://doi.org/10.1093/bioinformatics/btz541> or <https://www.biorxiv.org/content/10.1101/535286v3>.
 
 To quickly filter your data according to predicted pathogenic potentials, you can use:
 ```
