@@ -1,5 +1,13 @@
 # Read in data
 all.vhdbd <- read.delim("virushostdb.daily.tsv")
+
+temporal <- TRUE
+
+if (temporal) {
+	old.vhdbd <- read.delim("2019/virushostdb.daily.tsv")
+	all.vhdbd <- all.vhdbd[!(all.vhdbd$virus.tax.id %in% old.vhdbd$virus.tax.id),]
+}
+
 # Delete record(s) with Variola as host name (Variola is both the virus and a fish), with "root" and empty host info
 all.vhdbd <- all.vhdbd[!(all.vhdbd[,"host.name"] %in% c("Variola", "root", "", NA)), ]
 # Delete viroids
@@ -43,9 +51,12 @@ n.human.cho <- n.human.cho[!duplicated(n.human.cho[,"virus.tax.id"]),]
 n.chordata.met <- n.chordata.met[!duplicated(n.chordata.met[,"virus.tax.id"]),]
 n.metazoa.euk <- n.metazoa.euk[!duplicated(n.metazoa.euk[,"virus.tax.id"]),]
 n.eukarya.all <- n.eukarya.all[!duplicated(n.eukarya.all[,"virus.tax.id"]),]
+n.human.all <- n.human.all[!duplicated(n.human.all[,"virus.tax.id"]),]
 
 saveRDS(object = human, file = "IMG_assemblies_human.rds")
 saveRDS(object = n.human.cho, file = "IMG_assemblies_chordata.rds")
 saveRDS(object = n.chordata.met, file = "IMG_assemblies_metazoa.rds")
 saveRDS(object = n.metazoa.euk, file = "IMG_assemblies_eukarya.rds")
 saveRDS(object = n.eukarya.all, file = "IMG_assemblies_neukarya.rds")
+
+saveRDS(object = n.human.all, file = "IMG_assemblies_all.rds")
