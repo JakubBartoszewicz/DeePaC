@@ -150,8 +150,12 @@ for fragments_file in os.listdir(args.dir_fragmented_genomes):
             if not seq_name in genome_patho_dict:
                 genome_patho_dict[seq_name] = np.zeros(contig_len)
                 genome_read_counter_dict[seq_name] = np.zeros(contig_len)
-
-            genome_patho_dict[seq_name][start:end] += scores_nt[fragment_idx, start-int(start_f):end-int(start_f)]
+            try:
+                genome_patho_dict[seq_name][start:end] += scores_nt[fragment_idx, start-int(start_f):end-int(start_f)]
+            except ValueError as err:
+                print(err)
+                print("Error. Please check if the genome length matches its description in the .genome/.gff3 file.")
+                break
             genome_read_counter_dict[seq_name][start:end] += 1
 
         c = 0
