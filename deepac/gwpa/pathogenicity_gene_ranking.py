@@ -14,6 +14,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--patho_dir", required=True, help="Directory containing the pathogenicity scores over all genomic regions per species (.bedgraph)")
 parser.add_argument("-g", "--gff_dir", required=True, help="Directory containing the annotation data of the species (.gff)")
 parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
+parser.add_argument('-x', '--extended', dest='extended', action='store_true', help='Check for multiple CDSs per gene.')
+
 args = parser.parse_args()
 
 
@@ -25,6 +27,10 @@ def featuretype_filter(feature, featuretype):
 
     if feature[2] == 'gene':
         if feature.attrs.get('gene', None) == featuretype:
+            return True
+
+    if feature[2] == 'CDS':
+        if feature.attrs.get('product', None) == featuretype:
             return True
 
     elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
@@ -55,7 +61,7 @@ def compute_gene_pathogenicity(filtered_gff):
 
 #for each species do
 for gff_file in os.listdir(args.gff_dir):
-    if gff_file.endswith(".gff"):
+    if gff_file.endswith(".gff") or gff_file.endswith(".gff3"):
         print("Processing " + gff_file + " ...")
         gff = pybedtools.BedTool(args.gff_dir + "/" + gff_file)
         bioproject_id = os.path.splitext(os.path.basename(gff_file))[0]
@@ -66,6 +72,9 @@ for gff_file in os.listdir(args.gff_dir):
             if feature[2] == 'gene':
                 if 'gene' in feature.attrs:
                     all_feature_types.append(feature.attrs['gene'])
+            if args.extended and feature[2] == 'CDS':
+                if 'product' in feature.attrs:
+                    all_feature_types.append(feature.attrs['product'])
             elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
                 if 'product' in feature.attrs:
                     all_feature_types.append(feature.attrs['product'])
