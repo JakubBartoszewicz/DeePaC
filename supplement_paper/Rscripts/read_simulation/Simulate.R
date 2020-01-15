@@ -67,7 +67,13 @@ if (Do.Clean){
         if (file.info(tempFasta)$size > 0){
             system(paste("cat", tempFasta, ">", f))
         } else {
-            cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the original file.\n"))
+            cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the longest contig.\n"))
+            status = system(paste("bioawk -cfastx 'length($seq) > max_length {max_length = length($seq); max_name=$name; max_comment=$comment; max_seq = $seq} END{print \">\"max_name \" \" max_comment;print max_seq}'",f,">",tempFasta ) )
+            if (file.info(tempFasta)$size > 0){
+                system(paste("cat", tempFasta, ">", f))
+            } else {
+                cat(paste("ERROR\n"))
+            }
         }
         file.remove(tempFasta)
     }
@@ -93,7 +99,13 @@ if (Do.Clean){
         if (file.info(tempFasta)$size > 0){
             system(paste("cat", tempFasta, ">", f))
         } else {
-            cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the original file.\n"))
+             cat(paste0("WARNING: all contigs of ", basename(f), " are shorter than ", min.contig, ". Using the longest contig.\n"))
+             status = system(paste("bioawk -cfastx 'length($seq) > max_length {max_length = length($seq); max_name=$name; max_comment=$comment; max_seq =     $seq} END{print \">\"max_name \" \" max_comment;print max_seq}'",f,">",tempFasta ) )
+             if (file.info(tempFasta)$size > 0){
+                 system(paste("cat", tempFasta, ">", f))
+             } else {
+                 cat(paste("ERROR\n"))
+             }
         }
         file.remove(tempFasta)
     }
