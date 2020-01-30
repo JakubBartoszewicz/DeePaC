@@ -1,7 +1,7 @@
 set.seed(0)
 library(stringr)
 
-date.postfix.img <- "_170418"
+date.postfix.img <- "_neukarya"
 random.best <- FALSE
 
 # no of folds to generate
@@ -12,6 +12,8 @@ fold_names <- paste0("fold", 1:k)
 download_format = ".fna"
 # no of folds to download
 k_download <- 1
+# generate urls
+urls <- FALSE
 
 IMG.all <- readRDS(paste0("IMG_assemblies",date.postfix.img,".rds"))
 IMG.all$assembly_level <- factor(IMG.all$assembly_level,levels(IMG.all$assembly_level), ordered = TRUE)
@@ -87,9 +89,13 @@ Species_HP_trainval <- setdiff(Species_HP,Species_HP_done)
 Species_NP_trainval <- setdiff(Species_NP,Species_NP_done)
 
 fold_val_sizes_HP <- sapply(1:k, function(i) {floor(length(Species_HP_trainval)/k)})
-fold_val_sizes_HP[1:(length(Species_HP_trainval) %% k)] <- fold_val_sizes_HP[1:(length(Species_HP_trainval) %% k)] + 1
+if(length(Species_HP_trainval) %% k > 0){
+    fold_val_sizes_HP[1:(length(Species_HP_trainval) %% k)] <- fold_val_sizes_HP[1:(length(Species_HP_trainval) %% k)] + 1
+}
 fold_val_sizes_NP <- sapply(1:k, function(i) {floor(length(Species_NP_trainval)/k)})
-fold_val_sizes_NP[1:(length(Species_NP_trainval) %% k)] <- fold_val_sizes_NP[1:(length(Species_NP_trainval) %% k)] + 1
+if(length(Species_NP_trainval) %% k > 0){
+    fold_val_sizes_NP[1:(length(Species_NP_trainval) %% k)] <- fold_val_sizes_NP[1:(length(Species_NP_trainval) %% k)] + 1
+}
 
 for (i in 1:k) {    
     Species_HP_trainval <- setdiff(Species_HP,Species_HP_done)    
@@ -143,31 +149,33 @@ saveRDS(IMG.all, paste0("IMG_all_folds", date.postfix.img, ".rds"))
 saveRDS(selected, paste0("IMG_", k_download, "_folds", date.postfix.img, ".rds"))
 
 
-# Save urls for downloading
-urls.test.HP <- sapply(as.character(selected$ftp_path[selected$fold1=="test" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-writeLines(urls.test.HP, con = paste0("urls.test.HP.", download_format, ".txt"))
+if(urls){
+    # Save urls for downloading
+    urls.test.HP <- sapply(as.character(selected$ftp_path[selected$fold1=="test" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+    writeLines(urls.test.HP, con = paste0("urls.test.HP.", download_format, ".txt"))
 
-urls.test.NP <- sapply(as.character(selected$ftp_path[selected$fold1=="test" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-writeLines(urls.test.NP, con = paste0("urls.test.NP", download_format, ".txt"))
+    urls.test.NP <- sapply(as.character(selected$ftp_path[selected$fold1=="test" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+    writeLines(urls.test.NP, con = paste0("urls.test.NP", download_format, ".txt"))
 
-for (i in 1:k_download) {  
-    urls.train.HP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="train" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    urls.val.HP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="val" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    writeLines(urls.train.HP, con = paste0("urls.train.HP.", fold_names[i], download_format, ".txt"))
-    writeLines(urls.val.HP, con = paste0("urls.val.HP.", fold_names[i], download_format, ".txt"))
-    
-    urls.train.NP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="train" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    urls.val.NP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="val" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    writeLines(urls.train.NP, con = paste0("urls.train.NP.", fold_names[i], download_format, ".txt"))
-    writeLines(urls.val.NP, con = paste0("urls.val.NP.", fold_names[i], download_format, ".txt"))
-}
+    for (i in 1:k_download) {  
+        urls.train.HP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="train" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        urls.val.HP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="val" & selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        writeLines(urls.train.HP, con = paste0("urls.train.HP.", fold_names[i], download_format, ".txt"))
+        writeLines(urls.val.HP, con = paste0("urls.val.HP.", fold_names[i], download_format, ".txt"))
+        
+        urls.train.NP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="train" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        urls.val.NP <- sapply(as.character(selected$ftp_path[selected[,paste0("fold", i)]=="val" & !selected$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        writeLines(urls.train.NP, con = paste0("urls.train.NP.", fold_names[i], download_format, ".txt"))
+        writeLines(urls.val.NP, con = paste0("urls.val.NP.", fold_names[i], download_format, ".txt"))
+    }
 
-# Save urls for downloading ALL TRAINING STRAINS
-for (i in 1:k_download) {  
-    urls.all.train.HP <- sapply(as.character(IMG.all$ftp_path[IMG.all[,paste0("fold", i)]=="train" & IMG.all$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    writeLines(urls.all.train.HP, con = paste0("urls.all.train.HP.", fold_names[i], download_format, ".txt"))
-    
-    urls.all.train.NP <- sapply(as.character(IMG.all$ftp_path[IMG.all[,paste0("fold", i)]=="train" & !IMG.all$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
-    writeLines(urls.all.train.NP, con = paste0("urls.all.train.NP.", fold_names[i], download_format, ".txt"))
+    # Save urls for downloading ALL TRAINING STRAINS
+    for (i in 1:k_download) {  
+        urls.all.train.HP <- sapply(as.character(IMG.all$ftp_path[IMG.all[,paste0("fold", i)]=="train" & IMG.all$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        writeLines(urls.all.train.HP, con = paste0("urls.all.train.HP.", fold_names[i], download_format, ".txt"))
+        
+        urls.all.train.NP <- sapply(as.character(IMG.all$ftp_path[IMG.all[,paste0("fold", i)]=="train" & !IMG.all$Pathogenic]), function(f){name <- unlist(strsplit(as.character(f), split = "/")); name <- name[length(name)]; return(paste0(f, "/", name, "_genomic", download_format, ".gz"))})
+        writeLines(urls.all.train.NP, con = paste0("urls.all.train.NP.", fold_names[i], download_format, ".txt"))
+    }
 }
 
