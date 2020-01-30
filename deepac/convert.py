@@ -30,7 +30,6 @@ def convert_cudnn(config, saved_model, no_prep):
         model = load_model(saved_model)
         model.save_weights(weights_path)
 
-
     # Load model architecture, device info and weights
     paprconfig = RCConfig(config)
 
