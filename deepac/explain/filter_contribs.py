@@ -14,7 +14,6 @@ from Bio import SeqIO
 
 from shap.explainers.deep import DeepExplainer
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 def get_rf_size(mdl, idx, conv_ids, pool = 2, cstride = 1):
     if idx == 0:
@@ -23,14 +22,13 @@ def get_rf_size(mdl, idx, conv_ids, pool = 2, cstride = 1):
         rf = get_rf_size(mdl, idx-1, conv_ids) + (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
     return rf
 
-def main():
+
+def get_filter_contribs(args):
     """
     Calculates DeepLIFT contribution scores for all neurons in the convolutional layer
     and extract all motifs for which a filter neuron got a non-zero contribution score.
     """
 
-    # parse command line arguments
-    args = parse_arguments()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     if args.w_norm and not args.do_lstm:
@@ -46,7 +44,6 @@ def main():
 
         model.save(norm_path)
         args.model = norm_path
-
 
     # extract some model information
     if args.do_lstm:
@@ -455,51 +452,6 @@ def write_partial_data(filter_id, read_ids, contribution_data, scores_input_pad,
                 file_writer.writerow(row)
 
 
-def parse_arguments():
-    """
-    Parse command line arguments.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
-    parser.add_argument("-b", "--w_norm", action="store_true",
-                        help="Set flag if filter weight matrices should be mean-centered")
-    parser.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
-    parser.add_argument("-N", "--nonpatho_test", required=True,
-                        help="Nonpathogenic reads of the test data set (.fasta)")
-    parser.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the test data set (.fasta)")
-    parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
-    parser.add_argument("-r", "--ref_mode", default="N", choices=['N', 'GC', 'own_ref_file'],
-                        help="Modus to calculate reference sequences")
-    parser.add_argument("-a", "--train_data",
-                        help="Train data (.npy), necessary to calculate reference sequences if ref_mode is 'GC'")
-    parser.add_argument("-F", "--ref_seqs",
-                        help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
-    parser.add_argument("-i", "--inter_neuron", nargs='*', dest="inter_neuron", type=int,
-                        help="Perform calculations for this intermediate neuron only")
-    parser.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
-                        help="Perform calculations for this intermediate layer")
-    parser.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
-                        help="Sequence chunk size")
-    parser.add_argument("-A", "--all-occurrences", dest="all_occurrences", action="store_true",
-                        help="Extract contributions for all occurrences of a filter per read (Default: max only)")
-    parser.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
-                        help="Interpret elements of the LSTM output")
-    partial_group = parser.add_mutually_exclusive_group(required=False)
-    partial_group.add_argument("-p", "--partial", dest="partial", action="store_true",
-                        help="Calculate partial nucleotide contributions per filter")
-    partial_group.add_argument("-e", "--easy_partial", dest="easy_partial", action="store_true",
-                        help="Calculate easy partial nucleotide contributions per filter. "
-                             "Works for the first convolutional layer only.")
-    args = parser.parse_args()
-    if args.ref_mode == "GC" and args.train_data is None:
-        raise ValueError(
-            "Training data (--train_data) is required to build reference sequences with the same GC-content!")
-    if args.ref_mode == "own_ref_file" and args.ref_seqs is None:
-        raise ValueError("File with own reference sequences (--ref_seqs) is missing!")
-
-    return args
-
-
 def get_reference_seqs(args, len_reads):
     """
     Load or create reference sequences for DeepLIFT.
@@ -564,7 +516,3 @@ def normalize_filter_weights(kernel, bias):
             for pos in range(kernel.shape[0]):
                 kernel[pos, :, filter_index] -= np.mean(kernel[pos, :, filter_index])
         return kernel, bias
-
-
-if __name__ == "__main__":
-    main()

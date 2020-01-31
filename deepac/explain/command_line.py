@@ -2,6 +2,13 @@
 A DeePaC explain CLI. Support filter visualization and analysis tools.
 
 """
+from deepac.explain.deepbind_scores import get_deepbind_scores
+from deepac.explain.filter_contribs import get_filter_contribs
+from deepac.explain.filter_ranking import get_filter_ranking
+from deepac.explain.weblogos import get_weblogos
+from deepac.explain.weblogos_extended import get_weblogos_ext
+from deepac.explain.fasta2transfac import fa2transfac
+from deepac.explain.IC_from_transfac import transfac2ic
 
 
 def add_explain_parser(xparser):
@@ -82,7 +89,7 @@ def add_explain_parser(xparser):
                                          "(only required if --weighting is chosen)")
     parser_fa2transfac.set_defaults(func=run_fa2transfac)
 
-    parser_weblogos= explain_subparsers.add_parser('weblogos', help='Get sequence logos.')
+    parser_weblogos = explain_subparsers.add_parser('weblogos', help='Get sequence logos.')
     parser_weblogos.add_argument("-i", "--in_dir", required=True, help="Directory containing motifs per filter")
     parser_weblogos.add_argument("-f", "--file_ext", default=".transfac", choices=['.fasta', '.transfac'],
                                  help="Extension of file format of input files (.fasta or .transfac)")
@@ -103,14 +110,14 @@ def add_explain_parser(xparser):
     parser_xlogos.add_argument("-o", "--out_dir", required=True, help="Output directory")
     parser_xlogos.set_defaults(func=run_xlogos)
 
-    parser_transfac2IC = explain_subparsers.add_parser('transfac2IC', help='Calculate information content '
+    parser_transfac2ic = explain_subparsers.add_parser('transfac2IC', help='Calculate information content '
                                                                            'from transfac files.')
-    parser_transfac2IC.add_argument("-i", "--in_file", required=True, help="File containing all filter motifs "
+    parser_transfac2ic.add_argument("-i", "--in_file", required=True, help="File containing all filter motifs "
                                                                            "in transfac format")
-    parser_transfac2IC.add_argument("-t", "--train", required=True, help="Training data set (.npy) to normalize "
+    parser_transfac2ic.add_argument("-t", "--train", required=True, help="Training data set (.npy) to normalize "
                                                                          "for GC-content")
-    parser_transfac2IC.add_argument("-o", "--out_file", default=True, help="Name of the output file")
-    parser_transfac2IC.set_defaults(func=run_transfac2IC)
+    parser_transfac2ic.add_argument("-o", "--out_file", default=True, help="Name of the output file")
+    parser_transfac2ic.set_defaults(func=run_transfac2IC)
 
     parser_mcompare = explain_subparsers.add_parser('mcompare', help='Compare motifs.')
     parser_mcompare.add_argument("-q", "--in_file1", required=True, help="File containing all filter motifs "
@@ -135,7 +142,7 @@ def add_explain_parser(xparser):
 
 def run_maxact(args):
     """Get DeepBind-like max-activation scores."""
-    print("maxact")
+    get_deepbind_scores(args)
 
 
 def run_fcontribs(args):
@@ -145,12 +152,12 @@ def run_fcontribs(args):
             "Training data (--train_data) is required to build reference sequences with the same GC-content!")
     if args.ref_mode == "own_ref_file" and args.ref_seqs is None:
         raise ValueError("File with own reference sequences (--ref_seqs) is missing!")
-    print("fcontribs")
+    get_filter_contribs(args)
 
 
 def run_franking(args):
     """Generate filter rankings."""
-    print("franking")
+    get_filter_ranking(args)
 
 
 def run_fa2transfac(args):
@@ -158,22 +165,22 @@ def run_fa2transfac(args):
     if args.weighting and args.weight_dir is None:
         raise ValueError(
             "Sequence weighting is selected but the directory containg this data (--weight_dir) is missing!")
-    print("fa2transfac")
+    fa2transfac(args)
 
 
 def run_weblogos(args):
     """Get sequence logos."""
-    print("weblogos")
+    get_weblogos(args)
 
 
 def run_xlogos(args):
     """Get extended sequence logos."""
-    print("xlogos")
+    get_weblogos_ext(args)
 
 
 def run_transfac2IC(args):
     """Calculate information content from transfac files."""
-    print("transfac2IC")
+    transfac2ic(args)
 
 
 def run_mcompare(args):
