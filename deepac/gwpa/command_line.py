@@ -3,6 +3,12 @@ A DeePaC gwpa CLI. Support GWPA tools.
 
 """
 import warnings
+from deepac.gwpa.fragment_genomes import frag_genomes
+from deepac.gwpa.gene_ranking import gene_rank
+from deepac.gwpa.genome_pathogenicity import genome_map
+from deepac.gwpa.nt_contribs import nt_map
+from deepac.gwpa.filter_activations import filter_activations
+from deepac.gwpa.filter_enrichment import filter_enrichment
 
 
 def add_gwpa_parser(gparser):
@@ -66,6 +72,8 @@ def add_gwpa_parser(gparser):
                                     help="Input directory with filter activation values for a species (.bed)")
     parser_fenrichment.add_argument("-g", "--gff", required=True, help="Gff file of species")
     parser_fenrichment.add_argument("-o", "--out_dir", default=".", help="Output directory")
+    parser_fenrichment.add_argument("-l", "--motif_length", default=15, type=int, help="Motif length")
+    parser_fenrichment.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
     parser_fenrichment.set_defaults(func=run_fenrichment)
 
     return gparser
@@ -74,31 +82,31 @@ def add_gwpa_parser(gparser):
 def run_fragment(args):
     """Fragment genomes for analysis."""
     if args.shift > args.read_len:
-        warnings.warn("Attention: Shift (" + str(args.shift) + ") is larger than read length (" + str(args.read_len) +
+        warnings.warn("Shift (" + str(args.shift) + ") is larger than read length (" + str(args.read_len) +
                       ")!")
-    print("fragment")
+    frag_genomes(args)
 
 
 def run_genomemap(args):
     """Generate a genome-wide phenotype potential map."""
-    print("genomemap")
+    genome_map(args)
 
 
 def run_granking(args):
     """Generate gene rankings."""
-    print("granking")
+    gene_rank(args)
 
 
 def run_ntcontribs(args):
     """Generate a genome-wide nt contribution map."""
-    print("ntcontribs")
+    nt_map(args)
 
 
 def run_factiv(args):
     """Get filter activations."""
-    print("factiv")
+    filter_activations(args)
 
 
 def run_fenrichment(args):
     """Run filter enrichment analysis."""
-    print("fenrichment")
+    filter_enrichment(args)

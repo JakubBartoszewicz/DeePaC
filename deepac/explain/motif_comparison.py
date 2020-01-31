@@ -12,7 +12,7 @@ Compare PSSMs of filter motifs.
 '''
 
 
-def main():
+def motif_compare(args):
 
     if float(Bio.__version__) < 1.72:
         raise ValueError("Update your Biopython version to 1.72 (at least in version 1.68 the transfac file read function of Biopython does not work correctly!)")
@@ -25,7 +25,7 @@ def main():
         os.makedirs(args.out_dir)
 
     # load training data to determine background nucleotide content
-    train_samples = np.load("/scratch/seidela/data/train_10e6_data.npy", mmap_mode='r')
+    train_samples = np.load(args.train_data, mmap_mode='r')
     probs = np.mean(np.mean(train_samples, axis=1), axis=0)
     bg = {'A': probs[0], 'C': probs[1], 'G': probs[2], 'T': probs[3]}
 
@@ -97,25 +97,6 @@ def main():
             file_writer.writerow(row)
 
 
-def parse_arguments():
-    # parse command line options
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-q", "--in_file1", required=True, help="File containing all filter motifs in transfac format")
-    parser.add_argument("-t", "--in_file2", required=True, help="File containing all filter motifs in transfac format")
-    parser.add_argument("-e", "--extensively", action="store_true", help="Compare every motif from --in_file1 with "
-                                                                         "every motif from --in_file2; "
-                                                                         "default: compare only motifs with the same ID")
-    parser.add_argument("-r", "--rc", action="store_true", help="Consider RC-complement of a motif")
-    parser.add_argument("-s", "--shift", action="store_true", help="Shift motifs to find best alignment")
-    parser.add_argument("-m", "--min_overlap", type=int, default=5, help="Minimal overlap between two motifs if "
-                                                                         "motifs are shifted to find the best alignment "
-                                                                         "(--shift); default: 5")
-    parser.add_argument("-o", "--out_dir", default=".", help="Output directory")
-    args = parser.parse_args()
-
-    return args
-
-
 def get_motif_similarity(measure, pssm1, pssm2, min_overlap):
     """Compute similarity between two position specific scoring matrices (pssm's)."""
 
@@ -143,7 +124,3 @@ def get_motif_similarity(measure, pssm1, pssm2, min_overlap):
             final_cor, final_p_value, final_offset = cor, p_value, offset
 
     return final_cor, final_p_value, final_offset
-
-
-if __name__ == "__main__":
-    main()

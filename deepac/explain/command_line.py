@@ -9,6 +9,7 @@ from deepac.explain.weblogos import get_weblogos
 from deepac.explain.weblogos_extended import get_weblogos_ext
 from deepac.explain.fasta2transfac import fa2transfac
 from deepac.explain.IC_from_transfac import transfac2ic
+from deepac.explain.motif_comparison import motif_compare
 
 
 def add_explain_parser(xparser):
@@ -124,6 +125,8 @@ def add_explain_parser(xparser):
                                                                          "in transfac format")
     parser_mcompare.add_argument("-t", "--in_file2", required=True, help="File containing all filter motifs "
                                                                          "in transfac format")
+    parser_mcompare.add_argument("-a", "--train_data",
+                        help="Training data (.npy), necessary to calculate background GC content")
     parser_mcompare.add_argument("-e", "--extensively", action="store_true", help="Compare every motif from "
                                                                                   "--in_file1 with "
                                                                                   "every motif from --in_file2; "
@@ -185,4 +188,4 @@ def run_transfac2IC(args):
 
 def run_mcompare(args):
     """Compare motifs."""
-    print("mcompare")
+    motif_compare(args)

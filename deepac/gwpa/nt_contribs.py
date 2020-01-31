@@ -70,114 +70,100 @@ def get_reference_seqs(args, len_reads):
 Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions.
 '''
 
-#parse command line options
-parser = argparse.ArgumentParser()
-parser.add_argument("-m", "--model", required=True, help="Model file (.h5)")
-parser.add_argument("-f", "--dir_fragmented_genomes", required=True, help="Directory containing the fragmented genomes (.fasta)")
-parser.add_argument("-g", "--genomes_dir", required=True, help="Directory containing genomes (.genome)")
-parser.add_argument("-o", "--out_dir", default = ".", help = "Output directory")
-parser.add_argument("-r", "--ref_mode", default="N", choices=['N', 'GC', 'own_ref_file'],
-                    help="Modus to calculate reference sequences")
-parser.add_argument("-a", "--train_data",
-                    help="Train data (.npy), necessary to calculate reference sequences if ref_mode is 'GC'")
-parser.add_argument("-F", "--ref_seqs",
-                    help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
-parser.add_argument("-L", "--read_length", dest="read_length", default=250, type=int,
-                    help="Fragment length")
-args = parser.parse_args()
 
-#create output directory
-if not os.path.exists(args.out_dir):
-    os.makedirs(args.out_dir)
+def nt_map(args):
+    #create output directory
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
 
-mean_scores = []
+    mean_scores = []
 
-ref_samples = get_reference_seqs(args, args.read_length)
-num_ref_seqs = ref_samples.shape[0]
+    ref_samples = get_reference_seqs(args, args.read_length)
+    num_ref_seqs = ref_samples.shape[0]
 
-model = load_model(args.model)
-explainer = DeepExplainer(model, ref_samples)
+    model = load_model(args.model)
+    explainer = DeepExplainer(model, ref_samples)
 
-#for each fragmented genome do
-for fragments_file in os.listdir(args.dir_fragmented_genomes):
+    #for each fragmented genome do
+    for fragments_file in os.listdir(args.dir_fragmented_genomes):
 
-    if fragments_file.endswith(".fasta") or fragments_file.endswith(".fna"):
+        if fragments_file.endswith(".fasta") or fragments_file.endswith(".fna"):
 
-        genome = os.path.splitext(os.path.basename(fragments_file))[0]
-        print("Processing " + genome + " ...")
-        #load fragments in fasta format
-        tokenizer = Tokenizer(char_level=True)
-        tokenizer.fit_on_texts('ACGT')
-        fragments = list(SeqIO.parse(args.dir_fragmented_genomes + "/" + fragments_file, "fasta"))
-        num_fragments = len(fragments)
-        records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
-        #records = records.reshape((records.shape[0], records.shape[2], records.shape[3]))
-        #load predictions per fragment
-        #preds_file = args.dir_fragmented_genomes_preds + "/" + genome + "_predictions.npy"
-        #preds = np.load(preds_file)
+            genome = os.path.splitext(os.path.basename(fragments_file))[0]
+            print("Processing " + genome + " ...")
+            #load fragments in fasta format
+            tokenizer = Tokenizer(char_level=True)
+            tokenizer.fit_on_texts('ACGT')
+            fragments = list(SeqIO.parse(args.dir_fragmented_genomes + "/" + fragments_file, "fasta"))
+            num_fragments = len(fragments)
+            records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
+            #records = records.reshape((records.shape[0], records.shape[2], records.shape[3]))
+            #load predictions per fragment
+            #preds_file = args.dir_fragmented_genomes_preds + "/" + genome + "_predictions.npy"
+            #preds = np.load(preds_file)
 
 
-        # assert num_fragments == len(preds), print("Something went wrong! Number fragments in fasta file and predictions differ ...")
+            # assert num_fragments == len(preds), print("Something went wrong! Number fragments in fasta file and predictions differ ...")
 
-        contribs = explainer.shap_values(records)[0]
-        scores_nt = np.sum(contribs, axis=-1)
+            contribs = explainer.shap_values(records)[0]
+            scores_nt = np.sum(contribs, axis=-1)
 
-        #load genome size
-        genome_info_file = args.genomes_dir + "/" + re.split("_fragmented_genomes", genome)[0] + ".genome"
-        if not os.path.isfile(genome_info_file):
-            print("Skipping " +  genome + " since .genome file is missing!")
-            continue
+            #load genome size
+            genome_info_file = args.genomes_dir + "/" + re.split("_fragmented_genomes", genome)[0] + ".genome"
+            if not os.path.isfile(genome_info_file):
+                print("Skipping " +  genome + " since .genome file is missing!")
+                continue
 
-        genome_info = pd.read_csv(genome_info_file, sep = "\t", index_col = 0, header = None)
+            genome_info = pd.read_csv(genome_info_file, sep = "\t", index_col = 0, header = None)
 
 
 
-        #prepare output table
-        df = pd.DataFrame()
+            #prepare output table
+            df = pd.DataFrame()
 
-        genome_patho_dict = OrderedDict() #save pathogenicity score for each nucleotide of all contigs of that genome
-        genome_read_counter_dict = OrderedDict() #count by how many reads each nucleotide is covered
+            genome_patho_dict = OrderedDict() #save pathogenicity score for each nucleotide of all contigs of that genome
+            genome_read_counter_dict = OrderedDict() #count by how many reads each nucleotide is covered
 
-        #build bed graph file representing pathogenicity over genome
-        for fragment_idx in range(num_fragments):
+            #build bed graph file representing pathogenicity over genome
+            for fragment_idx in range(num_fragments):
 
-            seq_name, start_f, end_f = re.split(":|\.\.", fragments[fragment_idx].id)
-            contig_len = int(genome_info.loc[seq_name])
-            start = max(0,int(start_f))
-            end = min(int(end_f), contig_len)
-            #score = preds[fragment_idx]
+                seq_name, start_f, end_f = re.split(":|\.\.", fragments[fragment_idx].id)
+                contig_len = int(genome_info.loc[seq_name])
+                start = max(0,int(start_f))
+                end = min(int(end_f), contig_len)
+                #score = preds[fragment_idx]
 
-            if not seq_name in genome_patho_dict:
-                genome_patho_dict[seq_name] = np.zeros(contig_len)
-                genome_read_counter_dict[seq_name] = np.zeros(contig_len)
-            try:
-                genome_patho_dict[seq_name][start:end] += scores_nt[fragment_idx, start-int(start_f):end-int(start_f)]
-            except ValueError as err:
-                print(err)
-                print("Error. Please check if the genome length matches its description in the .genome/.gff3 file.")
-                break
-            genome_read_counter_dict[seq_name][start:end] += 1
+                if not seq_name in genome_patho_dict:
+                    genome_patho_dict[seq_name] = np.zeros(contig_len)
+                    genome_read_counter_dict[seq_name] = np.zeros(contig_len)
+                try:
+                    genome_patho_dict[seq_name][start:end] += scores_nt[fragment_idx, start-int(start_f):end-int(start_f)]
+                except ValueError as err:
+                    print(err)
+                    print("Error. Please check if the genome length matches its description in the .genome/.gff3 file.")
+                    break
+                genome_read_counter_dict[seq_name][start:end] += 1
 
-        c = 0
-        for seq_name, genome_read_counter in genome_read_counter_dict.items():
+            c = 0
+            for seq_name, genome_read_counter in genome_read_counter_dict.items():
 
-            #compute mean pathogenicity score per nucleotide
-            genome_patho_dict[seq_name] /= genome_read_counter
+                #compute mean pathogenicity score per nucleotide
+                genome_patho_dict[seq_name] /= genome_read_counter
 
-            #convert array of nucelotde pathogenicity scores to intervals (-> bedgraph format)
-            contig_len = int(genome_info.loc[seq_name])
-            start_interval = 0
-            end_interval = 0
-            score_interval = 0
-            scores = genome_patho_dict[seq_name]
-            interval_starts = np.arange(scores.shape[0], dtype='int32')
-            interval_ends = np.arange(scores.shape[0], dtype='int32') + 1
-            df_s = pd.DataFrame(OrderedDict((('seq_name', [seq_name]*scores.shape[0]), ('start', interval_starts),
-                                           ('end', interval_ends),
-                                           ('score', scores))))
-            df = df.append(df_s, ignore_index=True)
+                #convert array of nucelotde pathogenicity scores to intervals (-> bedgraph format)
+                contig_len = int(genome_info.loc[seq_name])
+                start_interval = 0
+                end_interval = 0
+                score_interval = 0
+                scores = genome_patho_dict[seq_name]
+                interval_starts = np.arange(scores.shape[0], dtype='int32')
+                interval_ends = np.arange(scores.shape[0], dtype='int32') + 1
+                df_s = pd.DataFrame(OrderedDict((('seq_name', [seq_name]*scores.shape[0]), ('start', interval_starts),
+                                               ('end', interval_ends),
+                                               ('score', scores))))
+                df = df.append(df_s, ignore_index=True)
 
-        #save results
-        out_file = args.out_dir + "/" + genome + "_nt_contribs_map.bedgraph"
-        df[['start', 'end']] = df[['start', 'end']].astype(int)
-        df.to_csv(out_file , sep = "\t", index = False, header = False)
+            #save results
+            out_file = args.out_dir + "/" + genome + "_nt_contribs_map.bedgraph"
+            df[['start', 'end']] = df[['start', 'end']].astype(int)
+            df.to_csv(out_file , sep = "\t", index = False, header = False)
