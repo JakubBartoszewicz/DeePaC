@@ -23,6 +23,9 @@ from deepac import builtin_loading
 from deepac.tests import testcalls
 from deepac import __version__
 
+from deepac.explain.command_line import add_explain_parser
+from deepac.gwpa.command_line import add_gwpa_parser
+
 
 def main():
     """Run DeePaC CLI."""
@@ -30,7 +33,6 @@ def main():
     np.random.seed(seed)
     tf.set_random_seed(seed)
     rn.seed(seed)
-
     parse()
 
 
@@ -39,7 +41,7 @@ def parse():
     parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                 "with reverse-complement neural networks.")
     parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
-    subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.')
+    subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
     # create the parser for the "predict" command
     parser_predict = subparsers.add_parser('predict', help='Predict using a trained model.')
@@ -111,6 +113,14 @@ def parse():
     parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
     parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
     parser_test.set_defaults(func=run_tests)
+
+    parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
+    parser_explain = add_explain_parser(parser_explain)
+    parser_explain.set_defaults(func=lambda a: parser_explain.print_help())
+
+    parser_gwpa = subparsers.add_parser('gwpa', help='Run GWPA workflows.')
+    parser_gwpa = add_gwpa_parser(parser_gwpa)
+    parser_gwpa.set_defaults(func=lambda a: parser_gwpa.print_help())
 
     args = parser.parse_args()
 
