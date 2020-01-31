@@ -1,3 +1,7 @@
+"""@package deepac.explain.command_line
+A DeePaC gwpa CLI. Support GWPA tools.
+
+"""
 import warnings
 
 
@@ -68,6 +72,7 @@ def add_gwpa_parser(gparser):
 
 
 def run_fragment(args):
+    """Fragment genomes for analysis."""
     if args.shift > args.read_len:
         warnings.warn("Attention: Shift (" + str(args.shift) + ") is larger than read length (" + str(args.read_len) +
                       ")!")
@@ -75,20 +80,25 @@ def run_fragment(args):
 
 
 def run_genomemap(args):
+    """Generate a genome-wide phenotype potential map."""
     print("genomemap")
 
 
 def run_granking(args):
+    """Generate gene rankings."""
     print("granking")
 
 
 def run_ntcontribs(args):
+    """Generate a genome-wide nt contribution map."""
     print("ntcontribs")
 
 
 def run_factiv(args):
+    """Get filter activations."""
     print("factiv")
 
 
 def run_fenrichment(args):
+    """Run filter enrichment analysis."""
     print("fenrichment")

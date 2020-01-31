@@ -1,4 +1,11 @@
+"""@package deepac.explain.command_line
+A DeePaC explain CLI. Support filter visualization and analysis tools.
+
+"""
+
+
 def add_explain_parser(xparser):
+    """Parse DeePaC explain CLI arguments."""
     explain_subparsers = xparser.add_subparsers(help='DeePaC explain subcommands. See command --help for details.')
 
     parser_maxact = explain_subparsers.add_parser('maxact', help='Get DeepBind-like max-activation scores.')
@@ -127,10 +134,12 @@ def add_explain_parser(xparser):
 
 
 def run_maxact(args):
+    """Get DeepBind-like max-activation scores."""
     print("maxact")
 
 
 def run_fcontribs(args):
+    """GGet DeepLIFT/SHAP filter contribution scores."""
     if args.ref_mode == "GC" and args.train_data is None:
         raise ValueError(
             "Training data (--train_data) is required to build reference sequences with the same GC-content!")
@@ -140,10 +149,12 @@ def run_fcontribs(args):
 
 
 def run_franking(args):
+    """Generate filter rankings."""
     print("franking")
 
 
 def run_fa2transfac(args):
+    """Calculate transfac from fasta files."""
     if args.weighting and args.weight_dir is None:
         raise ValueError(
             "Sequence weighting is selected but the directory containg this data (--weight_dir) is missing!")
@@ -151,16 +162,20 @@ def run_fa2transfac(args):
 
 
 def run_weblogos(args):
+    """Get sequence logos."""
     print("weblogos")
 
 
 def run_xlogos(args):
+    """Get extended sequence logos."""
     print("xlogos")
 
 
 def run_transfac2IC(args):
+    """Calculate information content from transfac files."""
     print("transfac2IC")
 
 
 def run_mcompare(args):
+    """Compare motifs."""
     print("mcompare")
