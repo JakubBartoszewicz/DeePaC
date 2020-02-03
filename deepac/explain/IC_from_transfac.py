@@ -1,5 +1,4 @@
 import math
-import argparse
 import numpy as np
 from Bio.motifs import transfac
 import os

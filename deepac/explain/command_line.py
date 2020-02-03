@@ -2,7 +2,7 @@
 A DeePaC explain CLI. Support filter visualization and analysis tools.
 
 """
-from deepac.explain.deepbind_scores import get_deepbind_scores
+from deepac.explain.deepbind_scores import get_maxact
 from deepac.explain.filter_contribs import get_filter_contribs
 from deepac.explain.filter_ranking import get_filter_ranking
 from deepac.explain.weblogos import get_weblogos
@@ -145,7 +145,7 @@ def add_explain_parser(xparser):
 
 def run_maxact(args):
     """Get DeepBind-like max-activation scores."""
-    get_deepbind_scores(args)
+    get_maxact(args)
 
 
 def run_fcontribs(args):

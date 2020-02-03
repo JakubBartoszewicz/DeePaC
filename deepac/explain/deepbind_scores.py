@@ -2,7 +2,6 @@ import numpy as np
 import time
 import os
 import csv
-import argparse
 
 from keras.models import load_model
 from keras import backend as K
@@ -14,6 +13,33 @@ from functools import partial
 Calculates DeepBind scores for all neurons in the convolutional layer 
 and extract all motifs for which a filter neuron got a positive score.
 """
+
+
+def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, motif_length, test_data_set_name,
+                    out_dir, rc=False):
+    filter_activations = activation_list[:, filter_id]
+    filter_motif_starts = motif_start_list[:, filter_id]
+
+    pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
+    motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i] + motif_length] for i in pos_act_ids]
+    activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
+    # save filter contribution scores
+    filter_act_file = \
+        out_dir + "/filter_activations/deepbind_" + test_data_set_name + "_act_filter_%d.csv" % filter_id
+    with open(filter_act_file, 'a') as csv_file:
+        file_writer = csv.writer(csv_file)
+        for dat in activation_scores:
+            file_writer.writerow([">" + dat[0]])
+            file_writer.writerow([dat[1]])
+            file_writer.writerow([dat[2]])
+
+    filename = out_dir + "/fasta/deepbind_" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_id
+    with open(filename, "a") as output_handle:
+        if rc:
+            SeqIO.write([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc") for m in motifs],
+                        output_handle, "fasta")
+        else:
+            SeqIO.write(motifs, output_handle, "fasta")
 
 
 def get_max_strand(filter_id, dat_fwd, dat_rc):
@@ -34,12 +60,14 @@ def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
     return rf
 
 
-def get_deepbind_scores(args):
+
+def get_maxact(args):
     # Creates the model and loads weights
     model = load_model(args.model)
     print(model.summary())
     do_lstm = args.do_lstm
     if do_lstm:
+        #TODO: pass this
         motif_length = 250
         pad_left = 0
         pad_right = 0
@@ -107,30 +135,7 @@ def get_deepbind_scores(args):
     n = 0
     cores = args.n_cpus
 
-    def get_filter_data(filter_id, activation_list, motif_start_list, rc=False,):
-        filter_activations = activation_list[:, filter_id]
-        filter_motif_starts = motif_start_list[:, filter_id]
 
-        pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
-        motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i] + motif_length] for i in pos_act_ids]
-        activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
-        # save filter contribution scores
-        filter_act_file = \
-            args.out_dir + "/filter_activations/deepbind_" + test_data_set_name + "_act_filter_%d.csv" % filter_id
-        with open(filter_act_file, 'a') as csv_file:
-            file_writer = csv.writer(csv_file)
-            for dat in activation_scores:
-                file_writer.writerow([">" + dat[0]])
-                file_writer.writerow([dat[1]])
-                file_writer.writerow([dat[2]])
-
-        filename = args.out_dir + "/fasta/deepbind_" + test_data_set_name + "_motifs_filter_%d.fasta" % filter_id
-        with open(filename, "a") as output_handle:
-            if rc:
-                SeqIO.write([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc") for m in motifs],
-                            output_handle, "fasta")
-            else:
-                SeqIO.write(motifs, output_handle, "fasta")
 
     # for each read do:
     while n < total_num_reads:
@@ -153,17 +158,25 @@ def get_deepbind_scores(args):
 
         # for each filter do:
         if cores > 1:
-            p = Pool(processes=cores)
+            p = Pool(processes=min(cores, n_filters))
             p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
-            p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1]),
+            p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                          out_dir=args.out_dir),
                   range(n_filters))
-            p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1], rc=True),
+            p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                          out_dir=args.out_dir, rc=True),
                   range(n_filters))
         else:
             list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
-            list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1]),
+            list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                          out_dir=args.out_dir),
                      range(n_filters)))
-            list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1], rc=True),
+            list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                          out_dir=args.out_dir, rc=True),
                      range(n_filters)))
 
         n += chunk_size

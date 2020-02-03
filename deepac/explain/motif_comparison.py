@@ -14,12 +14,6 @@ Compare PSSMs of filter motifs.
 
 def motif_compare(args):
 
-    if float(Bio.__version__) < 1.72:
-        raise ValueError("Update your Biopython version to 1.72 (at least in version 1.68 the transfac file read function of Biopython does not work correctly!)")
-
-    # parse command line arguments
-    args = parse_arguments()
-
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

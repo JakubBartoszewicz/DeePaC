@@ -8,11 +8,12 @@ from deepac import preproc
 from deepac.tests import datagen
 from deepac import builtin_loading
 from deepac import __file__
+from deepac.explain.tests import ExplainTester
 import configparser
 import os
 
 
-def run_tests(n_cpus=8, n_gpus=0):
+def run_tests(n_cpus=8, n_gpus=0, explain=False, all=False):
     """Generate sample data and run all tests."""
     if os.path.exists("deepac-tests"):
         print("Deleting previous test output...")
@@ -28,15 +29,34 @@ def run_tests(n_cpus=8, n_gpus=0):
     print("TEST: Preprocessing data...")
     tester.test_preproc()
     print("TEST: Training...")
-    tester.test_train()
+    tester.test_train(explain)
     print("TEST: Predicting...")
-    tester.test_pred()
-    print("TEST: Evaluating...")
-    tester.test_eval()
-    print("TEST: Converting...")
-    tester.test_convert()
-    print("TEST: Filtering...")
-    tester.test_filter()
+    tester.test_pred(explain)
+    if all or not explain:
+        print("TEST: Evaluating...")
+        tester.test_eval()
+        print("TEST: Converting...")
+        tester.test_convert()
+        print("TEST: Filtering...")
+        tester.test_filter()
+    if all or explain:
+        explainTester = ExplainTester(n_cpus, n_gpus)
+        print("X-TEST: Maxact (DeepBind)...")
+        explainTester.test_maxact()
+        print("X-TEST: Filter contributions (DeepLIFT)...")
+        explainTester.test_fcontribs()
+        print("X-TEST: Filter ranking...")
+        explainTester.test_franking()
+        print("X-TEST: fa2transfac...")
+        explainTester.test_fa2transfac()
+        print("X-TEST: Weblogos...")
+        explainTester.test_weblogos()
+        print("X-TEST: Extended weblogos...")
+        explainTester.test_weblogos_extended()
+        #print("X-TEST: transfac2IC...")
+        #explainTester.test_transfac2ic()
+        #print("X-TEST: Motif comparison...")
+        #explainTester.test_motif_compare()
     print("TEST: OK")
 
 
@@ -65,28 +85,8 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
 
-    def test_train(self):
+    def test_train(self, quick=False):
         """Test training."""
-        print("TEST: Training (sensitive)...")
-        paprconfig = builtin_loading.get_sensitive_training_config(self.n_cpus, self.n_gpus)
-        self.__config_train(paprconfig).train()
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
-                                            "nn-img-sensitive-lstm-e001.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
-                                            "nn-img-sensitive-lstm-e002.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
-                                            "training-img-sensitive-lstm.csv"))), "Training failed."
-
-        print("TEST: Training (rapid)...")
-        paprconfig = builtin_loading.get_rapid_training_config(self.n_cpus, self.n_gpus)
-        self.__config_train(paprconfig).train()
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
-                                            "nn-img-rapid-cnn-e001.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
-                                            "nn-img-rapid-cnn-e002.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
-                                            "training-img-rapid-cnn.csv"))), "Training failed."
-
         print("TEST: Training (custom)...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
@@ -98,6 +98,29 @@ class Tester:
                                             "nn-deepac-test-e002.h5"))), "Training failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "training-deepac-test.csv"))), "Training failed."
+
+        if not quick:
+            print("TEST: Training (rapid)...")
+            paprconfig = builtin_loading.get_rapid_training_config(self.n_cpus, self.n_gpus)
+            self.__config_train(paprconfig).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
+                                                "nn-img-rapid-cnn-e001.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
+                                                "nn-img-rapid-cnn-e002.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
+                                                "training-img-rapid-cnn.csv"))), "Training failed."
+
+            print("TEST: Training (sensitive)...")
+            paprconfig = builtin_loading.get_sensitive_training_config(self.n_cpus, self.n_gpus)
+            self.__config_train(paprconfig).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
+                                                "nn-img-sensitive-lstm-e001.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
+                                                "nn-img-sensitive-lstm-e002.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
+                                                "training-img-sensitive-lstm.csv"))), "Training failed."
+
+
 
     def __config_train(self, paprconfig):
         """Set sample data paths and compile."""
@@ -119,28 +142,30 @@ class Tester:
         paprnet.compile_model()
         return paprnet
 
-    def test_pred(self):
+    def test_pred(self, quick=False):
         """Test predicting."""
-        print("TEST: Predicting (sensitive)...")
-        model = builtin_loading.load_sensitive_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
-        predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                    os.path.join("deepac-tests", "deepac-test-logs", "val-pred-sensitive.npy"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "val-pred-sensitive.npy"))), "Prediction failed."
-
-        print("TEST: Predicting (rapid)...")
-        model = builtin_loading.load_rapid_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
-        predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                    os.path.join("deepac-tests", "deepac-test-logs", "val-pred-rapid.npy"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "val-pred-rapid.npy"))), "Prediction failed."
-
         print("TEST: Predicting (custom)...")
         model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
+
+        if not quick:
+            print("TEST: Predicting (rapid)...")
+            model = builtin_loading.load_rapid_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
+            predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
+                        os.path.join("deepac-tests", "img-rapid-cnn-logs", "val-pred-rapid.npy"))
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
+                                                "val-pred-rapid.npy"))), "Prediction failed."
+
+            print("TEST: Predicting (sensitive)...")
+            model = builtin_loading.load_sensitive_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
+            predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
+                        os.path.join("deepac-tests", "img-sensitive-lstm-logs", "val-pred-sensitive.npy"))
+            assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
+                                                "val-pred-sensitive.npy"))), "Prediction failed."
+
 
     def test_eval(self):
         """Test evaluating."""

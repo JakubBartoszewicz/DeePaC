@@ -19,7 +19,6 @@ def fa2transfac(args):
 	#create output directory
 	if not os.path.exists(args.out_dir):
 		os.makedirs(args.out_dir)
-		os.makedirs(args.out_dir + "/with_Ns")
 
 	#for each convolutional filter
 	for file in os.listdir(args.in_dir):

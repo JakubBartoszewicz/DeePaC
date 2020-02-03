@@ -112,6 +112,11 @@ def parse():
     parser_test = subparsers.add_parser('test', help='Run additional tests.')
     parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
     parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+    explain_group = parser_test.add_mutually_exclusive_group(required=False)
+    explain_group.add_argument('-x', '--explain-gwpa', dest="explain", help="Test intepretability workflows.",
+                               default=False, action="store_true")
+    explain_group.add_argument('-a', '--all', help="Test all functions.",
+                               default=False, action="store_true")
     parser_test.set_defaults(func=run_tests)
 
     parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
@@ -221,7 +226,7 @@ def run_convert(args):
 
 def run_tests(args):
     """Run tests."""
-    testcalls.run_tests(args.n_cpus, args.n_gpus)
+    testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.all)
 
 if __name__ == "__main__":
     main()

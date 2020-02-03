@@ -64,29 +64,42 @@ def get_filter_ranking(args):
 
                 #plot distribution of contribution scores per filter (excluding zeros) as histograms
                 print("Plotting the distribution of the contribution scores of " + filter + ' ...')
+                data = []
+                boxplot_labels = []
                 TN = filter_scores[filter][np.array(y_truth[read_ids[filter]] == 0) & np.array(y_pred[read_ids[filter]] == 0)]
                 TP = filter_scores[filter][np.array(y_truth[read_ids[filter]] == 1) & np.array(y_pred[read_ids[filter]] == 1)]
                 FP = filter_scores[filter][np.array(y_truth[read_ids[filter]] == 0) & np.array(y_pred[read_ids[filter]] == 1)]
                 FN = filter_scores[filter][np.array(y_truth[read_ids[filter]] == 1) & np.array(y_pred[read_ids[filter]] == 0)]
-                if len(TN) > 1: plt.hist(TN, alpha = 0.3, bins = 100, label = "TN", color = "green")
-                if len(TP) > 1: plt.hist(TP, alpha = 0.3, bins = 100, label = "TP", color = "blue")
-                if len(FP) > 1: plt.hist(FP, alpha = 0.3, bins = 100, label = "FP", color = "red")
-                if len(FN) > 1: plt.hist(FN, alpha = 0.3, bins = 100, label = "FN", color = "orange")
+
+                if len(TP) > 1:
+                    plt.hist(TP, alpha=0.3, bins=100, label="TP", color="blue")
+                    data.append(TP)
+                    boxplot_labels.append("TP")
+                if len(TN) > 1:
+                    plt.hist(TN, alpha=0.3, bins=100, label="TN", color="green")
+                    data.append(TN)
+                    boxplot_labels.append("TN")
+                if len(FP) > 1:
+                    plt.hist(FP, alpha=0.3, bins=100, label="FP", color="red")
+                    data.append(FP)
+                    boxplot_labels.append("FP")
+                if len(FN) > 1:
+                    plt.hist(FN, alpha=0.3, bins=100, label="FN", color="orange")
+                    data.append(FN)
+                    boxplot_labels.append("FN")
                 plt.title('distribution of contribution scores of '+filter+'\n(' + args.mode + ')')
                 plt.xlabel("contribution score")
                 plt.ylabel("#reads")
                 plt.legend(loc='upper right',  prop={'size': 10})
-                plt.savefig(out_dir + "/distr_contribution_scores_" + filter + "_wo_zeros_4_classes_"+ args.mode + ".png")
+                plt.savefig(out_dir + "/distr_contribution_scores_" + filter + "_wo_zeros_4_classes_" + args.mode + ".png")
                 plt.gcf().clear()
 
                 #plot distribution of contribution scores per filter (excluding zeros) as boxplots
-                data = [TP, FN, TN, FP]
-                plt.boxplot(data, labels = ["TP", "FN", "TN", "FP"])
-                #plt.title('distribution of contribution scores of '+filter+'\n(' + args.mode + ')')
-                plt.xlabel("contribution score")
-                plt.ylabel("#reads")
-                plt.legend(loc='upper right',  prop={'size': 12})
-                plt.savefig(out_dir + "/boxplots_contribution_scores_" + filter + "_wo_zeros_4_classes_"+ args.mode + ".png")
+                plt.boxplot(data, labels=boxplot_labels)
+
+                plt.title('distribution of contribution scores of '+filter+'\n(' + args.mode + ')')
+                plt.ylabel("contribution score")
+                plt.savefig(out_dir + "/boxplots_contribution_scores_" + filter + "_wo_zeros_4_classes_" + args.mode + ".png")
                 plt.gcf().clear()
 
 

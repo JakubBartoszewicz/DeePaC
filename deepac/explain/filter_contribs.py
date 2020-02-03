@@ -208,7 +208,7 @@ def get_filter_contribs(args):
                                        scores_input_pad = scores_nt_rc, out_dir=args.out_dir,
                                        data_set_name=test_data_set_name, motif_len=motif_length)
         i += chunk_size
-    print("Done "+str(i)+" from "+str(total_num_reads)+" sequences")
+    print("Done "+str(min(i, total_num_reads))+" from "+str(total_num_reads)+" sequences")
 
 
 def get_max_strand(filter_id, dat_fwd, dat_rc):

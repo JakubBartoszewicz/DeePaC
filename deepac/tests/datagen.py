@@ -9,7 +9,7 @@ def __generate_read(gc=0.5, length =250):
     at = 1 - gc
     arr = np.random.choice(['A', 'C', 'G', 'T'], size=length, p=[at/2, gc/2, gc/2, at/2])
     seq = "".join(arr)
-    rec = SeqRecord(Seq(seq), "random seq gc {}%".format(0.5 * 100), '', '')
+    rec = SeqRecord(Seq(seq), "random seq gc {}%".format(gc * 100), '', '')
     return rec
 
 def generate_reads(n, filename, gc=0.5, length =250, append = False):

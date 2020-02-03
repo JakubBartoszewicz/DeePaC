@@ -76,10 +76,7 @@ def nt_map(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
-    mean_scores = []
-
     ref_samples = get_reference_seqs(args, args.read_length)
-    num_ref_seqs = ref_samples.shape[0]
 
     model = load_model(args.model)
     explainer = DeepExplainer(model, ref_samples)
@@ -97,11 +94,6 @@ def nt_map(args):
             fragments = list(SeqIO.parse(args.dir_fragmented_genomes + "/" + fragments_file, "fasta"))
             num_fragments = len(fragments)
             records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
-            #records = records.reshape((records.shape[0], records.shape[2], records.shape[3]))
-            #load predictions per fragment
-            #preds_file = args.dir_fragmented_genomes_preds + "/" + genome + "_predictions.npy"
-            #preds = np.load(preds_file)
-
 
             # assert num_fragments == len(preds), print("Something went wrong! Number fragments in fasta file and predictions differ ...")
 
@@ -129,9 +121,8 @@ def nt_map(args):
 
                 seq_name, start_f, end_f = re.split(":|\.\.", fragments[fragment_idx].id)
                 contig_len = int(genome_info.loc[seq_name])
-                start = max(0,int(start_f))
+                start = max(0, int(start_f))
                 end = min(int(end_f), contig_len)
-                #score = preds[fragment_idx]
 
                 if not seq_name in genome_patho_dict:
                     genome_patho_dict[seq_name] = np.zeros(contig_len)
@@ -144,17 +135,12 @@ def nt_map(args):
                     break
                 genome_read_counter_dict[seq_name][start:end] += 1
 
-            c = 0
             for seq_name, genome_read_counter in genome_read_counter_dict.items():
 
                 #compute mean pathogenicity score per nucleotide
                 genome_patho_dict[seq_name] /= genome_read_counter
 
                 #convert array of nucelotde pathogenicity scores to intervals (-> bedgraph format)
-                contig_len = int(genome_info.loc[seq_name])
-                start_interval = 0
-                end_interval = 0
-                score_interval = 0
                 scores = genome_patho_dict[seq_name]
                 interval_starts = np.arange(scores.shape[0], dtype='int32')
                 interval_ends = np.arange(scores.shape[0], dtype='int32') + 1
