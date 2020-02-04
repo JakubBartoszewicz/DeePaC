@@ -9,11 +9,12 @@ from deepac.tests import datagen
 from deepac import builtin_loading
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
+from deepac.gwpa.tests import GWPATester
 import configparser
 import os
 
 
-def run_tests(n_cpus=8, n_gpus=0, explain=False, all=False):
+def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, all=False):
     """Generate sample data and run all tests."""
     if os.path.exists("deepac-tests"):
         print("Deleting previous test output...")
@@ -22,17 +23,18 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, all=False):
                 os.remove(os.path.join(root, name))
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
-
+    quick = explain or gwpa
     print("TEST: Generating data...")
     datagen.generate_sample_data()
     tester = Tester(n_cpus, n_gpus)
     print("TEST: Preprocessing data...")
     tester.test_preproc()
     print("TEST: Training...")
-    tester.test_train(explain)
-    print("TEST: Predicting...")
-    tester.test_pred(explain)
-    if all or not explain:
+    tester.test_train(quick)
+    if all or explain:
+        print("TEST: Predicting...")
+        tester.test_pred(quick)
+    if all or not quick:
         print("TEST: Evaluating...")
         tester.test_eval()
         print("TEST: Converting...")
@@ -40,23 +42,39 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, all=False):
         print("TEST: Filtering...")
         tester.test_filter()
     if all or explain:
-        explainTester = ExplainTester(n_cpus, n_gpus)
+        explaintester = ExplainTester(n_cpus, n_gpus)
         print("X-TEST: Maxact (DeepBind)...")
-        explainTester.test_maxact()
+        explaintester.test_maxact()
         print("X-TEST: Filter contributions (DeepLIFT)...")
-        explainTester.test_fcontribs()
+        explaintester.test_fcontribs()
         print("X-TEST: Filter ranking...")
-        explainTester.test_franking()
+        explaintester.test_franking()
         print("X-TEST: fa2transfac...")
-        explainTester.test_fa2transfac()
+        explaintester.test_fa2transfac()
         print("X-TEST: Weblogos...")
-        explainTester.test_weblogos()
+        explaintester.test_weblogos()
         print("X-TEST: Extended weblogos...")
-        explainTester.test_weblogos_extended()
+        explaintester.test_weblogos_extended()
         #print("X-TEST: transfac2IC...")
-        #explainTester.test_transfac2ic()
+        #explaintester.test_transfac2ic()
         #print("X-TEST: Motif comparison...")
-        #explainTester.test_motif_compare()
+        #explaintester.test_motif_compare()
+
+    if all or gwpa:
+        gwpatester = GWPATester(n_cpus)
+        print("X-TEST: Fragmenting genomes...")
+        gwpatester.test_fragment()
+        print("X-TEST: Genome-wide phenotype potential map...")
+        gwpatester.test_genomemap()
+        print("X-TEST: Gene ranking...")
+        gwpatester.test_granking()
+        print("X-TEST: Nucleotide contribution map...")
+        gwpatester.test_ntcontribs()
+        print("X-TEST: Filter activations...")
+        gwpatester.test_factiv()
+        print("X-TEST: Filter enrichment...")
+        gwpatester.test_fenrichment()
+
     print("TEST: OK")
 
 
@@ -193,8 +211,8 @@ class Tester:
         """Test filtering."""
         model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_fasta(model, os.path.join("deepac-tests", "sample-val-pos.fasta"),
-                      os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
+                      os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val-pos.npy"))
         filter_fasta(os.path.join("deepac-tests", "sample-val-pos.fasta"),
-                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
-                     os.path.join("deepac-tests", "sample-train-pos-filtered.fasta"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "sample-train-pos-filtered.fasta"))), "Filtering failed."
+                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val-pos.npy"),
+                     os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))), "Filtering failed."

@@ -27,12 +27,12 @@ def featuretype_filter(feature, featuretype):
     return False
 
 
-def subset_featuretypes(gff, featuretype):
+def subset_featuretypes(featuretype, gff):
     result = gff.filter(featuretype_filter, featuretype).saveas()
     return pybedtools.BedTool(result.fn)
 
 
-def count_reads_in_features(bed, features_fn):
+def count_reads_in_features(features_fn, bed):
     """
     Callback function to count reads in features
     """
@@ -110,6 +110,7 @@ def filter_enrichment(args):
                 contingency_table = [[num_hits_feature[idx], num_possible_hits_feature[idx] - num_hits_feature[idx]],
                                      [num_hits_outside_feature[idx],
                                       num_possible_hits_outside_feature[idx] - num_hits_outside_feature[idx]]]
+
                 oddsratio, p_value = fisher_exact(contingency_table,
                                                   alternative="two-sided")  # H1: motif occurence is significantly biased towards coding or noncoding region
                 oddsratio, p_value_c = fisher_exact(contingency_table,

@@ -1,8 +1,6 @@
 import os
-import sys
-import argparse
 from weblogolib import *
-from weblogolib.colorscheme import ColorRule, ColorScheme, SymbolColor, IndexColor
+from weblogolib.colorscheme import ColorRule, ColorScheme
 from weblogolib.color import Color
 from weblogolib import parse_prior
 import csv

@@ -41,6 +41,7 @@ def add_gwpa_parser(gparser):
     parser_granking.add_argument("-o", "--out_dir", default=".", help="Output directory")
     parser_granking.add_argument('-x', '--extended', dest='extended', action='store_true',
                                  help='Check for multiple CDSs per gene.')
+    parser_granking.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
     parser_granking.set_defaults(func=run_granking)
 
     parser_ntcontribs = gwpa_subparsers.add_parser('ntcontribs', help='Generate a genome-wide nt contribution map.')

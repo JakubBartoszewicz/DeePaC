@@ -1,6 +1,6 @@
-import argparse
 import os
-import sys
+from corebio.matrix import Motif
+import weblogolib
 from weblogolib import *
 import numpy as np
 import re
@@ -40,8 +40,6 @@ def get_weblogos(args):
             #load count matrix from transfac file
             elif args.file_ext == ".transfac":
 
-                from corebio.matrix import Motif
-                import weblogolib
                 motif = Motif.read_transfac(fin)
                 prior = weblogolib.parse_prior(str(GC_content), motif.alphabet)
                 try:

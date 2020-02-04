@@ -4,23 +4,28 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import os
 
-def __generate_read(gc=0.5, length =250):
+
+def __generate_read(gc=0.5, length=250, header=None):
     """Generate a random read."""
+    if header is None:
+        header = "random seq gc {}%".format(gc * 100)
     at = 1 - gc
     arr = np.random.choice(['A', 'C', 'G', 'T'], size=length, p=[at/2, gc/2, gc/2, at/2])
     seq = "".join(arr)
-    rec = SeqRecord(Seq(seq), "random seq gc {}%".format(gc * 100), '', '')
+    rec = SeqRecord(Seq(seq), header, '', '')
     return rec
 
-def generate_reads(n, filename, gc=0.5, length =250, append = False):
+
+def generate_reads(n, filename, gc=0.5, length=250, append=False, header=None):
     """Generate random reads to a fasta file."""
-    reads = [__generate_read(gc, length) for i in range(0, n)]
+    reads = [__generate_read(gc, length, header) for i in range(0, n)]
     if append:
         with open(filename, "a") as output_handle:
             SeqIO.write(reads, output_handle, "fasta")
     else:
         with open(filename, "w") as output_handle:
             SeqIO.write(reads, output_handle, "fasta")
+
 
 def generate_sample_data(gc_pos=0.7, gc_neg=0.3, n_train=1024, n_val=1024):
     """Generate a sample random dataset."""
