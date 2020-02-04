@@ -118,7 +118,7 @@ def add_explain_parser(xparser):
     parser_transfac2ic.add_argument("-t", "--train", required=True, help="Training data set (.npy) to normalize "
                                                                          "for GC-content")
     parser_transfac2ic.add_argument("-o", "--out_file", default=True, help="Name of the output file")
-    parser_transfac2ic.set_defaults(func=run_transfac2IC)
+    parser_transfac2ic.set_defaults(func=run_transfac2ic)
 
     parser_mcompare = explain_subparsers.add_parser('mcompare', help='Compare motifs.')
     parser_mcompare.add_argument("-q", "--in_file1", required=True, help="File containing all filter motifs "
@@ -126,7 +126,7 @@ def add_explain_parser(xparser):
     parser_mcompare.add_argument("-t", "--in_file2", required=True, help="File containing all filter motifs "
                                                                          "in transfac format")
     parser_mcompare.add_argument("-a", "--train_data",
-                        help="Training data (.npy), necessary to calculate background GC content")
+                                 help="Training data (.npy), necessary to calculate background GC content")
     parser_mcompare.add_argument("-e", "--extensively", action="store_true", help="Compare every motif from "
                                                                                   "--in_file1 with "
                                                                                   "every motif from --in_file2; "
@@ -181,7 +181,7 @@ def run_xlogos(args):
     get_weblogos_ext(args)
 
 
-def run_transfac2IC(args):
+def run_transfac2ic(args):
     """Calculate information content from transfac files."""
     transfac2ic(args)
 

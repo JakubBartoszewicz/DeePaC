@@ -17,7 +17,7 @@ def filter_activations(args):
     # Creates the model and loads weights
     model = load_model(args.model)
     conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
-    output_layer='conv1d_1'
+    output_layer = 'conv1d_1'
     motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
@@ -31,17 +31,18 @@ def filter_activations(args):
 
     print("Loading test data (.fasta) ...")
     reads = list(SeqIO.parse(args.test_fasta, "fasta"))
-    assert len(reads) == total_num_reads, "Test data in .npy-format and fasta files containing different number of reads!"
+    assert len(reads) == total_num_reads, \
+        "Test data in .npy-format and fasta files containing different number of reads!"
 
     print("Padding reads ...")
     reads = ["N" * pad_left + r + "N" * pad_right for r in reads]
-    #extract genome_id, genomic start and end positions of the reads
+    # extract genome_id, genomic start and end positions of the reads
     reads_info = []
     for r in reads:
         r_info = re.split(">|:|\.\.", r.id)
         reads_info.append([r_info[0], int(r_info[1]), int(r_info[2])])
 
-    #create output directory
+    # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
     # Specify input and output of the network
@@ -56,13 +57,12 @@ def filter_activations(args):
     iterate_rc = K.function([input_img, K.learning_phase()],
                             [layer_output_rc])
 
-
     print("Computing activations ...")
     chunk_size = 1000
     n = 0
     while n < total_num_reads:
         print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
-        samples_chunk = samples[n:n+chunk_size,:,:]
+        samples_chunk = samples[n:n+chunk_size, :, :]
         reads_info_chunk = reads_info[n:n+chunk_size]
 
         # activations = iterate([samples_chunk, 0])[0] #activations.shape = [total_num_reads, len_reads, n_filters]
@@ -74,7 +74,7 @@ def filter_activations(args):
         n_filters = activations_fwd.shape[-1]
         for filter_index in range(n_filters):
 
-            #print("Processing filter " + str(filter_index) + " ...")
+            # print("Processing filter " + str(filter_index) + " ...")
             filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
 
             pos_indices = np.where(activations[:, :, filter_index] > 0)
@@ -88,8 +88,8 @@ def filter_activations(args):
                     continue
                 else:
                     activation_score = activations[read, neuron, filter_index]
-                    rows.append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end, "filter_"+str(filter_index),
-                                 '%.4g' % activation_score])
+                    rows.append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
+                                 "filter_"+str(filter_index), '%.4g' % activation_score])
 
             # sort by sequence and filter start position
             rows.sort(key=itemgetter(0, 1))

@@ -43,19 +43,20 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
     patho_score /= float(total_num_bases)
     return patho_score
 
+
 def gene_rank(args):
-    #create output directory
+    # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
-    #for each species do
+    # for each species do
     for gff_file in os.listdir(args.gff_dir):
         if gff_file.endswith(".gff") or gff_file.endswith(".gff3"):
             print("Processing " + gff_file + " ...")
             gff = pybedtools.BedTool(args.gff_dir + "/" + gff_file)
             bioproject_id = os.path.splitext(os.path.basename(gff_file))[0]
 
-            #extract all feature types (genes, RNAs) from gff file
+            # extract all feature types (genes, RNAs) from gff file
             all_feature_types = []
             for feature in gff:
                 if feature[2] == 'gene':
@@ -75,13 +76,16 @@ def gene_rank(args):
             bedgraph = pybedtools.BedTool(patho_file)
 
             pool = multiprocessing.Pool(processes=args.n_cpus)
-            #filter gff files for feature of interest
+            # filter gff files for feature of interest
             filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
-            #compute mean pathogencity score per feature
-            feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph) for filtered_gff in filtered_gffs]
+            # compute mean pathogencity score per feature
+            feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
+                                       for filtered_gff in filtered_gffs]
 
-            #save results
-            patho_table = pd.DataFrame(OrderedDict( (('feature', all_feature_types), ('bioproject_id', bioproject_id), ('pathogenicity_score', feature_pathogenicities)) ))
-            patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending = False)
-            patho_table.to_csv(args.out_dir +  "/" + bioproject_id + "_feature_pathogenicity.csv" , sep = "\t", index = False)
+            # save results
+            patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
+                                                    ('bioproject_id', bioproject_id),
+                                                    ('pathogenicity_score', feature_pathogenicities))))
+            patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
+            patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv", sep="\t", index=False)
             pool.close()

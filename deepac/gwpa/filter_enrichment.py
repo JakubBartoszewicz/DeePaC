@@ -11,6 +11,7 @@ from functools import partial
 Perform genomic enrichment analysis per filter.
 '''
 
+
 def featuretype_filter(feature, featuretype):
     # CDS
     if feature[2] == featuretype:
@@ -36,8 +37,9 @@ def count_reads_in_features(features_fn, bed):
     """
     Callback function to count reads in features
     """
+    # overlap of at least 5bp (motif_length/3)
     return pybedtools.BedTool(bed).intersect(b=features_fn, stream=True,
-                                             f=1 / 3).count()  ##overlap of at least 5bp (motif_length/3)
+                                             f=1 / 3).count()
 
 
 def count_num_feature_occurences(features_fn):
@@ -80,7 +82,7 @@ def filter_enrichment(args):
         if (bed_file.endswith(".bed.gz") or bed_file.endswith(".bed")) and os.stat(
                 args.bed_dir + "/" + bed_file).st_size > 0:
 
-            filter = re.search("filter_[0-9]+", bed_file).group()
+            c_filter = re.search("filter_[0-9]+", bed_file).group()
             print("Processing " + bed_file + " ...")
             bed = pybedtools.BedTool(args.bed_dir + "/" + bed_file)
 
@@ -106,24 +108,29 @@ def filter_enrichment(args):
 
             for idx in range(len(all_feature_types)):
                 feature_type = all_feature_types[idx]
-                # perform fisher exact test to assess whether motif occurs significantly more often in or outside of feature
+                # perform fisher exact test to assess whether
+                # motif occurs significantly more often in or outside of feature
                 contingency_table = [[num_hits_feature[idx], num_possible_hits_feature[idx] - num_hits_feature[idx]],
                                      [num_hits_outside_feature[idx],
                                       num_possible_hits_outside_feature[idx] - num_hits_outside_feature[idx]]]
 
                 oddsratio, p_value = fisher_exact(contingency_table,
-                                                  alternative="two-sided")  # H1: motif occurence is significantly biased towards coding or noncoding region
+                                                  alternative="two-sided")
+                # H1: motif occurence is significantly biased towards coding or noncoding region
                 oddsratio, p_value_c = fisher_exact(contingency_table,
-                                                    alternative="greater")  # H1: motif occurs significantly more often in coding regions
+                                                    alternative="greater")
+                # H1: motif occurs significantly more often in coding regions
                 oddsratio, p_value_nc = fisher_exact(contingency_table,
-                                                     alternative="less")  # H1: motif occurs significantly more often in noncoding regions
+                                                     alternative="less")
+                # H1: motif occurs significantly more often in noncoding regions
 
-                motif_results.loc[idx] = [filter, bioproject_id, feature_type, num_hits_feature[idx],
+                motif_results.loc[idx] = [c_filter, bioproject_id, feature_type, num_hits_feature[idx],
                                           num_hits_outside_feature[idx], num_possible_hits_feature[idx],
-                                          num_possible_hits_outside_feature[idx], oddsratio, p_value, p_value_c, p_value_nc]
+                                          num_possible_hits_outside_feature[idx],
+                                          oddsratio, p_value, p_value_c, p_value_nc]
 
             # save enrichment results per motif
-            out_file = args.out_dir + "/" + bioproject_id + "_" + filter + ".csv"
+            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + ".csv"
             motif_results.to_csv(out_file, sep="\t", index=False)
             pool.close()
 
@@ -131,19 +138,19 @@ def filter_enrichment(args):
             fisher_q_value_2sided = multipletests(motif_results.fisher_p_value_2sided, alpha=0.05, method="fdr_bh")[1]
             fisher_q_value_feature = multipletests(motif_results.fisher_p_value_feature, alpha=0.05, method="fdr_bh")[1]
             fisher_q_value_outside_feature = \
-            multipletests(motif_results.fisher_p_value_outside_feature, alpha=0.05, method="fdr_bh")[1]
+                multipletests(motif_results.fisher_p_value_outside_feature, alpha=0.05, method="fdr_bh")[1]
 
             # add new columns to data frame
             motif_results['fisher_q_value_2sided'] = fisher_q_value_2sided
             motif_results['fisher_q_value_feature'] = fisher_q_value_feature
             motif_results['fisher_q_value_outside_feature'] = fisher_q_value_outside_feature
 
-            out_file = args.out_dir + "/" + bioproject_id + "_" + filter + "_ext.csv"
+            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_ext.csv"
             # save results
             motif_results.to_csv(out_file, sep="\t", index=False)
 
             # filtering out entries with FDR >= 0.05
-            out_file = args.out_dir + "/" + bioproject_id + "_" + filter + "_sorted_filtered.csv"
+            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_sorted_filtered.csv"
             motif_results = motif_results[motif_results.fisher_q_value_feature < 0.05]
             motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
             if len(motif_results.index):

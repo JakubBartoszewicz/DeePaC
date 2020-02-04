@@ -11,6 +11,7 @@ from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
 
+
 class GWPATester:
     """
     GWPATester class.
@@ -34,34 +35,34 @@ class GWPATester:
         self.__gen_sample(1, 0.3, [9000, 3000, 7000, 1000])
         self.__gen_sample(2, 0.7, [6000, 7000, 3000, 4000])
 
-    def __gen_sample(self, ID, gc, contigs):
-        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=ID)), gc=gc,
-                       length=contigs[0], header="SAMPLE{i}1.1".format(i=ID))
-        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=ID)), gc=gc,
-                       length=contigs[1], header="SAMPLE{i}2.1".format(i=ID), append=True)
-        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=ID)), gc=gc,
-                       length=contigs[2], header="SAMPLE{i}3.1".format(i=ID), append=True)
-        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=ID)), gc=1.0-gc,
-                       length=contigs[3], header="SAMPLE{i}4.1".format(i=ID), append=True)
+    def __gen_sample(self, s_id, gc, contigs):
+        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)), gc=gc,
+                       length=contigs[0], header="SAMPLE{i}1.1".format(i=s_id))
+        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)), gc=gc,
+                       length=contigs[1], header="SAMPLE{i}2.1".format(i=s_id), append=True)
+        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)), gc=gc,
+                       length=contigs[2], header="SAMPLE{i}3.1".format(i=s_id), append=True)
+        generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)),
+                       gc=1.0 - gc, length=contigs[3], header="SAMPLE{i}4.1".format(i=s_id), append=True)
 
-        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=ID), contigs[0]], ["SAMPLE{i}2.1".format(i=ID), contigs[1]],
-                           ["SAMPLE{i}3.1".format(i=ID), contigs[2]], ["SAMPLE{i}4.1".format(i=ID), contigs[3]]])
-        df.to_csv(os.path.join(self.outpath, "genome", "sample_genome{i}.genome".format(i=ID)), sep="\t",
+        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), contigs[0]], ["SAMPLE{i}2.1".format(i=s_id), contigs[1]],
+                           ["SAMPLE{i}3.1".format(i=s_id), contigs[2]], ["SAMPLE{i}4.1".format(i=s_id), contigs[3]]])
+        df.to_csv(os.path.join(self.outpath, "genome", "sample_genome{i}.genome".format(i=s_id)), sep="\t",
                   header=False, index=False)
 
-        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=ID), "Genbank", "region", "1", contigs[0], ".", "+", ".",
-                            "ID=SAMPLE{i}1.1".format(i=ID)],
-                           ["SAMPLE{i}1.1".format(i=ID), "Genbank", "gene", "51", contigs[0]-50, ".", "+", ".",
+        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), "Genbank", "region", "1", contigs[0], ".", "+", ".",
+                            "ID=SAMPLE{i}1.1".format(i=s_id)],
+                           ["SAMPLE{i}1.1".format(i=s_id), "Genbank", "gene", "51", contigs[0] - 50, ".", "+", ".",
                             "ID=gene-EXP1;gene=EXP1;product=EXP1"],
-                           ["SAMPLE{i}2.1".format(i=ID), "Genbank", "region", "1", contigs[1], ".", "+", ".",
-                            "ID=SAMPLE{i}2.1".format(i=ID)],
-                           ["SAMPLE{i}3.1".format(i=ID), "Genbank", "region", "1", contigs[2], ".", "+", ".",
-                            "ID=SAMPLE{i}3.1".format(i=ID)],
-                           ["SAMPLE{i}4.1".format(i=ID), "Genbank", "region", "1", contigs[3], ".", "+", ".",
-                            "ID=SAMPLE{i}4.1".format(i=ID)],
-                           ["SAMPLE{i}4.1".format(i=ID), "Genbank", "gene", "51", contigs[3]-50, ".", "+", ".",
-                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i}".format(i=ID)]])
-        df.to_csv(os.path.join(self.outpath, "genome_gff3", "sample_genome{i}.gff3".format(i=ID)), sep="\t",
+                           ["SAMPLE{i}2.1".format(i=s_id), "Genbank", "region", "1", contigs[1], ".", "+", ".",
+                            "ID=SAMPLE{i}2.1".format(i=s_id)],
+                           ["SAMPLE{i}3.1".format(i=s_id), "Genbank", "region", "1", contigs[2], ".", "+", ".",
+                            "ID=SAMPLE{i}3.1".format(i=s_id)],
+                           ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "region", "1", contigs[3], ".", "+", ".",
+                            "ID=SAMPLE{i}4.1".format(i=s_id)],
+                           ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "gene", "51", contigs[3] - 50, ".", "+", ".",
+                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i}".format(i=s_id)]])
+        df.to_csv(os.path.join(self.outpath, "genome_gff3", "sample_genome{i}.gff3".format(i=s_id)), sep="\t",
                   header=False, index=False)
 
     def test_fragment(self):
@@ -87,7 +88,8 @@ class GWPATester:
 
         args = Namespace(dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          dir_fragmented_genomes_preds=os.path.join(self.outpath, "genome_frag_pred"),
-                         genomes_dir=os.path.join(self.outpath, "genome"), out_dir=os.path.join(self.outpath, "bedgraph"))
+                         genomes_dir=os.path.join(self.outpath, "genome"),
+                         out_dir=os.path.join(self.outpath, "bedgraph"))
         genome_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_pathogenicity.bedgraph"))), \
@@ -108,18 +110,28 @@ class GWPATester:
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
             "Nt contribs failed."
 
+        args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
+                         genomes_dir=os.path.join(self.outpath, "genome"),
+                         train_data=os.path.join("deepac-tests", "sample_train_data.npy"),
+                         out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250)
+        nt_map(args)
+        assert (os.path.isfile(os.path.join(self.outpath, "bedgraph_gc",
+                                            "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
+            "Nt contribs failed."
+
     def test_factiv(self):
         args = Namespace(model=self.model,
                          test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
-                         test_fasta=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.fasta"),
-                         out_dir=os.path.join(self.outpath,"factiv"))
+                         test_fasta=os.path.join(self.outpath, "genome_frag",
+                                                 "sample_genome2_fragmented_genomes.fasta"),
+                         out_dir=os.path.join(self.outpath, "factiv"))
         filter_activations(args)
         assert (os.path.isfile(os.path.join(self.outpath, "factiv",
                                             "sample_genome2_fragmented_genomes_filter_31.bed"))), \
             "Factiv failed."
 
     def test_fenrichment(self):
-        args = Namespace(bed_dir=os.path.join(self.outpath,"factiv"),
+        args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),
                          motif_length=15, n_cpus=self.n_cpus)

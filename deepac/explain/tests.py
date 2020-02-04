@@ -25,7 +25,6 @@ class ExplainTester:
         self.test_data = os.path.join("deepac-tests", "sample_train_data.npy")
         self.outpath = os.path.join("deepac-tests", "explain")
 
-
     def test_maxact(self):
         args = Namespace(model=self.model, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "maxact"),
@@ -63,8 +62,9 @@ class ExplainTester:
         assert (os.path.isfile(os.path.join(self.outpath, "franking", "original",
                                             "ranking_filter_4_classes_patho_filter_original.txt"))), \
             "Franking failed."
-        assert (os.path.isfile(os.path.join(self.outpath, "franking", "original",
-                                            "boxplots_contribution_scores_filter_31_wo_zeros_4_classes_original.png"))), \
+        assert (os.path.isfile(
+            os.path.join(self.outpath, "franking", "original",
+                         "boxplots_contribution_scores_filter_31_wo_zeros_4_classes_original.png"))), \
             "Franking failed."
         assert (os.path.isfile(os.path.join(self.outpath, "franking", "original",
                                             "distr_contribution_scores_filter_31_wo_zeros_4_classes_original.png"))), \
@@ -104,8 +104,9 @@ class ExplainTester:
         args = Namespace(fasta_dir=fasta_dir, scores_dir=scores_dir, logo_dir=logo_dir,
                          train_data=self.test_data, out_dir=out_dir)
         get_weblogos_ext(args)
-        assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "weblogos_ext",
-                                            "weblogo_extended_sample_train_data_motifs_filter_31_seq_weighting.jpeg"))),\
+        assert (os.path.isfile(
+            os.path.join(self.outpath, "fcontribs", "weblogos_ext",
+                         "weblogo_extended_sample_train_data_motifs_filter_31_seq_weighting.jpeg"))),\
             "Extended weblogos failed."
 
     def test_transfac2ic(self):
@@ -120,9 +121,9 @@ class ExplainTester:
 
     def test_motif_compare(self):
         in_file1 = os.path.join(self.outpath, "fcontribs", "transfac",
-                               "sample_train_data_motifs_filter_31.transfac")
+                                "sample_train_data_motifs_filter_31.transfac")
         in_file2 = os.path.join(self.outpath, "maxact", "transfac_w",
-                               "sample_train_data_motifs_filter_31_seq_weighting.transfac")
+                                "sample_train_data_motifs_filter_31_seq_weighting.transfac")
         out_dir = os.path.join(self.outpath, "fcontribs", "motif_compare")
         args = Namespace(in_file1=in_file1,
                          in_file2=in_file2,
@@ -133,4 +134,4 @@ class ExplainTester:
                          shift=False,
                          min_overlap=5)
         motif_compare(args)
-        #assert (os.path.isfile(out_dir)), "Motif comparison failed."
+        # assert (os.path.isfile(out_dir)), "Motif comparison failed."

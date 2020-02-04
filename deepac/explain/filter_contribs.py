@@ -1,8 +1,6 @@
-import argparse
 import os
 import csv
 import numpy as np
-import sys
 import re
 
 from keras.models import load_model
@@ -15,11 +13,12 @@ from Bio import SeqIO
 from shap.explainers.deep import DeepExplainer
 
 
-def get_rf_size(mdl, idx, conv_ids, pool = 2, cstride = 1):
+def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
     if idx == 0:
         rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
     else:
-        rf = get_rf_size(mdl, idx-1, conv_ids) + (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
+        rf = get_rf_size(mdl, idx-1, conv_ids) +\
+             (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
     return rf
 
 
@@ -47,7 +46,8 @@ def get_filter_contribs(args):
 
     # extract some model information
     if args.do_lstm:
-        conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Bidirectional" in str(layer)][args.inter_layer - 1]
+        conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
+                          if "Bidirectional" in str(layer)][args.inter_layer - 1]
         n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[-1]
         motif_length = 250
         pad_left = 0
@@ -150,10 +150,9 @@ def get_filter_contribs(args):
             dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
                                       input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                       max_only=max_only) for i in range(n_filters)]
-        if max_only:
-            dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
 
         if max_only:
+            dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
             contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
         else:
             contrib_dat_fwd, motif_dat_fwd = list(zip(*dat_fwd))
@@ -175,13 +174,15 @@ def get_filter_contribs(args):
                                             node=0, ref_samples=ref_samples,
                                             contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                             input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm) for i in filter_range]
+                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                               for i in filter_range]
 
             partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
                                            node=1, ref_samples=ref_samples,
                                            contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                            input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm) for i in filter_range]
+                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                              for i in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
             partials_nt_fwd = [get_easy_partials(i, model=model, conv_layer_idx=conv_layer_idx, node=0,
@@ -199,13 +200,13 @@ def get_filter_contribs(args):
             print("Saving partial data ...")
             if scores_nt_fwd:
                 for f in filter_range:
-                    write_partial_data(f, read_ids = read_ids_fwd ,contribution_data=contrib_dat_fwd,
-                                       scores_input_pad = scores_nt_fwd, out_dir=args.out_dir,
+                    write_partial_data(f, read_ids=read_ids_fwd, contribution_data=contrib_dat_fwd,
+                                       scores_input_pad=scores_nt_fwd, out_dir=args.out_dir,
                                        data_set_name=test_data_set_name, motif_len=motif_length)
             if scores_nt_rc:
                 for f in filter_range:
-                    write_partial_data(f, read_ids = read_ids_rc ,contribution_data=contrib_dat_rc,
-                                       scores_input_pad = scores_nt_rc, out_dir=args.out_dir,
+                    write_partial_data(f, read_ids=read_ids_rc, contribution_data=contrib_dat_rc,
+                                       scores_input_pad=scores_nt_rc, out_dir=args.out_dir,
                                        data_set_name=test_data_set_name, motif_len=motif_length)
         i += chunk_size
     print("Done "+str(min(i, total_num_reads))+" from "+str(total_num_reads)+" sequences")
@@ -312,8 +313,9 @@ def get_lstm_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False
             motifs.append("")
     return contribution_data, motifs
 
+
 def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
-    #TODO: correct empty data saving when all_occurrences==True. Handled in filter ranking now.
+    # TODO: correct empty data saving when all_occurrences==True. Handled in filter ranking now.
     if filter_id is None:
         return
     if contribution_data[filter_id] is not None and motifs[filter_id] is not None and \
@@ -324,7 +326,7 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
         with open(filter_rel_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file)
             for dat in contribution_data[filter_id]:
-                if len(dat)>0:
+                if len(dat) > 0:
                     file_writer.writerow([">" + dat[0]])
                     file_writer.writerow(dat[1])
                     file_writer.writerow(dat[2])
@@ -369,27 +371,28 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
 
         explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
-        sample = samples_chunk[seq_id,:,:].reshape((1,ref_samples.shape[1], ref_samples.shape[2]))
+        sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
         # Get difference in activation of the intemediate neuron
         if lstm:
             diff = intermediate_diff[seq_id, filter_id]
         else:
-            diff = intermediate_diff[seq_id,contribution_data[filter_id][seq_id][1][0], filter_id]
+            diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
         scores_nt = explainer_nt.shap_values(sample)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
         partials = partials.reshape(partials.shape[1], partials.shape[2])
         # Sum along the channel (nt) axis and pad
         scores_pt_pad = np.sum(partials, axis=1)
-        scores_pt_pad = np.pad(scores_pt_pad, ((pad_left, pad_right)), 'constant', constant_values=0.0)
-        if node==1:
-            scores_pt_pad=scores_pt_pad[::-1]
+        scores_pt_pad = np.pad(scores_pt_pad, (pad_left, pad_right), 'constant', constant_values=0.0)
+        if node == 1:
+            scores_pt_pad = scores_pt_pad[::-1]
         scores_pt_all.append(scores_pt_pad)
 
     return scores_pt_all, read_ids
 
+
 def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data, samples_chunk,
-                 input_reads, intermediate_diff, pad_left, pad_right):
+                      input_reads, intermediate_diff, pad_left, pad_right):
     if filter_id is None:
         return [], []
     num_reads = len(input_reads)
@@ -416,7 +419,7 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
         sample = sample.reshape((1, sample.shape[0], sample.shape[1]))
         sample = sample[:, motif_start:motif_start+motif_length, :]
         # Get difference in activation of the intemediate neuron
-        diff = intermediate_diff[seq_id,contribution_data[filter_id][seq_id][1][0], filter_id]
+        diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
         # Assuming: first layer only, all-zero reference, no nonlinearity, one-hot encoded nucleotides
         # Then: contributions to filter output are equal to the weights
         scores_nt = model.get_layer(index=conv_layer_idx).get_weights()[0][:, :, filter_id]
@@ -426,9 +429,11 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
         # Sum along the channel (nt) axis and pad
         partials = partials.reshape(partials.shape[1], partials.shape[2])
         scores_pt_pad = np.sum(partials, axis=1)
-        pad_right_read = intermediate_diff.shape[1] + pad_right + pad_left - contribution_data[filter_id][seq_id][1][0] - motif_length
+        pad_right_read = \
+            intermediate_diff.shape[1] + pad_right + pad_left - \
+            contribution_data[filter_id][seq_id][1][0] - motif_length
         pad_left_read = contribution_data[filter_id][seq_id][1][0]
-        scores_pt_pad = np.pad(scores_pt_pad, ((pad_left_read, pad_right_read)), 'constant', constant_values=0.0)
+        scores_pt_pad = np.pad(scores_pt_pad, (pad_left_read, pad_right_read), 'constant', constant_values=0.0)
         scores_pt_all.append(scores_pt_pad)
 
     return scores_pt_all, read_ids
@@ -446,7 +451,8 @@ def write_partial_data(filter_id, read_ids, contribution_data, scores_input_pad,
             if len(contribution_data[filter_id][ind]) > 0 and len(scores_input_pad[filter_id][ind]) > 0:
                 scores = scores_input_pad[filter_id][ind]
                 scores = scores.tolist()
-                scores = scores[contribution_data[filter_id][ind][1][0]:(contribution_data[filter_id][ind][1][0] + motif_len)]
+                scores = scores[contribution_data[filter_id][ind][1][0]:(contribution_data[filter_id][ind][1][0] +
+                                                                         motif_len)]
                 row = ['%.4g' % s for s in scores]
                 file_writer.writerow([">" + contribution_data[filter_id][ind][0]])
                 file_writer.writerow(row)

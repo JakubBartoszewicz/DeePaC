@@ -27,7 +27,7 @@ def motif_compare(args):
     with open(args.in_file1) as handle:
         records1 = transfac.read(handle)
 
-	# load all filter motifs from second file
+    # load all filter motifs from second file
     with open(args.in_file2) as handle:
         records2 = transfac.read(handle)
 
@@ -60,7 +60,7 @@ def motif_compare(args):
 
             if args.extensively or pssm1.get("ID") == pssm2.get("ID"):
 
-                #print("Comparing " + pssm1.get("ID") + " with " + pssm2.get("ID") + "...")
+                # print("Comparing " + pssm1.get("ID") + " with " + pssm2.get("ID") + "...")
                 row = [pssm1.get("ID"), pssm2.get("ID")]
 
                 for measure in [pearsonr, spearmanr]:

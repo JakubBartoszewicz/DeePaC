@@ -60,14 +60,13 @@ def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
     return rf
 
 
-
 def get_maxact(args):
     # Creates the model and loads weights
     model = load_model(args.model)
     print(model.summary())
     do_lstm = args.do_lstm
     if do_lstm:
-        #TODO: pass this
+        # TODO: pass this
         motif_length = 250
         pad_left = 0
         pad_right = 0
@@ -135,8 +134,6 @@ def get_maxact(args):
     n = 0
     cores = args.n_cpus
 
-
-
     # for each read do:
     while n < total_num_reads:
 
@@ -171,12 +168,12 @@ def get_maxact(args):
         else:
             list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
             list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
-                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                          out_dir=args.out_dir),
+                             reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                             out_dir=args.out_dir),
                      range(n_filters)))
             list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
-                          reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                          out_dir=args.out_dir, rc=True),
+                             reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
+                             out_dir=args.out_dir, rc=True),
                      range(n_filters)))
 
         n += chunk_size
