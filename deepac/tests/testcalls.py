@@ -14,7 +14,7 @@ import configparser
 import os
 
 
-def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, all=False):
+def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, do_all=False, do_quick=False):
     """Generate sample data and run all tests."""
     if os.path.exists("deepac-tests"):
         print("Deleting previous test output...")
@@ -23,7 +23,7 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, all=False):
                 os.remove(os.path.join(root, name))
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
-    quick = explain or gwpa
+    quick = do_quick or explain or gwpa
     print("TEST: Generating data...")
     datagen.generate_sample_data()
     tester = Tester(n_cpus, n_gpus)
@@ -31,17 +31,17 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, all=False):
     tester.test_preproc()
     print("TEST: Training...")
     tester.test_train(quick)
-    if all or explain:
+    if do_all or explain:
         print("TEST: Predicting...")
         tester.test_pred(quick)
-    if all or not quick:
+    if do_all or not quick:
         print("TEST: Evaluating...")
         tester.test_eval()
         print("TEST: Converting...")
         tester.test_convert()
         print("TEST: Filtering...")
         tester.test_filter()
-    if all or explain:
+    if do_all or explain:
         explaintester = ExplainTester(n_cpus, n_gpus)
         print("X-TEST: Maxact (DeepBind)...")
         explaintester.test_maxact()
@@ -60,7 +60,7 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, all=False):
         #print("X-TEST: Motif comparison...")
         #explaintester.test_motif_compare()
 
-    if all or gwpa:
+    if do_all or gwpa:
         gwpatester = GWPATester(n_cpus)
         print("X-TEST: Fragmenting genomes...")
         gwpatester.test_fragment()
@@ -138,8 +138,6 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
                                                 "training-img-sensitive-lstm.csv"))), "Training failed."
 
-
-
     def __config_train(self, paprconfig):
         """Set sample data paths and compile."""
         paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train_data.npy")
@@ -184,7 +182,6 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
                                                 "val-pred-sensitive.npy"))), "Prediction failed."
 
-
     def test_eval(self):
         """Test evaluating."""
         config = configparser.ConfigParser()
@@ -211,8 +208,10 @@ class Tester:
         """Test filtering."""
         model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_fasta(model, os.path.join("deepac-tests", "sample-val-pos.fasta"),
-                      os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val-pos.npy"))
+                      os.path.join("deepac-tests", "deepac-test-logs",
+                                   "deepac-test-e002-predictions-sample_val-pos.npy"))
         filter_fasta(os.path.join("deepac-tests", "sample-val-pos.fasta"),
-                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val-pos.npy"),
+                     os.path.join("deepac-tests", "deepac-test-logs",
+                                  "deepac-test-e002-predictions-sample_val-pos.npy"),
                      os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))), "Filtering failed."

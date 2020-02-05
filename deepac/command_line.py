@@ -76,7 +76,7 @@ def parse():
     parser_train = subparsers.add_parser('train', help='Train a new model.')
     train_group = parser_train.add_mutually_exclusive_group(required=True)
     train_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
-                               help='Use the sensitive LSTM model.')
+                             help='Use the sensitive LSTM model.')
     train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
     train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
     parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
@@ -113,11 +113,13 @@ def parse():
     parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
     parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
     parser_test.add_argument('-x', '--explain', dest="explain", help="Test explain workflows.",
-                               default=False, action="store_true")
+                             default=False, action="store_true")
     parser_test.add_argument('-p', '--gwpa', dest="gwpa", help="Test gwpa workflows.",
-                               default=False, action="store_true")
+                             default=False, action="store_true")
     parser_test.add_argument('-a', '--all', help="Test all functions.",
-                               default=False, action="store_true")
+                             default=False, action="store_true")
+    parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
+                             default=False, action="store_true")
     parser_test.set_defaults(func=run_tests)
 
     parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
@@ -225,9 +227,11 @@ def run_convert(args):
     config.read(args.config)
     convert_cudnn(config, args.model, args.from_weights)
 
+
 def run_tests(args):
     """Run tests."""
-    testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.gwpa, args.all)
+    testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.gwpa, args.all, args.quick)
+
 
 if __name__ == "__main__":
     main()
