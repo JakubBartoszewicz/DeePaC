@@ -6,23 +6,31 @@
 # see http://www.ncbi.nlm.nih.gov/books/NBK279675/ and http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3848038/
 
 require(stringr, quietly = T)
-
-MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=T){
+options(warn=1)
+MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL){
 
   if(groundTruth == T){
     query_acc <- sapply(strsplit(as.character(Blast$Query),"[/]"), function(x) tail(x,1))
     query_acc <- str_replace(string=query_acc, pattern="\\.fq.*", replacement="")
     # map to IMG and extract species and label
     Query2IMG <- match(query_acc,as.character(IMGdata$assembly_accession))
-    Query_Species <- IMGdata$Species[Query2IMG]
+    Query_Species <- as.character(IMGdata$Species)[Query2IMG]
     Query_Label <- IMGdata$Pathogenic[Query2IMG]
   }
 
-  myReferences_acc <- str_replace(string=as.character(Blast$Target), pattern="\\|.*", replacement="")
+  # myReferences_acc <- str_replace(string=as.character(Blast$Target), pattern=".*_", replacement="")
+  myReferences <- str_replace(string=as.character(Blast$Target), pattern="^._", replacement="")
+  if(use.suppTable){
+    reptable <- read.table(suppTable)
+    ids_right = as.character(reptable$V2)
+    names(ids_right) <- as.character(reptable$V1)
+    myReferences <- ids_right[myReferences]
+  }
+  myReferences_acc = sapply(1:length(myReferences), function(x){IMGdata[grepl(pattern = myReferences[x], x = IMGdata$refseq.id, fixed = T),"assembly_accession"]})
 
   # map to IMG and extract species and label
   Match2IMG <- match(myReferences_acc,as.character(IMGdata$assembly_accession))
-  Matched_Species <- IMGdata$Species[Match2IMG]
+  Matched_Species <- as.character(IMGdata$Species)[Match2IMG]
   Matched_Label <- IMGdata$Pathogenic[Match2IMG]
 
   # check if multiple alignments
@@ -42,15 +50,16 @@ MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=T){
   return(myData)
 }
 
-
-HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_ROGAL"
+HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_virS"
 ProjectFolder <-  "PathogenReads"
 WorkingDirectory <- "HP_NHP"
 # Choose test folder
 ReadType <- "Left_250bp"
 Fold <- 1
 
-IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"IMG_1_folds_170418_sizes.rds") )
+IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"VHDB_all.rds") )
+suppTable = "~/SCRATCH_NOBAK/blastrepair/ids_tab"
+use.suppTable = T
 
 Do.BuildDB <- T
 Do.RunBlast <- T
@@ -59,7 +68,7 @@ Do.ProcessBlast <- T
 Do.AllStrains <- F
 
 # multi core
-Cores = 45
+Cores = 100
 
 
 # load libraries functions and databases
@@ -120,50 +129,50 @@ if(Do.AllStrains == T) {
   DBOutput <- file.path(DBdir,paste("AllStrains_fold",Fold, sep=""))
   MappingFolder <- "AllStrains"
 } else {
-  DBOutput <- file.path(DBdir,paste("AllTrainingGenomes_fold",Fold, sep=""))
+  DBOutput <- file.path(DBdir,paste("AllTrainingGenomes_fold",Fold,sep=""))
   MappingFolder <- "AllTrainingGenomes"
 }
 
-dir.create(file.path(Path2TestFiles,"Blast"))  
+dir.create(file.path(Path2TestFiles,"Blast"))
 
 # abort if exists already
 dir.create(file.path(Path2TestFiles,"Blast",MappingFolder))
 
 # write log
 LogFile <- file.path(Path2TestFiles,"Blast",MappingFolder,"Log.txt")
-sink(file = file.path(Path2TestFiles,"Blast",MappingFolder,"ScreenOutput.txt"), append = T, type = "output", split = T)  
+sink(file = file.path(Path2TestFiles,"Blast",MappingFolder,"ScreenOutput.txt"), append = T, type = "output", split = T)
 
 
 if(Do.RunBlast ==T) {
 
   # find all read files
   ReadFiles <- list.files(Path2TestFiles,pattern="fa$",full.names = T)
-  
+
   write(paste("Starting blast alignment on",Sys.time()),file = LogFile, append = F)
   print(paste("New run on",date()))
-  
+
   # Options
   Options <- "-task dc-megablast" # for inter-species comparisons
   # Options <- "-task blastn" # the traditional program used for inter-species comparisons
-  
+
   # loop over all read files
-  
+
   StartTime <- proc.time()
-  
-  Check <-  foreach(i = 1:length(ReadFiles)) %dopar% {
+
+  Check <-  foreach(i = 1:length(ReadFiles)) %do% {
     print(paste("Processing item",i,":",ReadFiles[i]))
-  
+
     InFile <- ReadFiles[i]
     OutFile <- file.path(Path2TestFiles,"Blast",MappingFolder,sub("fa","blast",tail(strsplit(ReadFiles[i],"[/]")[[1]],1)) )
-    
-    Time <- system.time( system(paste("blastn -outfmt 6 -max_target_seqs 1",Options,"-db",DBOutput,"-query",InFile,"-out",OutFile) ) )
+
+    Time <- system.time( system(paste("blastn -outfmt 6 -max_target_seqs 1 -num_threads ",Cores, " ", Options,"-db",DBOutput,"-query",InFile,"-out",OutFile) ) )
     write(paste("Blast alignment of file",InFile,"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
-    
+
     return(file.exists(OutFile))
   }
-  
+
   EndTime <- proc.time()
-  
+
   print(paste("Blast alignment took",(EndTime[3]-StartTime[3])/60,"min") )
   print("---Finito")
 
@@ -175,41 +184,42 @@ if(Do.RunBlast ==T) {
 if(Do.ProcessBlast == T) {
   # load functions
   BlastFiles <- list.files(file.path(Path2TestFiles,"Blast",MappingFolder),pattern = "blast$", full.names = T)
-  
+
   StartTime <- proc.time()
-  
-  Check <- foreach(i = 1:length(BlastFiles)) %dopar% {
-    
+
+  Check <- foreach(i = 1:length(BlastFiles)) %do% {
+
     print(paste("Processing file",i))
-      
+
     Time1 <- proc.time()
-    
+
     Blast <- read.table(BlastFiles[i])
     colnames(Blast) <- c("Query","Target","PercentIdentity","Alignment_length","mismatches","gap_opens","query_Start","query_End","target_Start","target_End","Evalue","BitScore")
-  
+
     # remove secondary hits
     Dups <- which(duplicated(Blast$Query))
-    if(length(Dups>0) )Blast <- Blast[-Dups,]  
-  
+    if(length(Dups>0) )Blast <- Blast[-Dups,]
+
     # Match to IMG
-    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata)
-  
+    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable)
+
     Time <- proc.time() - Time1
     write(paste("Blast analysis of file",BlastFiles[i],"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
-    
+
     saveRDS(Blast_matched,sub("[.]blast","_matched.rds",BlastFiles[i]))
-  
+
     return(file.exists(sub("[.]blast","_matched.rds",BlastFiles[i]))  )
-  
+
   }
-  
+
   EndTime <- proc.time()
-  
+
   print(paste("Blast Analysis took",(EndTime[3]-StartTime[3])/60,"min") )
 
 }
-
+warnings()
 sink()
+
 
 
 
