@@ -1,9 +1,9 @@
 import os
-from corebio.matrix import Motif
-from weblogolib import *
-from weblogolib.colorscheme import ColorRule, ColorScheme
-from weblogolib.color import Color
-from weblogolib import parse_prior
+from weblogo.matrix import Motif
+from weblogo import *
+from weblogo.colorscheme import ColorRule, ColorScheme
+from weblogo.color import Color
+from weblogo import parse_prior
 import csv
 import re
 import numpy as np

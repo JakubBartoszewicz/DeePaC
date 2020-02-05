@@ -16,7 +16,7 @@ Either count each sequence once or weight count by DeepLIFT score a filter obtai
 
 def weighted_count(instances_obj, m_weights):
     weighted_counts = {}
-    for letter in instances_obj.alphabet.letters:
+    for letter in instances_obj.alphabet:
         weighted_counts[letter] = [0] * instances_obj.length
     for idx, instance in enumerate(instances_obj):
         for position, letter in enumerate(instance):

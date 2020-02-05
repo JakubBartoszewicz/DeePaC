@@ -1,4 +1,4 @@
-biopython==1.73
+biopython==1.76
 h5py==2.9.0
 Keras==2.2.4
 Keras-Applications==1.0.7
@@ -14,7 +14,7 @@ statsmodels==0.10.0
 shap==0.29.2
 tensorboard==1.13.0
 tensorflow==1.13.0
-weblogo==3.6.0
+weblogo==3.7.4
 pandas==0.24.2
 scipy==1.2.1
 

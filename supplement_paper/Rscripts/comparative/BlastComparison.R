@@ -211,41 +211,6 @@ if(Do.ProcessBlast == T) {
 
 sink()
 
-# ---
-# Extra scripts
-
-# create database from aggregation of genome fasta files:
-# if(!file.exists(file.path(HomeFolder,ProjectFolder,"OtherData",WorkingDirectory,"Benchmark","ListOfFastas.txt"))) stop("File ListOfFastas.txt missing. Abort")
-# ListOfFastas <- scan(file.path(HomeFolder,ProjectFolder,"OtherData",WorkingDirectory,"Benchmark","ListOfFastas.txt"),what=character(),sep=",")
-# ListOfFastas <- ListOfFastas[-which(ListOfFastas =="")]
-# InFiles <- paste(ListOfFastas,collapse = " ")
-# setwd(file.path(HomeFolder,ProjectFolder,"IMGdata"))
-# system(paste("makeblastdb -in",shQuote(InFiles),"-input_type fasta -dbtype nucl -title",DBTitle,"-out",DBOutput) )
-
-# ---
-# protein blast database
-
-# map to assembly ids
-
-# temp_Bioproject.Accession <- sub("[.]fasta","",ListOfFastas)
-# TraininingData_Bioproject.Accession <- gsub("[A-Z]","",temp_Bioproject.Accession)
-# names(TraininingData_Bioproject.Accession) <- temp_Bioproject.Accession
-# 
-# 
-# MappingTable_AssemblyID <- read.csv("/home/knauthc/data/labels.tsv",sep="\t")
-# 
-# MatchTable <- match(TraininingData_Bioproject.Accession,MappingTable_AssemblyID$bioproject)
-# 
-# TrainingData_AssemblyID <- MappingTable_AssemblyID$assembly[MatchTable]
-# 191 of 333 bioproject ids (in training data) don't have an assembly ID
-# 2924 of 4498 in final IMG dataset
-# 1251 availabe as faa files
-
-# add assemblies to DB
-
-# -> Not feasible due to large number of missing proteomes
-# manually obtain protein files ?
-
 
 
 

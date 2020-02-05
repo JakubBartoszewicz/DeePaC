@@ -1,7 +1,6 @@
 import os
-from corebio.matrix import Motif
-import weblogolib
-from weblogolib import *
+from weblogo.matrix import Motif
+from weblogo import *
 import numpy as np
 import re
 
@@ -33,16 +32,16 @@ def get_weblogos(args):
             # load motifs from fasta file
             if args.file_ext == ".fasta":
                 seqs = read_seq_data(fin)
-                prior = weblogolib.parse_prior(str(gc_content), seqs.alphabet)
+                prior = parse_prior(str(gc_content), seqs.alphabet)
                 data = LogoData.from_seqs(seqs, prior)
 
             # load count matrix from transfac file
             elif args.file_ext == ".transfac":
 
                 motif = Motif.read_transfac(fin)
-                prior = weblogolib.parse_prior(str(gc_content), motif.alphabet)
+                prior = parse_prior(str(gc_content), motif.alphabet)
                 try:
-                    data = weblogolib.LogoData.from_counts(motif.alphabet, motif, prior)
+                    data = LogoData.from_counts(motif.alphabet, motif, prior)
                 except ValueError as err:
                     print(err)
                     continue
