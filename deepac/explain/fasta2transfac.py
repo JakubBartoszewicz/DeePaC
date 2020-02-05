@@ -14,13 +14,13 @@ Either count each sequence once or weight count by DeepLIFT score a filter obtai
 '''
 
 
-def weighted_count(self):
+def weighted_count(instances_obj, m_weights):
     weighted_counts = {}
-    for letter in self.alphabet.letters:
-        weighted_counts[letter] = [0] * self.length
-    for idx, instance in enumerate(self):
+    for letter in instances_obj.alphabet.letters:
+        weighted_counts[letter] = [0] * instances_obj.length
+    for idx, instance in enumerate(instances_obj):
         for position, letter in enumerate(instance):
-            weighted_counts[letter][position] += self.motif_weights[idx]
+            weighted_counts[letter][position] += m_weights[idx]
     return weighted_counts
 
 
@@ -69,11 +69,8 @@ def fa2transfac(args):
                                     c += len(row)
 
                 assert c == len(m.instances), "Number sequences and number of weights differ ... Abort!"
-                m.instances.motif_weights = motif_weights
 
-                Instances.weighted_count = weighted_count
-
-                weighted_counts = m.instances.weighted_count()
+                weighted_counts = weighted_count(m.instances, motif_weights)
                 # override count matrix
                 m.counts = matrix.FrequencyPositionMatrix(m.instances.alphabet, weighted_counts)
 
