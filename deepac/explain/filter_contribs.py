@@ -130,7 +130,7 @@ def get_filter_contribs(args):
         inter_diff_rc = intermediate_rc - intermediate_ref_rc
 
         scores_filter = explainer.shap_values([intermediate_fwd,
-                                               intermediate_rc])
+                                               intermediate_rc], check_additivity=False)
         scores_fwd, scores_rc = scores_filter[0]
 
         # shape: [num_reads, len_reads, n_filters]
