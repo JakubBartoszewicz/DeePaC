@@ -1,12 +1,6 @@
-from keras.models import Sequential
-from keras.models import load_model
-from sklearn.metrics import roc_auc_score
+from tensorflow.keras.models import load_model
 import numpy as np
 import time
-import os
-import tensorflow as tf
-import h5py
-import keras.backend as K
 
 #intra_threads = 16
 #inter_threads = intra_threads

@@ -9,8 +9,8 @@ import random as rn
 import argparse
 import configparser
 import os
-import keras.backend as K
-from keras.models import load_model
+import tensorflow.keras.backend as K
+from tensorflow.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig

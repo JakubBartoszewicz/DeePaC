@@ -14,18 +14,18 @@ import errno
 import warnings
 from contextlib import redirect_stdout
 
-from keras.models import Model
-from keras.layers import Dense, Dropout, Activation, Input, Lambda
-from keras.layers import concatenate, add, multiply, average, maximum
-from keras.layers import CuDNNLSTM, LSTM, Bidirectional
-from keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
-import keras.backend as K
-from keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
-from keras.utils import plot_model
-from keras import regularizers
-from keras.optimizers import Adam
-from keras.layers.normalization import BatchNormalization
-from keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
+from tensorflow.keras.layers import concatenate, add, multiply, average, maximum
+from tensorflow.keras.layers import CuDNNLSTM, LSTM, Bidirectional
+from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
 
 from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 
@@ -323,7 +323,7 @@ class RCNet:
         return x_fwd, x_rc
 
     def __add_rc_lstm(self, inputs, return_sequences, units):
-        revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs._keras_shape[1:],
+        revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_lstm_input_{n}".format(n=self.__current_recurrent+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self.__add_siam_lstm(inputs, inputs_rc, return_sequences, units)
@@ -348,7 +348,7 @@ class RCNet:
         return x_fwd, x_rc
 
     def __add_rc_conv1d(self, inputs, units):
-        revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs._keras_shape[1:],
+        revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self.__current_conv+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self.__add_siam_conv1d(inputs, inputs_rc, units)
@@ -356,7 +356,7 @@ class RCNet:
         return out
 
     def __add_siam_batchnorm(self, inputs_fwd, inputs_rc):
-        input_shape = inputs_rc._keras_shape
+        input_shape = inputs_rc.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
@@ -365,7 +365,7 @@ class RCNet:
         inputs_rc = rc_in(inputs_rc)
         out = concatenate([inputs_fwd, inputs_rc], axis=1)
         out = BatchNormalization()(out)
-        split_shape = out._keras_shape[1] // 2
+        split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
                          name="split_batchnorm_fwd_output_{n}".format(n=self.__current_bn+1))
@@ -383,11 +383,11 @@ class RCNet:
         return x_fwd, x_rc
 
     def __add_rc_batchnorm(self, inputs):
-        input_shape = inputs._keras_shape
+        input_shape = inputs.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences." 
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
-        split_shape = inputs._keras_shape[-1] // 2
+        split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
                         name="split_batchnorm_fwd_input_{n}".format(n=self.__current_bn+1))
@@ -401,7 +401,7 @@ class RCNet:
 
     def __add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
         shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
-        rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc._keras_shape[1:],
+        rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc.shape[1:],
                        name="reverse_merging_dense_input_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
         if self.config.device_parallel:
@@ -417,7 +417,7 @@ class RCNet:
         return out
 
     def __add_rc_merge_dense(self, inputs, units, merge_function=add):
-        split_shape = inputs._keras_shape[-1] // 2
+        split_shape = inputs.shape[-1] // 2
         fwd_in = Lambda(lambda x: x[:, :split_shape], output_shape=[split_shape],
                         name="split_merging_dense_input_fwd_{n}".format(n=1))
         rc_in = Lambda(lambda x: x[:, split_shape:], output_shape=[split_shape],
@@ -681,7 +681,7 @@ class RCNet:
         self.__current_bn = 0
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd._keras_shape[1:],
+        revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
                             name="reverse_complement_input_{n}".format(n=self.__current_recurrent+1))
         inputs_rc = revcomp_in(inputs_fwd)
         # The last recurrent layer should return the output for the last unit only.

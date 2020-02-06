@@ -1,14 +1,9 @@
-from keras.models import Sequential
-from keras.models import load_model
-from keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.text import Tokenizer
 from Bio import SeqIO
-from sklearn.metrics import roc_auc_score
 import numpy as np
 import time
-import os
 import tensorflow as tf
-import h5py
-import keras.backend as K
+import tensorflow.keras.backend as K
 
 config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1, \
                         allow_soft_placement=True, device_count = {'CPU': 1})

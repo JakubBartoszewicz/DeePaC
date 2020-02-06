@@ -1,7 +1,7 @@
 import re
 import os
 import numpy as np
-from keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.text import Tokenizer
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict

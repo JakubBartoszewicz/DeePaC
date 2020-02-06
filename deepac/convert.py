@@ -9,8 +9,8 @@ be used, as the number of available devices is overridden by this script.
 
 import re
 
-import keras.backend as K
-from keras.models import load_model
+import tensorflow.keras.backend as K
+from tensorflow.keras.models import load_model
 
 from deepac.nn_train import RCConfig, RCNet
 

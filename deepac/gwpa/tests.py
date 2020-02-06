@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 import pandas as pd
 from deepac.predict import predict_npy
 from deepac.tests.datagen import generate_reads
@@ -137,5 +137,5 @@ class GWPATester:
                          motif_length=15, n_cpus=self.n_cpus)
         filter_enrichment(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fenrichment",
-                                            "sample_genome2_filter_31_sorted_filtered.csv"))), \
+                                            "sample_genome2_filter_31_ext.csv"))), \
             "Fenrichment failed."

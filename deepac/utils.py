@@ -5,11 +5,11 @@ Utility classes for DeePaC.
 import numpy as np
 
 import math
-from keras.utils.data_utils import Sequence
+from tensorflow.keras.utils import Sequence
 import psutil
-from keras.callbacks import CSVLogger
-from keras import Model
-from keras.utils import multi_gpu_model
+from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras import Model
+from tensorflow.keras.utils import multi_gpu_model
 import csv
 import six
 from collections import OrderedDict
