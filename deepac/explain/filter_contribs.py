@@ -10,7 +10,7 @@ import keras.backend as K
 
 from Bio import SeqIO
 
-from shap.explainers.deep import DeepExplainer
+from shap.explainers.deep import TFDeepExplainer
 
 
 def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
@@ -107,7 +107,7 @@ def get_filter_contribs(args):
     intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
     intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
 
-    explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
+    explainer = TFDeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                 model.get_layer(index=conv_layer_idx).get_output_at(1)],
                                model.layers[-1].output),
                               [intermediate_ref_fwd,
@@ -369,7 +369,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
         else:
             out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
 
-        explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
+        explainer_nt = TFDeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
         # Get difference in activation of the intemediate neuron

@@ -33,7 +33,7 @@ setup(name='deepac',
           'h5py',
           'psutil',
           'pandas',
-          'shap',
+          'shap>=0.34',
           'weblogo>=3.7.4',
           'pybedtools',
           'statsmodels'

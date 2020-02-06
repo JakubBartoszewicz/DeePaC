@@ -31,9 +31,9 @@ class ExplainTester:
                          n_cpus=self.n_cpus, do_lstm=False, inter_layer=1)
         get_maxact(args)
         assert (os.path.isfile(os.path.join(self.outpath, "maxact", "fasta",
-                                            "deepbind_sample_train_data_motifs_filter_31.fasta"))), "Maxact failed."
+                                            "deepbind_sample_val_data_motifs_filter_31.fasta"))), "Maxact failed."
         assert (os.path.isfile(os.path.join(self.outpath, "maxact", "filter_activations",
-                                            "deepbind_sample_train_data_act_filter_31.csv"))), "Maxact failed."
+                                            "deepbind_sample_val_data_act_filter_31.csv"))), "Maxact failed."
 
     def test_fcontribs(self):
         args = Namespace(model=self.model, w_norm=True, test_data=self.test_data, nonpatho_test=self.neg_fasta,
@@ -42,11 +42,11 @@ class ExplainTester:
                          do_lstm=False, inter_layer=1, easy_partial=True, partial=False)
         get_filter_contribs(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "fasta",
-                                            "sample_train_data_motifs_filter_31.fasta"))), "Fcontribs failed."
+                                            "sample_val_data_motifs_filter_31.fasta"))), "Fcontribs failed."
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "filter_scores",
-                                            "sample_train_data_rel_filter_31.csv"))), "Fcontribs failed."
+                                            "sample_val_data_rel_filter_31.csv"))), "Fcontribs failed."
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "nuc_scores",
-                                            "sample_train_data_rel_filter_31_nucleotides.csv"))), "Fcontribs failed."
+                                            "sample_val_data_rel_filter_31_nucleotides.csv"))), "Fcontribs failed."
 
     def test_franking(self):
         scores_dir = os.path.join("deepac-tests", "explain", "fcontribs", "filter_scores")
@@ -77,14 +77,14 @@ class ExplainTester:
         args = Namespace(in_dir=in_dir, out_dir=out_dir, weighting=True, weight_dir=w_dir)
         fa2transfac(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "transfac_w",
-                                            "sample_train_data_motifs_filter_31_seq_weighting.transfac"))),\
+                                            "sample_val_data_motifs_filter_31_seq_weighting.transfac"))),\
             "fa2transfac failed."
 
         out_dir = os.path.join(self.outpath, "fcontribs", "transfac")
         args = Namespace(in_dir=in_dir, out_dir=out_dir, weighting=False, weight_dir=w_dir)
         fa2transfac(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "transfac",
-                                            "sample_train_data_motifs_filter_31.transfac"))),\
+                                            "sample_val_data_motifs_filter_31.transfac"))),\
             "fa2transfac failed."
 
     def test_weblogos(self):
@@ -93,7 +93,7 @@ class ExplainTester:
         args = Namespace(in_dir=in_dir, file_ext=".transfac", train_data=self.test_data, out_dir=out_dir)
         get_weblogos(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "weblogos",
-                                            "weblogo_sample_train_data_motifs_filter_31_seq_weighting.jpeg"))),\
+                                            "weblogo_sample_val_data_motifs_filter_31_seq_weighting.jpeg"))),\
             "Weblogos failed."
 
     def test_weblogos_extended(self):
@@ -106,13 +106,13 @@ class ExplainTester:
         get_weblogos_ext(args)
         assert (os.path.isfile(
             os.path.join(self.outpath, "fcontribs", "weblogos_ext",
-                         "weblogo_extended_sample_train_data_motifs_filter_31_seq_weighting.jpeg"))),\
+                         "weblogo_extended_sample_val_data_motifs_filter_31_seq_weighting.jpeg"))),\
             "Extended weblogos failed."
 
     def test_transfac2ic(self):
         in_file = os.path.join(self.outpath, "fcontribs", "transfac",
-                               "sample_train_data_motifs_filter_31.transfac")
-        out_file = os.path.join(self.outpath, "fcontribs", "sample_train_data_motifs_filter_31_ic.txt")
+                               "sample_val_data_motifs_filter_31.transfac")
+        out_file = os.path.join(self.outpath, "fcontribs", "sample_val_data_motifs_filter_31_ic.txt")
         args = Namespace(in_file=in_file,
                          train=self.test_data,
                          out_file=out_file)
@@ -121,9 +121,9 @@ class ExplainTester:
 
     def test_motif_compare(self):
         in_file1 = os.path.join(self.outpath, "fcontribs", "transfac",
-                                "sample_train_data_motifs_filter_31.transfac")
+                                "sample_val_data_motifs_filter_31.transfac")
         in_file2 = os.path.join(self.outpath, "maxact", "transfac_w",
-                                "sample_train_data_motifs_filter_31_seq_weighting.transfac")
+                                "sample_val_data_motifs_filter_31_seq_weighting.transfac")
         out_dir = os.path.join(self.outpath, "fcontribs", "motif_compare")
         args = Namespace(in_file1=in_file1,
                          in_file2=in_file2,
