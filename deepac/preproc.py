@@ -70,7 +70,7 @@ def preproc(config):
         # Count negative samples
         n_negative = x_train_neg.shape[0]
     else:
-        x_train_neg = np.zeros((0, read_length, 4))
+        x_train_neg = np.zeros((0, read_length, 4),dtype=np.uint8)
         n_negative = 0
 
     if pos_path != "none":
@@ -82,7 +82,7 @@ def preproc(config):
         # Count positive samples
         n_positive = x_train_pos.shape[0]
     else:
-        x_train_pos = np.zeros((0, read_length, 4))
+        x_train_pos = np.zeros((0, read_length, 4),dtype=np.uint8)
         n_positive = 0
     # Concatenate
     x_train = np.concatenate((x_train_neg, x_train_pos))
