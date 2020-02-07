@@ -22,7 +22,7 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
     if matrix.shape[0] < read_length:
         # Pad with zeros
-        matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4))))
+        matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4),dtype=np.uint8)))
     if matrix.shape[0] > read_length:
         # Trim
         matrix = matrix[:read_length, :]
@@ -66,7 +66,7 @@ def preproc(config):
             # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
             # Tokenize function is applied to the fasta sequence generator.
             x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                   read_length=read_length), read_fasta(input_handle)))
+                                                   read_length=read_length), read_fasta(input_handle)),dtype=np.uint8)
         # Count negative samples
         n_negative = x_train_neg.shape[0]
     else:
@@ -78,7 +78,7 @@ def preproc(config):
         with open(pos_path) as input_handle:
             # Parse fasta, tokenize in parallel & concatenate to negative data
             x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                   read_length=read_length), read_fasta(input_handle)))
+                                                   read_length=read_length), read_fasta(input_handle)),dtype=np.uint8)
         # Count positive samples
         n_positive = x_train_pos.shape[0]
     else:
