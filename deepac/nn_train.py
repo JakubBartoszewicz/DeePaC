@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 
 from tensorflow.compat.v1.keras.models import Model
 from tensorflow.compat.v1.keras.layers import Dense, Dropout, Activation, Input, Lambda
-from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum
+from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum, Flatten
 from tensorflow.compat.v1.keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from tensorflow.compat.v1.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 import tensorflow.compat.v1.keras.backend as K
@@ -511,7 +511,9 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = AveragePooling1D()(x)
-            elif self.config.conv_pooling != 'none':
+            elif self.config.conv_pooling == 'none':
+                x = Flatten()(x)
+            else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')
@@ -630,7 +632,9 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = AveragePooling1D()(x)
-            elif self.config.conv_pooling != 'none':
+            elif self.config.conv_pooling == 'none':
+                x = Flatten()(x)
+            else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')
