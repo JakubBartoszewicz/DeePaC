@@ -136,6 +136,5 @@ class GWPATester:
                          out_dir=os.path.join(self.outpath, "fenrichment"),
                          motif_length=15, n_cpus=self.n_cpus)
         filter_enrichment(args)
-        assert (os.path.isfile(os.path.join(self.outpath, "fenrichment",
-                                            "sample_genome2_filter_31_ext.csv"))), \
+        assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
             "Fenrichment failed."

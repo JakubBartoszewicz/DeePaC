@@ -58,7 +58,10 @@ class RCConfig:
         self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
         self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch')
         if self.use_generators_train or self.use_generators_val:
-            self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
+            self.multiprocessing = self.use_generators_val = config['DataLoad'].getboolean('Multiprocessing')
+            self.batch_loading_workers = 1
+            if self.multiprocessing:
+                self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
             self.batch_queue = config['DataLoad'].getint('BatchQueue')
 
         # Input Data Config #
@@ -892,7 +895,7 @@ class RCNet:
                                                                  class_weight=self.config.class_weight,
                                                                  max_queue_size=self.config.batch_queue,
                                                                  workers=self.config.batch_loading_workers,
-                                                                 use_multiprocessing=True,
+                                                                 use_multiprocessing=self.config.multiprocessing,
                                                                  initial_epoch=self.config.epoch_start)
             else:
                 # Fit a parallel model using data in memory
@@ -915,7 +918,7 @@ class RCNet:
                                                         class_weight=self.config.class_weight,
                                                         max_queue_size=self.config.batch_queue,
                                                         workers=self.config.batch_loading_workers,
-                                                        use_multiprocessing=True,
+                                                        use_multiprocessing=self.config.multiprocessing,
                                                         initial_epoch=self.config.epoch_start)
             else:
                 # Fit a model using data in memory
