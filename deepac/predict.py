@@ -6,7 +6,7 @@ from deepac.preproc import read_fasta, tokenize
 from multiprocessing import Pool
 from functools import partial
 
-from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools

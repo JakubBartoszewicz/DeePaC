@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from tensorflow.keras.models import load_model
+from tensorflow.compat.v1.keras.models import load_model
 import pandas as pd
 from deepac.predict import predict_npy
 from deepac.tests.datagen import generate_reads

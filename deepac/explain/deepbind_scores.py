@@ -3,8 +3,8 @@ import time
 import os
 import csv
 
-from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
+from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.compat.v1.keras import backend as K
 from Bio import SeqIO
 from multiprocessing import Pool
 from functools import partial

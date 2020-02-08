@@ -3,10 +3,10 @@ import csv
 import numpy as np
 import re
 
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.utils import to_categorical
-import tensorflow.keras.backend as K
+from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
+from tensorflow.compat.v1.keras.utils import to_categorical
+import tensorflow.compat.v1.keras.backend as K
 
 from Bio import SeqIO
 

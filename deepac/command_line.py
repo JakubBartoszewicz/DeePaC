@@ -3,14 +3,14 @@ A DeePaC CLI. Support subcommands, prediction with built-in and custom models, t
 
 """
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import random as rn
-
+tf.disable_v2_behavior()
 import argparse
 import configparser
 import os
-import tensorflow.keras.backend as K
-from tensorflow.keras.models import load_model
+import tensorflow.compat.v1.keras.backend as K
+from tensorflow.compat.v1.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig
