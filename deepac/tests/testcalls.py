@@ -31,7 +31,7 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, do_all=False, do_qu
     tester.test_preproc()
     print("TEST: Training...")
     tester.test_train(quick)
-    if do_all or explain:
+    if do_all or do_quick or explain:
         print("TEST: Predicting...")
         tester.test_pred(quick)
     if do_all or not quick:
