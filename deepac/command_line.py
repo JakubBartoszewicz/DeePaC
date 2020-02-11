@@ -120,6 +120,8 @@ def parse():
                              default=False, action="store_true")
     parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
                              default=False, action="store_true")
+    parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
+                             default=False, action="store_true")
     parser_test.set_defaults(func=run_tests)
 
     parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
@@ -230,7 +232,7 @@ def run_convert(args):
 
 def run_tests(args):
     """Run tests."""
-    testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.gwpa, args.all, args.quick)
+    testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.gwpa, args.all, args.quick, args.keep)
 
 
 if __name__ == "__main__":

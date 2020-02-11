@@ -66,8 +66,8 @@ def get_maxact(args):
     print(model.summary())
     do_lstm = args.do_lstm
     if do_lstm:
-        # TODO: pass this
-        motif_length = 250
+        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
         pad_left = 0
         pad_right = 0
     else:
@@ -78,9 +78,11 @@ def get_maxact(args):
 
     layer_dict = dict([(layer.name, layer) for layer in model.layers])
     if do_lstm:
-        output_layer = 'bidirectional_'+str(args.inter_layer)
+        output_layer = [layer.name for idx, layer in enumerate(model.layers)
+                        if "Bidirectional" in str(layer)][args.inter_layer - 1]
     else:
-        output_layer = 'conv1d_'+str(args.inter_layer)
+        output_layer = [layer.name for idx, layer in enumerate(model.layers)
+                        if "Conv1D" in str(layer)][args.inter_layer - 1]
 
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
@@ -179,4 +181,5 @@ def get_maxact(args):
         n += chunk_size
 
     end_time = time.time()
+    print("Done "+str(min(n, total_num_reads))+" from "+str(total_num_reads)+" sequences")
     print("Processed in " + str(end_time - start_time))

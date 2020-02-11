@@ -14,9 +14,9 @@ import configparser
 import os
 
 
-def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, do_all=False, do_quick=False):
+def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, do_all=False, do_quick=False, keep=False):
     """Generate sample data and run all tests."""
-    if os.path.exists("deepac-tests"):
+    if not keep and os.path.exists("deepac-tests"):
         print("Deleting previous test output...")
         for root, dirs, files in os.walk("deepac-tests", topdown=False):
             for name in files:
@@ -116,6 +116,7 @@ class Tester:
                                             "nn-deepac-test-e002.h5"))), "Training failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "training-deepac-test.csv"))), "Training failed."
+        K.clear_session()
 
         if not quick:
             print("TEST: Training (rapid)...")
@@ -127,6 +128,7 @@ class Tester:
                                                 "nn-img-rapid-cnn-e002.h5"))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "img-rapid-cnn-logs",
                                                 "training-img-rapid-cnn.csv"))), "Training failed."
+            K.clear_session()
 
             print("TEST: Training (sensitive)...")
             paprconfig = builtin_loading.get_sensitive_training_config(self.n_cpus, self.n_gpus)
@@ -137,6 +139,7 @@ class Tester:
                                                 "nn-img-sensitive-lstm-e002.h5"))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "img-sensitive-lstm-logs",
                                                 "training-img-sensitive-lstm.csv"))), "Training failed."
+            K.clear_session()
 
     def __config_train(self, paprconfig):
         """Set sample data paths and compile."""

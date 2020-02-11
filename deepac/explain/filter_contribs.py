@@ -49,7 +49,8 @@ def get_filter_contribs(args):
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
                           if "Bidirectional" in str(layer)][args.inter_layer - 1]
         n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[-1]
-        motif_length = 250
+        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
         pad_left = 0
         pad_right = 0
     else:
