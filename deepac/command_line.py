@@ -181,9 +181,9 @@ def run_predict(args):
         args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
     if args.sensitive:
-        model = builtin_loading.load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        model = builtin_loading.load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
     elif args.rapid:
-        model = builtin_loading.load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+        model = builtin_loading.load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
     else:
         model = load_model(args.custom)
 

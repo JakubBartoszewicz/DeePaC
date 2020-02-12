@@ -164,7 +164,7 @@ class RCConfig:
         self.log_memory = config['Training'].getboolean('MemUsageLog')
         self.summaries = config['Training'].getboolean('Summaries')
         self.log_superpath = config['Training']['LogPath']
-        self.log_dir = self.log_superpath + "/{runname}-logs".format(runname=self.runname)
+        self.log_dir = os.path.join(self.log_superpath, "{runname}-logs".format(runname=self.runname))
 
         self.use_tb = config['Training'].getboolean('Use_TB')
         if self.use_tb:
@@ -200,7 +200,7 @@ class RCNet:
 
     """
 
-    def __init__(self, config):
+    def __init__(self, config, training_mode=True):
         """RCNet constructor and config parsing"""
         self.config = config
         self.history = None
@@ -217,13 +217,14 @@ class RCNet:
         self.model = None
         self.parallel_model = None
 
-        try:
-            os.makedirs(self.config.log_dir)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+        if training_mode:
+            try:
+                os.makedirs(self.config.log_dir)
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    raise
 
-        self.__set_callbacks()
+            self.__set_callbacks()
         if K.backend() == 'tensorflow':
             # Build the model using the CPU or GPU
             with tf.device(self.config.model_build_device):

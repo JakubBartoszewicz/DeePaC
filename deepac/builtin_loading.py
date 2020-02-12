@@ -5,17 +5,22 @@ import configparser
 import os
 
 
-def load_sensitive_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
+def load_sensitive_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
+                         training_mode=True):
     if n_gpus > 1:
         device_parallel = True
-    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel, log_path)
+    return __load_builtin_model("nn-img-sensitive-lstm", n_cpus, n_gpus, d_pref, device_parallel, log_path,
+                                training_mode)
 
 
-def load_rapid_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
-    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel, log_path)
+def load_rapid_model(n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
+                     training_mode=True):
+    return __load_builtin_model("nn-img-rapid-cnn", n_cpus, n_gpus, d_pref, device_parallel, log_path,
+                                training_mode)
 
 
-def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs"):
+def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
+                         training_mode=True):
     config_path = os.path.join(os.path.dirname(__file__), "builtin", "config", "{}.ini".format(prefix))
     weights_path = os.path.join(os.path.dirname(__file__), "builtin", "weights", "{}.h5".format(prefix))
     config = configparser.ConfigParser()
@@ -34,7 +39,7 @@ def __load_builtin_model(prefix, n_cpus, n_gpus, d_pref="/device:GPU:", device_p
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
 
-    paprnet = RCNet(paprconfig)
+    paprnet = RCNet(paprconfig, training_mode)
 
     paprnet.model.load_weights(weights_path)
 

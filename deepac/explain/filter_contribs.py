@@ -373,7 +373,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
         explainer_nt = TFDeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
-        # Get difference in activation of the intemediate neuron
+        # Get difference in activation of the intermediate neuron
         if lstm:
             diff = intermediate_diff[seq_id, filter_id]
         else:
