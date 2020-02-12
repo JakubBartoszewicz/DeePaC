@@ -327,7 +327,7 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
         with open(filter_rel_file, 'a') as csv_file:
             file_writer = csv.writer(csv_file)
             for dat in contribution_data[filter_id]:
-                if len(dat) > 0:
+                if len(dat) > 0 and len(dat[1]) > 0:
                     file_writer.writerow([">" + dat[0]])
                     file_writer.writerow(dat[1])
                     file_writer.writerow(dat[2])

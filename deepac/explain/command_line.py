@@ -53,7 +53,7 @@ def add_explain_parser(xparser):
     parser_fcontribs.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
                                   help="Perform calculations for this intermediate layer")
     parser_fcontribs.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
-                                  help="Sequence chunk size")
+                                  help="Sequence chunk size. Decrease for lower memory usage.")
     parser_fcontribs.add_argument("-A", "--all-occurrences", dest="all_occurrences", action="store_true",
                                   help="Extract contributions for all occurrences of a filter "
                                        "per read (Default: max only)")
@@ -61,10 +61,10 @@ def add_explain_parser(xparser):
                                   help="Interpret elements of the LSTM output")
     partial_group = parser_fcontribs.add_mutually_exclusive_group(required=False)
     partial_group.add_argument("-p", "--partial", dest="partial", action="store_true",
-                               help="Calculate partial nucleotide contributions per filter")
+                               help="Calculate partial nucleotide contributions per filter.")
     partial_group.add_argument("-e", "--easy_partial", dest="easy_partial", action="store_true",
                                help="Calculate easy partial nucleotide contributions per filter. "
-                                    "Works for the first convolutional layer only.")
+                                    "Works for the first convolutional layer only; disables all-occurences mode.")
     parser_fcontribs.set_defaults(func=run_fcontribs)
 
     parser_franking = explain_subparsers.add_parser('franking', help='Generate filter rankings.')
