@@ -5,7 +5,6 @@ A DeePaC CLI. Support subcommands, prediction with built-in and custom models, t
 import numpy as np
 import tensorflow.compat.v1 as tf
 import random as rn
-tf.disable_v2_behavior()
 import argparse
 import configparser
 import os
@@ -33,6 +32,7 @@ def main():
     np.random.seed(seed)
     tf.set_random_seed(seed)
     rn.seed(seed)
+    tf.disable_v2_behavior()
     parse()
 
 

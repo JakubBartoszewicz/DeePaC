@@ -53,10 +53,10 @@ def run_tests(n_cpus=8, n_gpus=0, explain=False, gwpa=False, do_all=False, do_qu
         explaintester.test_weblogos()
         print("X-TEST: Extended weblogos...")
         explaintester.test_weblogos_extended()
-        #print("X-TEST: transfac2IC...")
-        #explaintester.test_transfac2ic()
-        #print("X-TEST: Motif comparison...")
-        #explaintester.test_motif_compare()
+        print("X-TEST: transfac2IC...")
+        explaintester.test_transfac2ic()
+        print("X-TEST: Motif comparison...")
+        explaintester.test_motif_compare()
 
     if do_all or gwpa:
         gwpatester = GWPATester(n_cpus)

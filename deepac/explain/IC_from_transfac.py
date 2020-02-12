@@ -11,7 +11,7 @@ Compute information content for each filter motif (.transfac).
 def compute_mean_ic(pwm):
 	ic = 0.0
 	for column in range(pwm.length):
-		for base in pwm.alphabet.letters:
+		for base in pwm.alphabet:
 			ic += pwm[base][column] * math.log2(pwm[base][column]/pwm.background[base])
 	ic /= float(pwm.length)
 	return ic

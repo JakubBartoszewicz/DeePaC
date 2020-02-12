@@ -80,3 +80,12 @@ def fa2transfac(args):
                     file.replace(".fasta", str("_seq_weighting" if args.weighting else "") + ".transfac"), "w")\
                     as out_file:
                 out_file.write(m.format("transfac"))
+
+            m.alphabet = "ACGT"
+            m.counts = matrix.FrequencyPositionMatrix("ACGT", m.counts)
+
+            with open(
+                    args.out_dir + "/" +
+                    file.replace(".fasta", str("_seq_weighting" if args.weighting else "") + "_acgt.transfac"), "w")\
+                    as out_file:
+                out_file.write(m.format("transfac"))

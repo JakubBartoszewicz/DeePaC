@@ -8,7 +8,6 @@ paths to input files and how should be the model trained.
 
 import numpy as np
 import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
 import os
 
 import errno

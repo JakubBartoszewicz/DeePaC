@@ -1,8 +1,6 @@
 import os
 import csv
-import argparse
 import numpy as np
-import Bio
 from Bio.motifs import transfac
 from scipy.stats import pearsonr, spearmanr
 
@@ -32,21 +30,19 @@ def motif_compare(args):
         records2 = transfac.read(handle)
 
     # convert motifs to pssm's
-    pssms1 = [0] * len(records1)
-    pssms2 = [0] * len(records2)
-    rc_pssms2 = [0] * len(records2)
+    pssms1 = {}
+    pssms2 = {}
+    rc_pssms2 = {}
 
     for idx, m1 in enumerate(records1):
         pwm1 = m1.counts.normalize(pseudocounts=bg)
         pssm1 = pwm1.log_odds(background=bg)
-        pssm1["ID"] = m1.get("ID")
-        pssms1[idx] = pssm1
+        pssms1[m1.get("ID")] = pssm1
 
     for idx, m2 in enumerate(records2):
         pwm2 = m2.counts.normalize(pseudocounts=bg)
         pssm2 = pwm2.log_odds(background=bg)
-        pssm2["ID"] = m2.get("ID")
-        pssms2[idx] = pssm2
+        pssms2[m2.get("ID")] = pssm2
         # build reverse complement
         if args.rc:
             rc_pssm2 = pssm2.reverse_complement()
@@ -54,14 +50,13 @@ def motif_compare(args):
 
     result_table = []
     # compare motifs
-    for pssm1 in pssms1:
+    for idx1, pssm1 in pssms1.items():
 
-        for idx, pssm2 in enumerate(pssms2):
+        for idx2, pssm2 in pssms2.items():
 
-            if args.extensively or pssm1.get("ID") == pssm2.get("ID"):
+            if args.extensively or idx1 == idx2:
 
-                # print("Comparing " + pssm1.get("ID") + " with " + pssm2.get("ID") + "...")
-                row = [pssm1.get("ID"), pssm2.get("ID")]
+                row = [idx1, idx2]
 
                 for measure in [pearsonr, spearmanr]:
 
@@ -69,7 +64,7 @@ def motif_compare(args):
                                                                 args.min_overlap if args.shift else pssm1.length)
                     orientation = "+"
                     if args.rc:
-                        rc_pssm2 = rc_pssms2[idx]
+                        rc_pssm2 = rc_pssms2[idx2]
                         cor_rc, p_value_rc, offset_rc = get_motif_similarity(measure, pssm1, rc_pssm2,
                                                                              args.min_overlap if args.shift else pssm1.length)
                         # if cor < cor_rc:
@@ -98,7 +93,7 @@ def get_motif_similarity(measure, pssm1, pssm2, min_overlap):
 
     final_cor, final_p_value, final_offset = 0, 1, 0
 
-    letters = pssm1._letters
+    letters = pssm1.keys()
     for offset in range(-(pssm1.length - min_overlap), pssm1.length - min_overlap + 1):
 
         if offset < 0:

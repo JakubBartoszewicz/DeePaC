@@ -111,7 +111,7 @@ class ExplainTester:
 
     def test_transfac2ic(self):
         in_file = os.path.join(self.outpath, "fcontribs", "transfac",
-                               "sample_val_data_motifs_filter_31.transfac")
+                               "sample_val_data_motifs_filter_31_acgt.transfac")
         out_file = os.path.join(self.outpath, "fcontribs", "sample_val_data_motifs_filter_31_ic.txt")
         args = Namespace(in_file=in_file,
                          train=self.test_data,
@@ -121,9 +121,9 @@ class ExplainTester:
 
     def test_motif_compare(self):
         in_file1 = os.path.join(self.outpath, "fcontribs", "transfac",
-                                "sample_val_data_motifs_filter_31.transfac")
-        in_file2 = os.path.join(self.outpath, "maxact", "transfac_w",
-                                "sample_val_data_motifs_filter_31_seq_weighting.transfac")
+                                "sample_val_data_motifs_filter_31_acgt.transfac")
+        in_file2 = os.path.join(self.outpath, "fcontribs", "transfac_w",
+                                "sample_val_data_motifs_filter_31_seq_weighting_acgt.transfac")
         out_dir = os.path.join(self.outpath, "fcontribs", "motif_compare")
         args = Namespace(in_file1=in_file1,
                          in_file2=in_file2,
