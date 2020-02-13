@@ -55,12 +55,10 @@ class RCConfig:
         # Data Loading Config #
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
         self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
-        self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch')
+        self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch') and self.use_generators_train
         if self.use_generators_train or self.use_generators_val:
-            self.multiprocessing = self.use_generators_val = config['DataLoad'].getboolean('Multiprocessing')
-            self.batch_loading_workers = 1
-            if self.multiprocessing:
-                self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
+            self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
+            self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
             self.batch_queue = config['DataLoad'].getint('BatchQueue')
 
         # Input Data Config #
@@ -204,6 +202,8 @@ class RCNet:
         self.config = config
         self.history = None
 
+        self.__t_sequence = None
+        self.__v_sequence = None
         self.training_sequence = None
         self.x_train = None
         self.y_train = None
@@ -222,8 +222,8 @@ class RCNet:
             except OSError as e:
                 if e.errno != errno.EEXIST:
                     raise
-
             self.__set_callbacks()
+
         if K.backend() == 'tensorflow':
             # Build the model using the CPU or GPU
             with tf.device(self.config.model_build_device):
@@ -251,7 +251,9 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
-            self.training_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size)
+            self.__t_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size)
+
+            self.training_sequence = self.__t_sequence
             self.length_train = len(self.x_train)
         else:
             # ... or load all the data to memory
@@ -262,7 +264,9 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
-            self.validation_data = ReadSequence(self.x_val, self.y_val, self.config.batch_size)
+            self.__v_sequence = ReadSequence(self.x_val, self.y_val, self.config.batch_size)
+
+            self.validation_data = self.__v_sequence
             self.length_val = len(self.x_val)
         else:
             # ... or load all the data to memory
@@ -915,15 +919,15 @@ class RCNet:
         else:
             if self.config.use_generators_train:
                 # Fit a model using generators
-                self.history = self.model.fit_generator(generator=self.training_sequence,
-                                                        epochs=self.config.epoch_end,
-                                                        callbacks=self.callbacks,
-                                                        validation_data=self.validation_data,
-                                                        class_weight=self.config.class_weight,
-                                                        max_queue_size=self.config.batch_queue,
-                                                        workers=self.config.batch_loading_workers,
-                                                        use_multiprocessing=self.config.multiprocessing,
-                                                        initial_epoch=self.config.epoch_start)
+                self.history = self.model.fit(x=self.training_sequence,
+                                              epochs=self.config.epoch_end,
+                                              callbacks=self.callbacks,
+                                              validation_data=self.validation_data,
+                                              class_weight=self.config.class_weight,
+                                              use_multiprocessing=self.config.multiprocessing,
+                                              max_queue_size=self.config.batch_queue,
+                                              workers=self.config.batch_loading_workers,
+                                              initial_epoch=self.config.epoch_start)
             else:
                 # Fit a model using data in memory
                 self.history = self.model.fit(x=self.x_train,
