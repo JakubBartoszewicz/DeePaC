@@ -8,6 +8,7 @@ from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
 
 
 def frag_genomes(args):
+    """Fragment a genome into pseudo-reads."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

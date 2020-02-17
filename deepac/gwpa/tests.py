@@ -25,6 +25,7 @@ class GWPATester:
         self.__gen_data()
 
     def __gen_data(self):
+        """Generate test genome data."""
         if not os.path.exists(os.path.join(self.outpath, "genome_fasta")):
             os.makedirs(os.path.join(self.outpath, "genome_fasta"))
         if not os.path.exists(os.path.join(self.outpath, "genome")):
@@ -32,10 +33,11 @@ class GWPATester:
         if not os.path.exists(os.path.join(self.outpath, "genome_gff3")):
             os.makedirs(os.path.join(self.outpath, "genome_gff3"))
 
-        self.__gen_sample(1, 0.3, [9000, 3000, 7000, 1000])
-        self.__gen_sample(2, 0.7, [6000, 7000, 3000, 4000])
+        self.gen_sample(1, 0.3, [9000, 3000, 7000, 1000])
+        self.gen_sample(2, 0.7, [6000, 7000, 3000, 4000])
 
-    def __gen_sample(self, s_id, gc, contigs):
+    def gen_sample(self, s_id, gc, contigs):
+        """Generate sample genomes."""
         generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)), gc=gc,
                        length=contigs[0], header="SAMPLE{i}1.1".format(i=s_id))
         generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)), gc=gc,
@@ -66,6 +68,7 @@ class GWPATester:
                   header=False, index=False)
 
     def test_fragment(self):
+        """Test genome fragmentation."""
         args = Namespace(genomes_dir=os.path.join(self.outpath, "genome_fasta"),
                          read_len=250, shift=50, out_dir=os.path.join(self.outpath, "genome_frag"))
         frag_genomes(args)
@@ -75,6 +78,7 @@ class GWPATester:
             "Fragment genomes failed."
 
     def test_genomemap(self):
+        """Test genome-wide phenotype potential map generation."""
         model = load_model(self.model)
 
         if not os.path.exists(os.path.join(self.outpath, "genome_frag_pred")):
@@ -96,12 +100,14 @@ class GWPATester:
             "Genome map failed."
 
     def test_granking(self):
+        """Test gene ranking."""
         args = Namespace(patho_dir=os.path.join(self.outpath, "bedgraph"),
                          gff_dir=os.path.join(self.outpath, "genome_gff3"),
                          out_dir=os.path.join(self.outpath, "gene_rank"), extended=False, n_cpus=self.n_cpus)
         gene_rank(args)
 
     def test_ntcontribs(self):
+        """Test nucleotide contribution map generation."""
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250)
@@ -120,6 +126,7 @@ class GWPATester:
             "Nt contribs failed."
 
     def test_factiv(self):
+        """Test filter activations."""
         args = Namespace(model=self.model,
                          test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
                          test_fasta=os.path.join(self.outpath, "genome_frag",
@@ -131,6 +138,7 @@ class GWPATester:
             "Factiv failed."
 
     def test_fenrichment(self):
+        """Test filter enrichment analysis."""
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),

@@ -1,4 +1,3 @@
-import os
 from weblogo.matrix import Motif
 from weblogo import *
 from weblogo.colorscheme import ColorRule, ColorScheme
@@ -10,13 +9,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 
-'''
-Build extended weblogos per convolutional filter with nucleotide coloring.
-'''
-
-
-# define own color rules (color depends on position and nucleotide)
+"""
+Define own color rules (color depends on position and nucleotide)
+"""
 class SymbolIndexColor(ColorRule):
+
     def __init__(self, symbols, indices, color, description=None):
         self.symbols = symbols.upper()
         self.indices = indices
@@ -29,7 +26,7 @@ class SymbolIndexColor(ColorRule):
 
 
 def get_weblogos_ext(args):
-
+    """ Build extended weblogos per convolutional filter with nucleotide coloring."""
     samples = np.load(args.train_data, mmap_mode='r')
     gc_content = np.sum(np.mean(np.mean(samples, axis=1), axis=0)[1:3])
     at_content = 1 - gc_content

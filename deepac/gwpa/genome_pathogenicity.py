@@ -7,12 +7,9 @@ import pandas as pd
 from collections import OrderedDict
 from operator import itemgetter
 
-'''
-Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions.
-'''
-
 
 def genome_map(args):
+    """Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

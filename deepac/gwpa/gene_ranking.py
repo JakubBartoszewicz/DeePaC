@@ -5,12 +5,9 @@ import pandas as pd
 from functools import partial
 from collections import OrderedDict
 
-'''
-Compute mean pathogenicity score per gene and species.
-'''
-
 
 def featuretype_filter(feature, featuretype):
+    """Check if feature is a feature of interest (genes, CDSs and RNAs)."""
     if feature[2] == 'gene':
         if feature.attrs.get('gene', None) == featuretype:
             return True
@@ -27,11 +24,13 @@ def featuretype_filter(feature, featuretype):
 
 
 def subset_featuretypes(featuretype, gff):
+    """Select features of interest."""
     result = gff.filter(featuretype_filter, featuretype).saveas()
     return pybedtools.BedTool(result.fn)
 
 
 def compute_gene_pathogenicity(filtered_gff, bedgraph):
+    """Compute mean pathogenicity score of a gene."""
     # intersection = pybedtools.BedTool(bedgraph).intersect( b=filtered_gff)
     intersection = bedgraph.intersect(b=filtered_gff)
     total_num_bases = 0.
@@ -45,6 +44,7 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
 
 
 def gene_rank(args):
+    """Compute mean pathogenicity score per gene and species."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

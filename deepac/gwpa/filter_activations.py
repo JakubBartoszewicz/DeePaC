@@ -8,12 +8,10 @@ from Bio import SeqIO
 from operator import itemgetter
 from itertools import groupby
 
-'''
-Compute activation values genome-wide.
-'''
-
 
 def filter_activations(args):
+    """Compute activation values genome-wide."""
+
     # Creates the model and loads weights
     model = load_model(args.model)
     conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]

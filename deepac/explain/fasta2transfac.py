@@ -8,13 +8,9 @@ from Bio.motifs import matrix
 import numpy as np
 import csv
 
-'''
-Converts multiple sequence alignment saved in fasta format to transfac format (count matrix).
-Either count each sequence once or weight count by DeepLIFT score a filter obtained for it.
-'''
-
 
 def weighted_count(instances_obj, m_weights):
+    """Weight nt count by nt weights at each position"""
     weighted_counts = {}
     for letter in instances_obj.alphabet:
         weighted_counts[letter] = [0] * instances_obj.length
@@ -25,7 +21,8 @@ def weighted_count(instances_obj, m_weights):
 
 
 def fa2transfac(args):
-
+    """Convert multiple sequence alignment saved in fasta format to transfac format (count matrix).
+    Either count each sequence once or weight count by DeepLIFT score a filter obtained for it."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

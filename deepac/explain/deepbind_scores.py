@@ -9,14 +9,10 @@ from Bio import SeqIO
 from multiprocessing import Pool
 from functools import partial
 
-"""
-Calculates DeepBind scores for all neurons in the convolutional layer 
-and extract all motifs for which a filter neuron got a positive score.
-"""
-
 
 def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, motif_length, test_data_set_name,
                     out_dir, rc=False):
+    """Save filter activation scores and activating sequences"""
     filter_activations = activation_list[:, filter_id]
     filter_motif_starts = motif_start_list[:, filter_id]
 
@@ -43,6 +39,7 @@ def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, m
 
 
 def get_max_strand(filter_id, dat_fwd, dat_rc):
+    """Get max motif activation data over both strands"""
     for seq_id in range(dat_fwd[0].shape[0]):
         # if abs score on fwd higher than on rc
         if dat_fwd[0][seq_id, filter_id] >= dat_rc[0][seq_id, filter_id]:
@@ -52,6 +49,7 @@ def get_max_strand(filter_id, dat_fwd, dat_rc):
 
 
 def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
+    """Calculate receptor field size (motif length)"""
     if idx == 0:
         rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
     else:
@@ -61,6 +59,8 @@ def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
 
 
 def get_maxact(args):
+    """Calculates DeepBind scores for all neurons in the convolutional layer
+    and extract all motifs for which a filter neuron got a positive score."""
     # Creates the model and loads weights
     model = load_model(args.model)
     print(model.summary())

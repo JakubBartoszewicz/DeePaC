@@ -12,9 +12,7 @@ from shap.explainers.deep import DeepExplainer
 
 
 def get_reference_seqs(args, len_reads):
-    """
-    Load or create reference sequences for DeepLIFT.
-    """
+    """Load or create reference sequences for DeepLIFT."""
     # generate reference sequence with N's
     if args.ref_mode == "N":
 
@@ -65,12 +63,8 @@ def get_reference_seqs(args, len_reads):
     return ref_samples
 
 
-'''
-Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions.
-'''
-
-
 def nt_map(args):
+    """Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

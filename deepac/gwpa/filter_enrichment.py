@@ -7,12 +7,9 @@ import re
 from statsmodels.sandbox.stats.multicomp import multipletests
 from functools import partial
 
-'''
-Perform genomic enrichment analysis per filter.
-'''
-
 
 def featuretype_filter(feature, featuretype):
+    """Check if feature is a feature of interest (genes, CDSs and RNAs)."""
     # CDS
     if feature[2] == featuretype:
         return True
@@ -29,14 +26,13 @@ def featuretype_filter(feature, featuretype):
 
 
 def subset_featuretypes(featuretype, gff):
+    """Select features of interest."""
     result = gff.filter(featuretype_filter, featuretype).saveas()
     return pybedtools.BedTool(result.fn)
 
 
 def count_reads_in_features(features_fn, bed):
-    """
-    Callback function to count reads in features
-    """
+    """Callback function to count reads in features"""
     # overlap of at least 5bp (motif_length/3)
     return pybedtools.BedTool(bed).intersect(b=features_fn, stream=True,
                                              f=1 / 3).count()
@@ -51,6 +47,7 @@ def count_len_feature_region(features_fn):
 
 
 def filter_enrichment(args):
+    """Perform genomic enrichment analysis per filter."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

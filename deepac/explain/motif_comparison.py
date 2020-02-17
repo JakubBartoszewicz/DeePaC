@@ -5,13 +5,8 @@ from Bio.motifs import transfac
 from scipy.stats import pearsonr, spearmanr
 
 
-'''
-Compare PSSMs of filter motifs.
-'''
-
-
 def motif_compare(args):
-
+    """Compare PSSMs of filter motifs."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

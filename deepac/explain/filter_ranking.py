@@ -5,13 +5,9 @@ import matplotlib.pyplot as plt
 import csv
 
 
-'''
-Plot contribution scores per filter and rank filters according to their pathogenicity/non-pathogenicity potential.
-'''
-
-
 def get_filter_ranking(args):
-
+    """Plot contribution scores per filter and rank filters
+    according to their pathogenicity/non-pathogenicity potential."""
     # create output directory
     out_dir = args.out_dir + "/" + args.mode
     if not os.path.exists(out_dir):

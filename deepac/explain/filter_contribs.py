@@ -14,19 +14,18 @@ from shap.explainers.deep import TFDeepExplainer
 
 
 def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
+    """Calculate receptor field size (motif length)"""
     if idx == 0:
         rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
     else:
-        rf = get_rf_size(mdl, idx-1, conv_ids) +\
+        rf = get_rf_size(mdl, idx-1, conv_ids) + \
              (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
     return rf
 
 
 def get_filter_contribs(args):
-    """
-    Calculates DeepLIFT contribution scores for all neurons in the convolutional layer
-    and extract all motifs for which a filter neuron got a non-zero contribution score.
-    """
+    """Calculate DeepLIFT contribution scores for all neurons in the convolutional layer
+    and extract all motifs for which a filter neuron got a non-zero contribution score."""
 
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences

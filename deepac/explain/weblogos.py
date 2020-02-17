@@ -1,16 +1,11 @@
-import os
 from weblogo.matrix import Motif
 from weblogo import *
 import numpy as np
 import re
 
-'''
-Build standard weblogos per convolutional filter.
-'''
-
 
 def get_weblogos(args):
-
+    """Build standard weblogos per convolutional filter."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
