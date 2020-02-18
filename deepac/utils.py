@@ -71,24 +71,29 @@ class ReadSequence(Sequence):
         np.random.shuffle(self.indices)
 
 
+def get_memory_usage():
+    # return the memory usage in MB
+    process = psutil.Process()
+    mem = process.memory_info()[0] / float(2 ** 20)
+    return mem
+
+
 class CSVMemoryLogger(CSVLogger):
 
     """
     A Keras CSV logger with a memory usage field.
     Based on a comment by joelthchao: https://github.com/keras-team/keras/issues/5935#issuecomment-289041967
     """
+    def __init__(self, *args, **kwargs):
+        self.keys = None
+        self.writer = None
+        super().__init__(*args, **kwargs)
 
-    def __get_memory_usage(self):
-        # return the memory usage in MB
-        process = psutil.Process()
-        mem = process.memory_info()[0] / float(2 ** 20)
-        return mem
-    
     def on_epoch_end(self, epoch, logs=None):
         """Log memory usage and performance after each epoch"""
         logs = logs or {}
         # Get memory usage as maxrss
-        mem_usage = self.__get_memory_usage()
+        mem_usage = get_memory_usage()
         logs["Mem"] = mem_usage
         
         def handle_value(k):

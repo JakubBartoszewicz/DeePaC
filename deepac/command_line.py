@@ -19,7 +19,7 @@ from deepac.eval.eval_species import evaluate_species
 from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac.builtin_loading import BuiltinLoader
-from deepac.tests import testcalls
+from deepac.tests.testcalls import Tester
 from deepac import __version__
 from deepac import __file__
 
@@ -35,17 +35,56 @@ def main():
     rn.seed(seed)
     tf.disable_v2_behavior()
     modulepath = os.path.dirname(__file__)
-    runner = DeepacRunner(modulepath)
+    builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
+                       "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
+    builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
+                       "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
+    runner = MainRunner(builtin_configs, builtin_weights)
     runner.parse()
 
 
-class DeepacRunner:
-    def __init__(self, modulepath=None):
-        if modulepath is None:
-            self.modulepath = os.path.dir(__file__)
-        else:
-            self.modulepath = modulepath
-        self.bloader = BuiltinLoader(modulepath)
+def run_filter(args):
+    """Filter a reads in a fasta file by pathogenic potential."""
+    if args.precision <= 0:
+        raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
+    if args.output is None:
+        args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
+    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
+
+
+def run_preproc(args):
+    """Parse the config file and preprocess the Illumina reads."""
+    config = configparser.ConfigParser()
+    config.read(args.config)
+    preproc(config)
+
+
+def run_evaluate(args):
+    """Parse the config file and evaluate the NN on Illumina reads."""
+    config = configparser.ConfigParser()
+    if args.species_config is not None:
+        config.read(args.species_config)
+        evaluate_species(config)
+    elif args.reads_config is not None:
+        config.read(args.reads_config)
+        evaluate_reads(config)
+    elif args.ens_config is not None:
+        config.read(args.ens_config)
+        evaluate_ensemble(config)
+
+
+def run_convert(args):
+    """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
+    config = configparser.ConfigParser()
+    config.read(args.config)
+    convert_cudnn(config, args.model, args.from_weights)
+
+
+class MainRunner:
+    def __init__(self, builtin_configs=None, builtin_weights=None):
+        self.builtin_configs = builtin_configs
+        self.builtin_weights = builtin_weights
+        self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
@@ -95,42 +134,11 @@ class DeepacRunner:
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus)
 
-    def run_filter(self, args):
-        """Filter a reads in a fasta file by pathogenic potential."""
-        if args.precision <= 0:
-            raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
-        if args.output is None:
-            args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-        filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
-
-    def run_preproc(self, args):
-        """Parse the config file and preprocess the Illumina reads."""
-        config = configparser.ConfigParser()
-        config.read(args.config)
-        preproc(config)
-
-    def run_evaluate(self, args):
-        """Parse the config file and evaluate the NN on Illumina reads."""
-        config = configparser.ConfigParser()
-        if args.species_config is not None:
-            config.read(args.species_config)
-            evaluate_species(config)
-        elif args.reads_config is not None:
-            config.read(args.reads_config)
-            evaluate_reads(config)
-        elif args.ens_config is not None:
-            config.read(args.ens_config)
-            evaluate_ensemble(config)
-
-    def run_convert(self, args):
-        """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
-        config = configparser.ConfigParser()
-        config.read(args.config)
-        convert_cudnn(config, args.model, args.from_weights)
-
     def run_tests(self, args):
         """Run tests."""
-        testcalls.run_tests(args.n_cpus, args.n_gpus, args.explain, args.gwpa, args.all, args.quick, args.keep)
+        tester = Tester(args.n_cpus, args.n_gpus, self.builtin_configs, self.builtin_weights,
+                        args.explain, args.gwpa, args.all, args.quick, args.keep)
+        tester.run_tests()
 
     def parse(self):
         """Parse DeePaC CLI arguments."""
@@ -167,7 +175,7 @@ class DeepacRunner:
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
         parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
-        parser_filter.set_defaults(func=self.run_filter)
+        parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
         parser_train = subparsers.add_parser('train', help='Train a new model.')
@@ -189,7 +197,7 @@ class DeepacRunner:
         # create the parser for the "preproc" command
         parser_preproc = subparsers.add_parser('preproc', help='Convert fasta files to numpy arrays for training.')
         parser_preproc.add_argument('config', help='Preprocessing config file.')
-        parser_preproc.set_defaults(func=self.run_preproc)
+        parser_preproc.set_defaults(func=run_preproc)
 
         # create the parser for the "eval" command
         parser_eval = subparsers.add_parser('eval', help='Predict using a trained model.')
@@ -197,7 +205,7 @@ class DeepacRunner:
         eval_group.add_argument('-s', '--species', dest='species_config', help='Species-wise evaluation.')
         eval_group.add_argument('-r', '--reads', dest='reads_config', help='Read-wise evaluation.')
         eval_group.add_argument('-e', '--ensemble', dest='ens_config', help='Simple ensemble evaluation.')
-        parser_eval.set_defaults(func=self.run_evaluate)
+        parser_eval.set_defaults(func=run_evaluate)
 
         # create the parser for the "convert" command
         parser_convert = subparsers.add_parser('convert', help='Convert a CuDNNLSTM to a CPU-compatible LSTM.')
@@ -205,7 +213,7 @@ class DeepacRunner:
         parser_convert.add_argument('model', help='Saved model.')
         parser_convert.add_argument('-w', '--weights', dest='from_weights', help="Use prepared weights instead of the "
                                                                                  "model file.", action="store_true")
-        parser_convert.set_defaults(func=self.run_convert)
+        parser_convert.set_defaults(func=run_convert)
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
         parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
