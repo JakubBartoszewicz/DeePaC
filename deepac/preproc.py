@@ -48,7 +48,8 @@ def preproc(config):
     out_data_path = config['OutputPaths']['OutData']
     out_labels_path = config['OutputPaths']['OutLabels']
     
-    # Set additional options: gzip compression, RC augmentation, data type
+    # Set additional options: shuffle, gzip compression, RC augmentation, data type
+    do_shuffle = config['Options'].getboolean('Do_shuffle')
     do_gzip = config['Options'].getboolean('Do_gzip')
     do_revc = config['Options'].getboolean('Do_revc')
     datatype = config['Options']['DataType']
@@ -90,7 +91,13 @@ def preproc(config):
     y_train = np.concatenate((np.repeat(0, n_negative).astype(datatype), np.repeat(1, n_positive).astype(datatype)))
     # All sequences must have the same length. Then x_train is an array and the view below can be created
     # Note: creating a view instead of reversing element-wise saves a lot of memory
-    
+
+    if do_shuffle:
+        indices = np.arange(len(y_train))
+        np.random.shuffle(indices)
+        x_train = x_train[indices, ::, ::]
+        y_train = y_train[indices]
+
     # RC augmentation: Add reverse-complements by reversing both dimensions of the matrix
     # assumes the following order of columns: "ACGT"
     if do_revc:
