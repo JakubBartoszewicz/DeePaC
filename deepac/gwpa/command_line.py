@@ -1,4 +1,4 @@
-"""@package deepac.explain.command_line
+"""@package deepac.gwpa.command_line
 A DeePaC gwpa CLI. Support GWPA tools.
 
 """

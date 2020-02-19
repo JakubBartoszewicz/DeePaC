@@ -149,7 +149,7 @@ def run_maxact(args):
 
 
 def run_fcontribs(args):
-    """GGet DeepLIFT/SHAP filter contribution scores."""
+    """Get DeepLIFT/SHAP filter contribution scores."""
     if args.ref_mode == "GC" and args.train_data is None:
         raise ValueError(
             "Training data (--train_data) is required to build reference sequences with the same GC-content!")

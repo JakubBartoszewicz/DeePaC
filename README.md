@@ -3,8 +3,9 @@
 # DeePaC
 
 DeePaC is a python package and a CLI tool for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
-reads) with reverse-complement neural networks. For details, see our preprint on bioRxiv: 
+reads) with interpretable reverse-complement neural networks. For details, see our preprint on bioRxiv: 
 <https://www.biorxiv.org/content/10.1101/535286v3> and the paper in *Bioinformatics*: <https://doi.org/10.1093/bioinformatics/btz541>.
+For details regarding the interpretability functionalities of DeePaC, see the preprint here: <https://www.biorxiv.org/content/10.1101/2020.01.29.925354v2>
 
 Documentation can be found here:
 <https://rki_bioinformatics.gitlab.io/DeePaC/>.
@@ -58,15 +59,22 @@ If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow 
 you can do the same as above:
 ```
 pip uninstall tensorflow
-pip install tensorflow-gpu==1.*
+pip install tensorflow-gpu==1.15
 ```
 
 ### Optional: run tests
 Optionally, you can run explicit tests of your installation. Note that it may take some time on a CPU.
 ```
-deepac test 
+# Run standard tests
+deepac test
+# Run quick tests (eg. on CPUs)
+deepac test -q
 # Test using a GPU
 deepac test -g 1
+# Test explainability and gwpa workflows
+deepac test -xp
+# Full tests
+deepac test -a -g 1
 ```
 
 ### Help
@@ -145,9 +153,70 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
+## Filter visualization
+To find the most relevant filters and visualize them, use the following minimum workflow: 
+```
+# Calculate filter and nucleotide contibutions (partial Shapley values) for the first convolutional layer
+# using mean-centered weight matrices and "easy" calculation mode
+deepac explain fcontribs -m model.h5 -eb -t test_data.npy -N test_nonpatho.fasta -P test_patho.fasta -o fcontribs 
+
+# Create filter ranking
+deepac explain franking -f fcontribs/filter_scores -y test_labels.npy -p test_predictions.npy -o franking
+
+# Prepare transfac files for filter visualization (weighted by filter contribution)
+deepac explain fa2transfac -i fcontribs/fasta -o fcnotribs/transfac -w -d fcontribs/filter_scores
+
+# Visualize nucleotide contribution sequence logos
+deepac explain xlogos -f fcontribs/fasta -s fcontribs/filter_scores -l fcnotribs/transfac -t train_data.npy -o xlogos
+```
+You can browse through other supplementary functionalities and parameters by checking the help:
+```
+deepac explain -h
+deepac explain fcontribs -h
+deepac explain xlogos -h
+# etc.
+```
+
+## Genome-wide phenotype potential analysis (GWPA)
+To find interesting regions of a whole genome, use this workflow to generate nucleotide-resolution maps of
+predicted phenotype potentials and nucleotide contributions:
+```
+# Fragment the genomes into pseudoreads
+deepac gwpa fragment -g genomes_fasta -o fragmented_genomes
+
+# Predict the pathogenic potential of each pseudoread
+deepac predict -r -a fragmented_genomes/sample1_fragmented_genomes.npy -o predictions/sample1_pred.npy
+
+# Create bedgraphs of mean pathogenic potential at each position of the genome
+# Can be visualized in IGV
+deepac gwpa genomemap -f fragmented_genomes -p predictions -g genomes_genome -o bedgraph
+
+# Rank genes by mean pathogenic potential
+deepac gwpa granking -p bedgraph -g genomes_gff -o granking
+
+# Create bedgraphs of mean nuclotide contribution at each position of the genome
+# Can be visualized in IGV
+deepac gwpa ntcontribs -m model.h5 -f fragmented_genomes -g genomes_genome -o bedgraph_nt
+```
+You can browse through other supplementary functionalities and parameters by checking the help:
+```
+deepac gwpa -h
+deepac gwpa genomemap -h
+deepac gwpa ntcontribs -h
+# etc.
+```
+## Filter enrichment analysis
+Finally, you can check for filter enrichment in annotated genes or other genomic features:
+```
+# Get filter activations, genome-wide
+deepac gwpa factiv -m model.h5 -t fragmented_genomes/sample1_fragmented_genomes.npy -f fragmented_genomes/sample1_fragmented_genomes.fasta -o factiv
+
+# Check for enrichment within annotated genomic features
+deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
+```
 ## Supplementary data and scripts
 
-In the supplement_paper directory you can find the R scripts and data files used in the paper for dataset preprocessing and benchmarking.
+In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
 
 ## Cite us
 If you find DeePaC useful, please cite:
@@ -164,4 +233,17 @@ If you find DeePaC useful, please cite:
     url = {https://doi.org/10.1093/bioinformatics/btz541},
     eprint = {http://oup.prod.sis.lan/bioinformatics/advance-article-pdf/doi/10.1093/bioinformatics/btz541/28971344/btz541.pdf},
 }
+
+@article {Bartoszewicz2020.01.29.925354,
+	author = {Bartoszewicz, Jakub M. and Seidel, Anja and Renard, Bernhard Y.},
+	title = {Interpretable detection of novel human viruses from genome sequencing data},
+	elocation-id = {2020.01.29.925354},
+	year = {2020},
+	doi = {10.1101/2020.01.29.925354},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354},
+	eprint = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354.full.pdf},
+	journal = {bioRxiv}
+}
+
 ```
