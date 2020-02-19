@@ -67,8 +67,8 @@ class RCConfig:
         self.seq_dim = len(self.alphabet)
         # subread settings (subread = first k nucleotides of a read)
         self.use_subreads = config['DataLoad'].getboolean('use_subreads')
-        self.min_subread_length = config['DataLoad'].getboolean('min_subread_length')
-        self.max_subread_length = config['DataLoad'].getboolean('max_subread_length')
+        self.min_subread_length = config['DataLoad'].getint('min_subread_length')
+        self.max_subread_length = config['DataLoad'].getint('max_subread_length')
         self.dist_subread = config['DataLoad'].getboolean('dist_subread')
 
         # Architecture Config #
