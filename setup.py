@@ -26,7 +26,7 @@ setup(name='deepac',
       python_requires='>=3',
       install_requires=[
           'keras>=2.3.1',
-          'tensorflow==1.15',
+          'tensorflow==1.15.2',
           'biopython>=1.76',
           'scikit-learn>=0.22.1',
           'matplotlib>=3.1.3',

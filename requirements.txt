@@ -13,7 +13,7 @@ six==1.14.0
 statsmodels==0.11.0
 shap==0.34
 tensorboard==1.15.0
-tensorflow==1.15.0
+tensorflow==1.15.2
 weblogo==3.7.4
 pandas==1.0.1
 scipy==1.4.1
