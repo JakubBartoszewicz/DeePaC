@@ -32,7 +32,7 @@ source my_env/bin/activate
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
  
 You can install DeePaC with `bioconda`. Set up the [bioconda channel](
-<https://bioconda.github.io/index.html#set-up-channels>) first, and then:
+<https://bioconda.github.io/user/install.html#set-up-channels>) first, and then:
 ```
 conda install deepac
 ```
