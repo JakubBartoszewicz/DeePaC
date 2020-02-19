@@ -75,6 +75,8 @@ deepac test -g 1
 deepac test -xp
 # Full tests
 deepac test -a -g 1
+# Full quick tests
+deepac test -aq
 ```
 
 ### Help
