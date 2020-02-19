@@ -22,7 +22,7 @@ setup(name='deepac',
       author='Jakub Bartoszewicz',
       author_email='jakub.bartoszewicz@hpi.de',
       license='MIT',
-      packages=['deepac', 'deepac.eval', 'deepac.tests', 'deepac.explain', 'deepac.gwap'],
+      packages=['deepac', 'deepac.eval', 'deepac.tests', 'deepac.explain', 'deepac.gwpa'],
       python_requires='>=3',
       install_requires=[
           'keras>=3.3.1',
