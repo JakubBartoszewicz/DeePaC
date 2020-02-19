@@ -264,7 +264,8 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
-            self.validation_data = ReadSequence(self.x_val, self.y_val, self.config.batch_size)
+            self.validation_data = ReadSequence(self.x_val, self.y_val, self.config.batch_size, \
+                                                  self.config.use_subreads, self.config.min_subread_length, self.config.max_subread_length, self.config.dist_subread)
             self.length_val = len(self.x_val)
         else:
             # ... or load all the data to memory
