@@ -17,7 +17,7 @@ Documentation can be found here:
 
 We recomment setting up an isolated `conda` environment:
 ```
-conda create -n my_env
+conda create -n my_env python=3.6
 conda activate my_env
 ```
 
