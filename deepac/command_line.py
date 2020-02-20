@@ -2,10 +2,10 @@
 A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
 
 """
-import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
 import numpy as np
 import tensorflow.compat.v1 as tf
 import random as rn
+import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
 import argparse
 import configparser
 import os
