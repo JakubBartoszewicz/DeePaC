@@ -14,17 +14,17 @@
     *  Minor bugfixes
 
 ### v0.9.3 - 13 May 2019
-  * Automated tests
-  * Bugfix: always saving models trained on built-in architectures
+    *  Automated tests
+    *  Bugfix: always saving models trained on built-in architectures
 
 ### v0.9.2 - 15 Apr 2019
-  * Windows compatibility
-  * CLI bugfixes
-  * Python3 required
-  * Built-in architectures for training
+    *  Windows compatibility
+    *  CLI bugfixes
+    *  Python3 required
+    *  Built-in architectures for training
 
 ### v0.9.1 - 12 Apr 2019
-  * added the CPU version of TensorFlow as the default requirement
+    *  added the CPU version of TensorFlow as the default requirement
 
 ### v0.9.0 - 3 Apr 2019
-  * Initial PyPi release
+    *  Initial PyPi release
