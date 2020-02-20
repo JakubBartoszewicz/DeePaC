@@ -1,3 +1,15 @@
+### v0.10.0 - 20 Feb 2020
+    New functionalities:
+    *  convolutional filter visualization with partial Shapley values (max-contribution or all-contributions) or max-activation
+    *  genome-wide phenotype potential maps
+    *  nucleotide contribution maps
+    *  filter enrichment analysis
+    *  filter and gene rankings
+
+    Other:
+    *  TF 1.15 required; TF 2.0 compatible with training and prediction but untested, as TFExplainer in SHAP not yet compatible (so the intepretability workflows require TF<2.0)
+    *  Minor bugfixes
+
 ### v0.9.3 - 13 May 2019
   * Automated tests
   * Bugfix: always saving models trained on built-in architectures
