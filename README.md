@@ -50,7 +50,7 @@ Note: TensorFlow 2.0 is not yet supported.
 To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu from the `defaults` channel before deepac:
 ```
 conda remove tensorflow
-conda install -c defaults tensorflow-gpu=1.* 
+conda install -c defaults tensorflow-gpu=1.15 
 conda install deepac
 ```
 Note: TensorFlow 2.0 is not yet supported.
