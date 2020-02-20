@@ -1,6 +1,5 @@
 import numpy as np
 import seaborn as sns
-import matplotlib.pyplot as plt
 
 sns.set_context("paper", font_scale=2.5)
 pathroot = "nn-ca2none-e002-predictions-"
