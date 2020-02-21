@@ -257,15 +257,15 @@ If you find DeePaC useful, please cite:
 }
 
 @article {Bartoszewicz2020.01.29.925354,
-	author = {Bartoszewicz, Jakub M. and Seidel, Anja and Renard, Bernhard Y.},
-	title = {Interpretable detection of novel human viruses from genome sequencing data},
-	elocation-id = {2020.01.29.925354},
-	year = {2020},
-	doi = {10.1101/2020.01.29.925354},
-	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354},
-	eprint = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354.full.pdf},
-	journal = {bioRxiv}
+    author = {Bartoszewicz, Jakub M. and Seidel, Anja and Renard, Bernhard Y.},
+    title = {Interpretable detection of novel human viruses from genome sequencing data},
+    elocation-id = {2020.01.29.925354},
+    year = {2020},
+    doi = {10.1101/2020.01.29.925354},
+    publisher = {Cold Spring Harbor Laboratory},
+    URL = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354},
+    eprint = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354.full.pdf},
+    journal = {bioRxiv}
 }
 
 ```
