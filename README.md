@@ -237,7 +237,7 @@ deepac gwpa factiv -m model.h5 -t fragmented_genomes/sample1_fragmented_genomes.
 deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
 ```
 ## Supplementary data and scripts
-
+Datasets are available here: <https://doi.org/10.5281/zenodo.3678562> (bacteria) and here: <https://doi.org/10.5281/zenodo.3630803> (viruses).
 In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
 
 ## Cite us
