@@ -10,6 +10,14 @@ For details regarding the interpretability functionalities of DeePaC, see the pr
 Documentation can be found here:
 <https://rki_bioinformatics.gitlab.io/DeePaC/>.
 
+## Plug-ins
+### DeePaC-strain
+Basic version of DeePaC comes with built-in models trained to predict pathogenic potentials of NGS reads originating from
+novel *bacteral species*. If you want to predict pathogenicity of novel *strains* of *known* species, try the DeePaC-strain plugin available here:
+<https://gitlab.com/JakubBartoszewicz/DeePaC-strain>. 
+
+### DeePaC-vir
+If you want to detect novel human viruses, try the DeePaC-vir plugin: <https://gitlab.com/JakubBartoszewicz/DeePaC-vir>. 
 
 ## Installation
 
@@ -37,6 +45,12 @@ You can install DeePaC with `bioconda`. Set up the [bioconda channel](
 conda install deepac
 ```
 
+If you want to install the plugins as well, use:
+
+```
+conda install deepacvir deepacstrain
+```
+
 ### With pip
 
 You can also install DeePaC with `pip`:
@@ -44,6 +58,12 @@ You can also install DeePaC with `pip`:
 pip install deepac
 ```
 Note: TensorFlow 2.0 is not yet supported.
+
+If you want to install the plugins, use:
+
+```
+pip install deepacvir deepacstrain
+```
 
 ### GPU support
 
