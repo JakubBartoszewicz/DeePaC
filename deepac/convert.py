@@ -35,7 +35,7 @@ def convert_cudnn(config, saved_model, no_prep):
 
     if K.backend() == 'tensorflow':
         paprconfig.set_tf_session()
-    paprnet = RCNet(paprconfig)
+    paprnet = RCNet(paprconfig, training_mode=False)
 
     paprnet.model.load_weights(weights_path)
 
