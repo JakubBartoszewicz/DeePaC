@@ -26,6 +26,7 @@ from tensorflow.compat.v1.keras import regularizers
 from tensorflow.compat.v1.keras.optimizers import Adam
 from tensorflow.compat.v1.keras.layers import BatchNormalization
 from tensorflow.compat.v1.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.compat.v1.keras.models import load_model
 
 from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 
@@ -243,6 +244,9 @@ class RCNet:
         elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
             raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
         else:
+            if self.config.epoch_start > 0:
+                checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
+                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start + 1))
             if self.config.use_rc:
                 self.__build_rc_model()
             else:
@@ -850,27 +854,30 @@ class RCNet:
 
     def compile_model(self):
         """Compile model and save model summaries"""
-        print("Compiling...")
-        # If using multiple GPUs, compile a parallel model for data parallelism.
-        # Use a wrapper for the parallel model to use the ModelCheckpoint callback
-        if self.config.multi_gpu and not self.config.device_parallel:
-            self.parallel_model = ModelMGPU(self.model, gpus=self.config.n_gpus)
-            self.parallel_model.compile(loss='binary_crossentropy',
-                                        optimizer=self.config.optimizer,
-                                        metrics=['accuracy'])
-        else:
-            self.model.compile(loss='binary_crossentropy',
-                               optimizer=self.config.optimizer,
-                               metrics=['accuracy'])
+        if self.config.epoch_start > 0:
+            print("Compiling...")
+            # If using multiple GPUs, compile a parallel model for data parallelism.
+            # Use a wrapper for the parallel model to use the ModelCheckpoint callback
+            if self.config.multi_gpu and not self.config.device_parallel:
+                self.parallel_model = ModelMGPU(self.model, gpus=self.config.n_gpus)
+                self.parallel_model.compile(loss='binary_crossentropy',
+                                            optimizer=self.config.optimizer,
+                                            metrics=['accuracy'])
+            else:
+                self.model.compile(loss='binary_crossentropy',
+                                   optimizer=self.config.optimizer,
+                                   metrics=['accuracy'])
 
-        # Print summary and plot model
-        if self.config.summaries:
-            with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
-                with redirect_stdout(f):
-                    self.model.summary()
-            plot_model(self.model,
-                       to_file=self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname),
-                       show_shapes=False, rankdir='TB')
+            # Print summary and plot model
+            if self.config.summaries:
+                with open(self.config.log_dir + "/summary-{runname}.txt".format(runname=self.config.runname), 'w') as f:
+                    with redirect_stdout(f):
+                        self.model.summary()
+                plot_model(self.model,
+                           to_file=self.config.log_dir + "/plot-{runname}.png".format(runname=self.config.runname),
+                           show_shapes=False, rankdir='TB')
+        else:
+            print('Skipping compilation of a pre-trained model...')
 
     def __set_callbacks(self):
         """Set callbacks to use during training"""
