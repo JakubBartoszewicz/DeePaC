@@ -233,7 +233,7 @@ class RCNet:
         if K.backend() == 'tensorflow':
             if self.config.epoch_start > 0:
                 checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start))
+                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
             else:
                 # Build the model using the CPU or GPU
                 with tf.device(self.config.model_build_device):
