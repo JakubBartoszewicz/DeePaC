@@ -154,8 +154,6 @@ class Tester:
         paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train_labels.npy")
         paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val_data.npy")
         paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val_labels.npy")
-        paprconfig.epoch_start = 0
-        paprconfig.epoch_end = 2
         paprconfig.n_gpus = self.n_gpus
         paprconfig.n_cpus = self.n_cpus
         paprconfig.log_superpath = "deepac-tests"

@@ -231,26 +231,22 @@ class RCNet:
             self.__set_callbacks()
 
         if K.backend() == 'tensorflow':
-            # Build the model using the CPU or GPU
-            with tf.device(self.config.model_build_device):
-                if self.config.rc_mode == "full":
-                    self.__build_rc_model()
-                elif self.config.rc_mode == "siam":
-                    self.__build_siam_model()
-                elif self.config.rc_mode == "none":
-                    self.__build_simple_model()
-                else:
-                    raise ValueError('Unrecognized RC mode')
-        elif K.backend() != 'tensorflow' and self.config.n_gpus > 1:
-            raise NotImplementedError('Keras team recommends multi-gpu training with tensorflow')
-        else:
             if self.config.epoch_start > 0:
                 checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start + 1))
-            if self.config.use_rc:
-                self.__build_rc_model()
+                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start))
             else:
-                self.__build_simple_model()
+                # Build the model using the CPU or GPU
+                with tf.device(self.config.model_build_device):
+                    if self.config.rc_mode == "full":
+                        self.__build_rc_model()
+                    elif self.config.rc_mode == "siam":
+                        self.__build_siam_model()
+                    elif self.config.rc_mode == "none":
+                        self.__build_simple_model()
+                    else:
+                        raise ValueError('Unrecognized RC mode')
+        else:
+            raise NotImplementedError('TensorFlow backend required.')
 
     def load_data(self):
         """Load datasets"""
@@ -854,7 +850,7 @@ class RCNet:
 
     def compile_model(self):
         """Compile model and save model summaries"""
-        if self.config.epoch_start > 0:
+        if self.config.epoch_start == 0:
             print("Compiling...")
             # If using multiple GPUs, compile a parallel model for data parallelism.
             # Use a wrapper for the parallel model to use the ModelCheckpoint callback
