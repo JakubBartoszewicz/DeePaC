@@ -38,7 +38,11 @@ def convert_cudnn(config, saved_model, no_prep):
     paprnet = RCNet(paprconfig, training_mode=False)
 
     paprnet.model.load_weights(weights_path)
+    paprnet.model.compile(loss='binary_crossentropy',
+                          optimizer=paprnet.config.optimizer,
+                          metrics=['accuracy'])
 
     # Save output
     save_path = path + "_converted.h5"
     paprnet.model.save(save_path)
+    print(paprnet.model.summary())
