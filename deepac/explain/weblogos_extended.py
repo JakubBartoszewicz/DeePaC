@@ -76,6 +76,9 @@ def get_weblogos_ext(args):
             except IOError:
                 print("No data, skipping.")
                 continue
+            except ValueError:
+                print("No data, skipping.")
+                continue
 
             # load weighted count matrix from transfac file
             if args.logo_dir:

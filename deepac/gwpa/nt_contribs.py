@@ -88,8 +88,16 @@ def nt_map(args):
             num_fragments = len(fragments)
             records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
 
-            contribs = explainer.shap_values(records)[0]
-            scores_nt = np.sum(contribs, axis=-1)
+            chunk_size = 500
+            i = 0
+            scores_nt_chunks = []
+            while i < num_fragments:
+                contribs_chunk = explainer.shap_values(records[i:i+chunk_size, :])[0]
+                scores_nt_chunk = np.sum(contribs_chunk, axis=-1)
+                scores_nt_chunks.append(scores_nt_chunk)
+                i = i + chunk_size
+                print("Done " + str(min(i, num_fragments)) + " from " + str(num_fragments) + " sequences")
+            scores_nt = np.vstack(scores_nt_chunks)
 
             # load genome size
             genome_info_file = args.genomes_dir + "/" + re.split("_fragmented_genomes", genome)[0] + ".genome"

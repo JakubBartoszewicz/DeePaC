@@ -22,7 +22,7 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
     if matrix.shape[0] < read_length:
         # Pad with zeros
-        matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4),dtype=datatype)))
+        matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4), dtype=datatype)))
     if matrix.shape[0] > read_length:
         # Trim
         matrix = matrix[:read_length, :]
