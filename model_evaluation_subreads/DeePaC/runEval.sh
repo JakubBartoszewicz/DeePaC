@@ -2,10 +2,11 @@
 
 prediction_folder=$1
 test_set=$2
-model_name=$3
+model_name=$(basename $1)
 
 sed -i 's/RunName.*/RunName = '$model_name'/g' eval_config.ini
 sed -i 's/DataSet.*/DataSet = '$test_set'/g' eval_config.ini
+sed -i 's/PairedSet.*/PairedSet = none/g' eval_config.ini
 
 # get files
 cp $prediction_folder/$test_set"_data_"* ./
@@ -23,4 +24,4 @@ done
 deepac eval -r eval_config.ini
 
 # rm temp files 
-rm $model_name"-e"*
+rm *.npy
