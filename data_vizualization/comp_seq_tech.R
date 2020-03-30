@@ -2,6 +2,7 @@ library(ggplot2)
 library(gridExtra)
 library(tidyverse)
 
+# data preparation
 read_eval_data <- readRDS("read_eval_data.rds")
 test_set = "test_1"
 read_eval_data_plot <- read_eval_data %>%
@@ -12,7 +13,20 @@ read_eval_data_plot <- read_eval_data %>%
     pred_type == "single_read"
   )
 
-plotDesign_compare_seq_tech <- function(metric,ylab, ylim,title = "",table = FALSE) {
+plot_compare_seq_tech <- function(metric,ylab, ylim,title = "",table = FALSE) {
+    # plots the course of a metric on different subreadlengths (y=metric,x=read length) 
+    # comparing the classifiers trained with data from varying seq technology
+    #
+    # Args:
+    #   metric: e.g. acc, auroc ...
+    #   ylab: label y axis 
+    #   ylim: limits y axis as vector
+    #   title of the plot
+    #   table: show table (Bool)
+    #
+    # Returns:
+    #   plot and opt. table
+    # compute plot
     plot <- ggplot(
       data = read_eval_data_plot,
       mapping = aes(
@@ -50,7 +64,7 @@ plotDesign_compare_seq_tech <- function(metric,ylab, ylim,title = "",table = FAL
   }
 
 acc <-
-  plotDesign_compare_seq_tech(
+  plot_compare_seq_tech(
     "acc",
     "accuracy",
     c(0.4, 1),
@@ -59,7 +73,7 @@ acc <-
   )
 acc
 auroc <-
-  plotDesign_compare_seq_tech(
+  plot_compare_seq_tech(
     "auroc",
     "auroc",
     c(0.4, 1),
@@ -68,7 +82,7 @@ auroc <-
   )
 auroc
 precision <-
-  plotDesign_compare_seq_tech(
+  plot_compare_seq_tech(
     "precision",
     "precision",
     c(0.4, 1),
@@ -77,7 +91,7 @@ precision <-
   )
 precision
 recall <-
-  plotDesign_compare_seq_tech(
+  plot_compare_seq_tech(
     "recall",
     "recall",
     c(0.3, 1),
@@ -86,7 +100,7 @@ recall <-
   )
 recall
 spec <-
-  plotDesign_compare_seq_tech("spec",
+  plot_compare_seq_tech("spec",
                               "spec",
                               c(0, 1),
                               title = paste("performance", test_set),

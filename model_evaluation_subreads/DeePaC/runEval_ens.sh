@@ -12,9 +12,9 @@ sed -i 's/RunNames.*/RunNames = '$run_name_1','$run_name_2'/g' eval_ens_config.i
 sed -i 's/DataSet.*/DataSet = '$test_set'/g' eval_ens_config.ini
 if [ -z ${paired_set+x} ]
 	then
-		sed -i 's/PairedSet.*/PairedSet = '$test_set_2'/g' eval_config.ini
+		sed -i 's/PairedSet.*/PairedSet = '$test_set_2'/g' eval_ens_config.ini
 	else
-		sed -i 's/PairedSet.*/PairedSet = none/g' eval_config.ini
+		sed -i 's/PairedSet.*/PairedSet = none/g' eval_ens_config.ini
 fi
 
 

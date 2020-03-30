@@ -6,18 +6,36 @@ read_eval_data <- readRDS("read_eval_data.rds")
 
 #plots ----
 # filter data
+cnns_img <-  c("cnn_25-250bp_d02_img-e001",
+              "cnn_50bp_d02_img-e008",
+              "cnn_100bp_d02_img-e001",
+              "cnn_150bp_d02_img-e003",
+              "cnn_200bp_d02_img-e003",
+              "cnn_250bp_d025_img")
+
+lstms_img <- c("lstm_25-250bp_d02_img-e009",
+               "lstm_50bp_d02_img-e009",
+               "lstm_100bp_d02_img-e005",
+               "lstm_150bp_d02_img-e010",
+               "lstm_200bp_d02_img-e010",
+               "lstm_250bp_d02_img")
+
+cnns_vhdb <-  c("cnn_25-250bp_d025_vhdb_all-e010",
+                "cnn_150bp_d025_vhdb_all-e014",
+                "cnn_250bp_d025_vhdb_all-e011")
+
+lstms_vhdb <- c("lstm_25-250bp_d02_vhdb_all-e001",
+                "lstm_150bp_d025_vhdb_all-e005",
+                "lstm_250bp_d02_vhdb_all-e013")
+
+
 read_eval_data_plot <- read_eval_data%>%
-  filter(pathogen_type=="img", 
-         training %in% c("cnn_25-250bp_d02_img-e001",
-                         "cnn_50bp_d02_img-e008",
-                         "cnn_100bp_d02_img-e001",
-                         "cnn_150bp_d02_img-e003",
-                         "cnn_200bp_d02_img-e003",
-                         "cnn_250bp_d025_img"),
-         set == "test_1")
+  filter(training %in% lstms_vhdb,
+         set == "all_test_1")%>%
+  mutate(trained_on = factor(trained_on,levels = c("50bp","100bp","150bp","200bp","250bp","25-250bp"),ordered = T))
 
 plot_metric_vs_subl <- function(data,metric,ylab,ylim,table=F){
-  # plots the course of a metric on different subreadlengths (y=metric,x=seq_cycle) and a table summerizing the plot 
+  # plots the course of a metric on different subreadlengths (y=metric,x=length) and a table summerizing the plot 
   #
   # Args:
   #   data: plot dataframe

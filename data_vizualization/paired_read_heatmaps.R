@@ -2,7 +2,19 @@
 library(tidyverse)
 
 plot_heatmap <- function(data,metric,limits_scale){
+  # plots a heatmap of a metric on different readlength comb 
+  #
+  # Args:
+  #   data: dataframe, must contain col subread_length, subread_length_2 and a metric
+  #   metric: e.g. acc, auroc ...
+  #   limits_scale: limits for the color scale
+  #
+  # Returns:
+  #   heatmap
+  # compute plot
   heatmap <- ggplot() + 
+    # no data and mapping defined in the ggplot command 
+    # to enable the easy drawing of lines on the plot later on 
     geom_tile(data = data,
               mapping = aes(subread_length, 
                             subread_length_2, 
@@ -27,8 +39,21 @@ plot_heatmap <- function(data,metric,limits_scale){
   return(heatmap)
 }
 
-add_line_heatmap <- function(heatmap,threshold,data,color,linetype,name,metric){
-  # get coordiantes
+add_line_heatmap <- function(heatmap,data,metric,threshold,color,linetype,name){
+  # draws a threshold line on a heatmap 
+  #
+  # Args:
+  #   heatmap
+  #   data: dataframe, must contain col subread_length, subread_length_2 and a metric
+  #   metric e.g. acc.....
+  #   threshold
+  #   color of the line
+  #   linetype 
+  #   name: legend key to be used
+  #
+  # Returns:
+  #   heatmap with the added line
+  # get coordiantes for the threshold line
   data <- data %>%
     arrange(subread_length, subread_length_2) %>%
     group_by(subread_length) %>%
@@ -76,6 +101,7 @@ add_line_heatmap <- function(heatmap,threshold,data,color,linetype,name,metric){
         show.legend = TRUE
       )
   }
+  # add color and linetype
   heatmap <- heatmap + 
     scale_color_manual(name="thresholds",values = color) + 
     scale_linetype_manual(name="thresholds",values = linetype)
@@ -85,14 +111,14 @@ add_line_heatmap <- function(heatmap,threshold,data,color,linetype,name,metric){
 
 read_eval_data <- readRDS(file = "read_eval_data.rds")
 
-trainings <- c("lstm_250bp_d02_img-metrics.csv",
-               "lstm_25-250bp_d02_img-e009-metrics.csv",
-               "lstm_250bp_d02_vhdb-e013_all-metrics.csv",
-               "lstm_150bp_d025_vhdb_all-e005-metrics.csv",
-               "cnn_250bp_d025_img-metrics.csv",
-               "cnn_150bp_d02_img-e003-metrics.csv",
-               "cnn_250bp_d025_vhdb_all-e011-metrics.csv",
-               "cnn_25-250bp_d025_vhdb_all-e010-metrics.csv")
+trainings <- c("lstm_250bp_d02_img",
+               "lstm_25-250bp_d02_img-e009",
+               "lstm_250bp_d02_vhdb-e013_all",
+               "lstm_150bp_d025_vhdb_all-e005",
+               "cnn_250bp_d025_img",
+               "cnn_150bp_d02_img-e003",
+               "cnn_250bp_d025_vhdb_all-e011",
+               "cnn_25-250bp_d025_vhdb_all-e010")
 
 metric <- "acc"
 for(train in trainings){
@@ -101,22 +127,24 @@ for(train in trainings){
            set %in% c("test_1_test_2","all_test_1_all_test_2"))%>%
     mutate_if(is.numeric, "round", digits = 3)
   
-heatmap <- plot_heatmap(read_eval_data_plot,metric,c(50,90))
-
-heatmap <- add_line_heatmap(heatmap = heatmap,threshold = 0.8,data = read_eval_data_plot,
-                             color = "black",linetype = "solid",name = "80%",metric = metric)
-
-baseline <- read_eval_data%>%
-  filter(training == train,
-         set %in% c("test_1","all_test_1"),
-         subread_length == 250)
-
-baseline <- as.numeric(baseline[,metric])
-
-heatmap <- add_line_heatmap(heatmap = heatmap,threshold = baseline,data = read_eval_data_plot,
-                             color = c("black","red"),linetype = c("solid","dashed"),name = "baseline",metric = metric)
-
-ggsave(filename = paste0("plots/", train, "_",metric,".jpg"),
-       plot = heatmap,width = 5, height = 5)
+  heatmap <- plot_heatmap(read_eval_data_plot,metric,c(50,90))
+  
+  heatmap <- add_line_heatmap(heatmap = heatmap,threshold = 0.8,data = read_eval_data_plot,
+                               color = "black",linetype = "solid",name = "80%",metric = metric)
+  
+  baseline <- read_eval_data%>%
+    filter(training == train,
+           set %in% c("test_1","all_test_1"),
+           subread_length == 250)
+  
+  baseline <- as.numeric(baseline[,metric])
+  
+  # when adding a second line color and linetype of the previous defined line need to be defined again
+  # => function should be optimized here
+  heatmap <- add_line_heatmap(heatmap = heatmap,threshold = baseline,data = read_eval_data_plot,
+                               color = c("black","red"),linetype = c("solid","dashed"),name = "baseline",metric = metric)
+  
+  ggsave(filename = paste0("plots/", train, "_",metric,".jpg"),
+         plot = heatmap,width = 5, height = 5)
 
 } 

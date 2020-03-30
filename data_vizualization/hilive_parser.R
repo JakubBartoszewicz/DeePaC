@@ -1,6 +1,8 @@
 library(readODS)
 
-# split the file containing the HiLive results into seperate csvs (easier to pass them to data pred script that way )
+# split the odt file containing the HiLive results into seperate csvs 
+# the csvs are supposed to be somehwat similar to deepac eval outout
+# (easier to pass them to data pred script that way )
 file <- "/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/HiLive/hybrid-performance.ods"
 sheets <- ods_sheets(path = file)
 for(sheet in sheets){
