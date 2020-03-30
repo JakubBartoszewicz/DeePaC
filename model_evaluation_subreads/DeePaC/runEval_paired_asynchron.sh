@@ -28,7 +28,7 @@ do
 done
 
 # run eval
-deepac eval -r eval_config_paired.ini
+deepac eval -r eval_config.ini
 
 rm *.npy
 

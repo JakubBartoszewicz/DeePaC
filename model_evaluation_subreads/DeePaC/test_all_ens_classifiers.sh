@@ -1,5 +1,7 @@
+# path to predictions to test
 pred_folders="$(ls -d /home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/DeePaC/predictions/* | grep 'img' | grep -v 'nano' )"
 
+# test all possible comb (no repetions)
 for pred_1 in $pred_folders
 do
     for pred_2 in $pred_folders

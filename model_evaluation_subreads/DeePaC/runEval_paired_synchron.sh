@@ -18,13 +18,21 @@ cp $prediction_folder/$test_set_2"_data"* ./
 var=1
 for length_1 in {025..250..25}
 do
-	printf -v epoch "%03d" $var
-	mv $test_set_1"_data_subread_"$length_1"_predictions.npy" $model_name"-e"$epoch"-predictions-"$test_set_1".npy"
-	mv $test_set_2"_data_subread_"$length_1"_predictions.npy" $model_name"-e"$epoch"-predictions-"$test_set_2".npy"
-	var=$((var+1))
+	if [ $length_1 == "025" ] || [ $length_1 == "075" ] || [ $length_1 == "125" ] || [ $length_1 == "175" ] || [ $length_1 == "225" ]
+	then
+		var=$((var+1))
+	else
+		printf -v epoch "%03d" $var
+		mv $test_set_1"_data_subread_"$length_1"_predictions.npy" $model_name"-e"$epoch"-predictions-"$test_set_1".npy"
+		mv $test_set_2"_data_subread_"$length_1"_predictions.npy" $model_name"-e"$epoch"-predictions-"$test_set_2".npy"
+		# run eval
+		sed -i 's/EpochStart =.*/EpochStart = '$var'/g' eval_config.ini
+		var=$((var+1))
+		sed -i 's/EpochEnd =.*/EpochEnd = '$var'/g' eval_config.ini
+
+		deepac eval -r eval_config.ini
+	fi
 done
 
-# run eval
-deepac eval -r eval_config_paired.ini
 
 rm *.npy

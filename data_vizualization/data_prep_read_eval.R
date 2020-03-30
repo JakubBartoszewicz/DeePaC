@@ -68,25 +68,22 @@ deepac_ens <- deepac_ens%>%
     mutate(epoch = 1:n())%>%
     ungroup()
 
-read_eval_data <- rbind(deepac,deepac_ens)
+read_eval_data <- rbind_own(deepac,deepac_ens)
 
-deepac <- deepac%>%
+read_eval_data <- read_eval_data%>%
   # add column indicating if its a paired or single read pred
-  mutate(pred_type = ifelse(set %in% c("test_1_test_2",
-                                       "test_2_nano_test_3_nano",
-                                       "test_2_nano_test_4_nano",
-                                       "test_3_nano_test_4_nano"), 
+  mutate(pred_type = ifelse(str_count(set,"test") > 1,
                             "paired_read", "single_read"))
 
 # epochs encode for subread length
 levels = 1:21
 labels = seq(25,500,25)
 labels = append(labels,c("avg"))
-colnames(deepac)[colnames(deepac) == "epoch"] <- "subread_length"
-deepac$subread_length <- factor(deepac$subread_length,levels = levels,labels = labels,ordered = TRUE)
-deepac$subread_length_2 <- factor(NA,levels = levels,labels = labels,ordered = TRUE)
+colnames(read_eval_data)[colnames(read_eval_data) == "epoch"] <- "subread_length"
+read_eval_data$subread_length <- factor(read_eval_data$subread_length,levels = levels,labels = labels,ordered = TRUE)
+read_eval_data$subread_length_2 <- factor(NA,levels = levels,labels = labels,ordered = TRUE)
 # all paired pred already present are synchronous
-deepac$subread_length_2[deepac$pred_type=="paired_read"] = deepac$subread_length[deepac$pred_type=="paired_read"]
+read_eval_data$subread_length_2[read_eval_data$pred_type=="paired_read"] = read_eval_data$subread_length[read_eval_data$pred_type=="paired_read"]
 
 
 # add asynchronous paired read data
@@ -104,13 +101,13 @@ deepac_paired_as <- deepac_paired_as%>%
 
 deepac_paired_as$pred_type=c("single_read","paired_read")
 
-read_eval_data <- rbind(read_eval_data,deepac_paired_as)
+read_eval_data <- rbind_own(read_eval_data,deepac_paired_as)
 
 # remove duplicates from paired pred and ensemble pred
-deepac <- deepac[!duplicated(deepac[c(1:6,8:21)]),]
+read_eval_data <- read_eval_data[!duplicated(read_eval_data[c(1:6,8:21)]),]
 
 # extract info from training column e.g. training read length, ann type ...
-deepac <- deepac%>%
+read_eval_data <- read_eval_data%>%
   rowwise()%>%
   mutate(trained_on = paste(unlist(str_extract_all(training,"\\d+-*\\d*bp")),collapse = "+"),
          subread_pos = ifelse(str_detect(training,"last"),"end","start"),
@@ -154,7 +151,7 @@ paprbag <- paprbag%>%
 
 
 # combine paprbag and deepac data
-read_eval_data <- rbind_own(deepac,paprbag)%>%
+read_eval_data <- rbind_own(read_eval_data,paprbag)%>%
   ungroup()
 
 # blast----
