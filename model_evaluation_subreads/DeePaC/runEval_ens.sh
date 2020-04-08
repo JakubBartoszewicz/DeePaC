@@ -5,18 +5,11 @@ pred_model_2=$2
 run_name_1=$(basename $1)
 run_name_2=$(basename $2)
 test_set=$3
-paired_set= $4
 
 sed -i 's/EnsembleName.*/EnsembleName = '$run_name_1'_'$run_name_2'/g' eval_ens_config.ini
 sed -i 's/RunNames.*/RunNames = '$run_name_1','$run_name_2'/g' eval_ens_config.ini
 sed -i 's/DataSet.*/DataSet = '$test_set'/g' eval_ens_config.ini
-if [ -z ${paired_set+x} ]
-	then
-		sed -i 's/PairedSet.*/PairedSet = '$test_set_2'/g' eval_ens_config.ini
-	else
-		sed -i 's/PairedSet.*/PairedSet = none/g' eval_ens_config.ini
-fi
-
+sed -i 's/PairedSet.*/PairedSet = none/g' eval_ens_config.ini
 
 
 # get files

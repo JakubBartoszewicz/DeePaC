@@ -6,9 +6,9 @@ for pred_1 in $pred_folders
 do
     for pred_2 in $pred_folders
     do 
+        # check if comb was already tested
         filename_1=$(basename $pred_1)"_"$(basename $pred_2)
         filename_2=$(basename $pred_2)"_"$(basename $pred_1)
-
         if [ $pred_1 == $pred_2 ] || [ -f ./"$filename_1"-metrics.csv ] || [ -f ./"$filename_2"-metrics.csv ]
         then
             echo $filename_1
