@@ -1,5 +1,5 @@
 source("SimulationWrapper.R")    
-    Workers <- 3
+    Workers <- 2
     
     Do.TrainingData <- F
     Do.ValidationData <- F
