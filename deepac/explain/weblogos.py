@@ -28,7 +28,14 @@ def get_weblogos(args):
             if args.file_ext == ".fasta":
                 seqs = read_seq_data(fin)
                 prior = parse_prior(str(gc_content), seqs.alphabet)
-                data = LogoData.from_seqs(seqs, prior)
+                try:
+                    data = LogoData.from_seqs(seqs, prior)
+                except ValueError as err:
+                    print(err)
+                    continue
+                except RuntimeError as err:
+                    print(err)
+                    continue
 
             # load count matrix from transfac file
             elif args.file_ext == ".transfac":
