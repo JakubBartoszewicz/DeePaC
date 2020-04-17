@@ -40,6 +40,9 @@ def get_weblogos(args):
                 except ValueError as err:
                     print(err)
                     continue
+                except RuntimeError as err:
+                    print(err)
+                    continue
 
             # set logo options
             options = LogoOptions()
