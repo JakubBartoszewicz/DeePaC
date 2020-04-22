@@ -19,6 +19,10 @@ novel *bacteral species*. If you want to predict pathogenicity of novel *strains
 ### DeePaC-vir
 If you want to detect novel human viruses, try the DeePaC-vir plugin: <https://gitlab.com/JakubBartoszewicz/DeePaC-vir>. 
 
+### DeePaC-Live
+If you want to run the predictions in real-time during an Illumina sequencing run, try DeePaC-Live: <https://gitlab.com/dacs-hpi/deepac-live>. 
+
+
 ## Installation
 
 ### Recommended: set up an environment
