@@ -107,6 +107,10 @@ class MainRunner:
             paprconfig.x_val_path = args.val_data
         if args.val_labels:
             paprconfig.y_val_path = args.val_labels
+        if args.run_name:
+            paprconfig.runname = args.run_name
+            paprconfig.log_dir = os.path.join(paprconfig.log_superpath,
+                                              "{runname}-logs".format(runname=paprconfig.runname))
 
         paprconfig.set_tf_session()
         paprnet = RCNet(paprconfig)
@@ -192,6 +196,8 @@ class MainRunner:
         parser_train.add_argument('-t', '--train-labels', dest="train_labels", help="Path to training labels.")
         parser_train.add_argument('-V', '--val-data', dest="val_data", help="Path to validation data.")
         parser_train.add_argument('-v', '--val-labels', dest="val_labels", help="Path to validation labels.")
+        parser_train.add_argument('-R', '--run-name', dest="run_name", help="Run name "
+                                                                            "(default: based on chosen config).")
         parser_train.set_defaults(func=self.run_train)
 
         # create the parser for the "preproc" command
