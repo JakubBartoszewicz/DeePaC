@@ -9,7 +9,7 @@ import random as rn
 import argparse
 import configparser
 import os
-import tensorflow.compat.v1.keras.backend as K
+import shutil
 from tensorflow.compat.v1.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
@@ -79,6 +79,13 @@ def run_convert(args):
     config = configparser.ConfigParser()
     config.read(args.config)
     convert_cudnn(config, args.model, args.from_weights)
+
+
+def run_templates(args):
+    """Get config templates (in this directory)."""
+    modulepath = os.path.dirname(__file__)
+    templates_path = os.path.join(modulepath, "builtin", "config_templates")
+    shutil.copytree(templates_path, os.path.join(os.getcwd(), "deepac_config_templates"))
 
 
 class MainRunner:
@@ -243,6 +250,9 @@ class MainRunner:
         parser_gwpa = subparsers.add_parser('gwpa', help='Run GWPA workflows.')
         parser_gwpa = add_gwpa_parser(parser_gwpa)
         parser_gwpa.set_defaults(func=lambda a: parser_gwpa.print_help())
+
+        parser_templates = subparsers.add_parser('templates', help='Get config templates (in this directory).')
+        parser_templates.set_defaults(func=run_templates)
 
         args = parser.parse_args()
 
