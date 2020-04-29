@@ -68,10 +68,10 @@ class RCConfig:
         self.alphabet = "ACGT"
         self.seq_dim = len(self.alphabet)
         # subread settings (subread = first k nucleotides of a read)
-        self.use_subreads = config['InputData'].getboolean('use_subreads')
-        self.min_subread_length = config['InputData'].getint('min_subread_length')
-        self.max_subread_length = config['InputData'].getint('max_subread_length')
-        self.dist_subread = config['InputData']['dist_subread']
+        self.use_subreads = config['InputData'].getboolean('UseSubreads')
+        self.min_subread_length = config['InputData'].getint('MinSubreadLength')
+        self.max_subread_length = config['InputData'].getint('MaxSubreadLength')
+        self.dist_subread = config['InputData']['DistSubread']
 
         # Architecture Config #
         # Set the seed

@@ -68,12 +68,11 @@ class ReadSequence(Sequence):
             batch_x = np.copy(self.X[batch_indices])
             """Randomly shorten reads"""
             for matrix in batch_x:
-                random_length = np.random.randint(self.min_subread_length,self.max_subread_length)
-                matrix[random_length:,:] = 0
+                random_length = np.random.randint(self.min_subread_length, self.max_subread_length + 1)
+                matrix[random_length:, :] = 0
         else:
             batch_x = self.X[batch_indices]
         batch_y = self.y[batch_indices]
-
 
         return np.array(batch_x), np.array(batch_y)
 
