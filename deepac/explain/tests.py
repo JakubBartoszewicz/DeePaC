@@ -108,7 +108,7 @@ class ExplainTester:
         scores_dir = os.path.join(self.outpath, "fcontribs", "nuc_scores")
         out_dir = os.path.join(self.outpath, "fcontribs", "weblogos_ext")
         args = Namespace(fasta_dir=fasta_dir, scores_dir=scores_dir, logo_dir=logo_dir,
-                         train_data=self.test_data, out_dir=out_dir)
+                         train_data=self.test_data, out_dir=out_dir, gain=250*512)
         get_weblogos_ext(args)
         assert (os.path.isfile(
             os.path.join(self.outpath, "fcontribs", "weblogos_ext",

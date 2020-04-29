@@ -16,8 +16,8 @@ def get_weblogos(args):
     # for each convolutional filter
     for file in os.listdir(args.in_dir):
 
-        if bool(re.search("_motifs_filter_[0-9]+.*" + args.file_ext, file)) and os.stat(args.in_dir + "/" + file).st_size > 0:
-
+        if bool(re.search("_motifs_filter_[0-9]+.*" + args.file_ext, file)) and \
+                os.stat(args.in_dir + "/" + file).st_size > 0:
             c_filter = re.search("filter_[0-9]+", file).group()
             filter_index = c_filter.replace("filter_", "")
             print("Processing filter: " + filter_index)

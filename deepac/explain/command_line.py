@@ -100,13 +100,16 @@ def add_explain_parser(xparser):
     parser_weblogos.set_defaults(func=run_weblogos)
 
     parser_xlogos = explain_subparsers.add_parser('xlogos', help='Get extended sequence logos.')
-    parser_xlogos.add_argument("-f", "--fasta_dir", required=True, help="Directory containing motifs "
+    parser_xlogos.add_argument("-i", "--fasta_dir", required=True, help="Directory containing motifs "
                                                                         "per filter (.fasta)")
     parser_xlogos.add_argument("-s", "--scores_dir", required=True,
                                help="Directory containing nucleotide scores per filter (.csv)")
-    parser_xlogos.add_argument("-l", "--logo_dir",
+    parser_xlogos.add_argument("-I", "--logo_dir",
                                help="Directory containing motifs in weighted transfac format (only required if "
                                     "weighted weblogos should be created)")
+    parser_xlogos.add_argument("-G", "--gain", default=250 * 512, type=int,
+                               help="Color saturation gain. Weblogo colors reach saturation when the average nt "
+                                    "score=1/gain. Default: 128000. Recommended: input length * number of filters.")
     parser_xlogos.add_argument("-t", "--train_data", help="Training data set to compute GC-content")
     parser_xlogos.add_argument("-o", "--out_dir", required=True, help="Output directory")
     parser_xlogos.set_defaults(func=run_xlogos)
