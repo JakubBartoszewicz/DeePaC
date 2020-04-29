@@ -108,8 +108,7 @@ class MainRunner:
         if args.val_labels:
             paprconfig.y_val_path = args.val_labels
 
-        if K.backend() == 'tensorflow':
-            paprconfig.set_tf_session()
+        paprconfig.set_tf_session()
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()

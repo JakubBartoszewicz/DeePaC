@@ -161,8 +161,7 @@ class Tester:
         paprconfig.log_superpath = "deepac-tests"
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
 
-        if K.backend() == 'tensorflow':
-            paprconfig.set_tf_session()
+        paprconfig.set_tf_session()
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()
