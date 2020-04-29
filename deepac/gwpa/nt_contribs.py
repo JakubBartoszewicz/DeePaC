@@ -88,7 +88,7 @@ def nt_map(args):
             num_fragments = len(fragments)
             records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
 
-            chunk_size = 500
+            chunk_size = args.chunk_size
             i = 0
             scores_nt_chunks = []
             while i < num_fragments:

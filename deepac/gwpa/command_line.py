@@ -59,6 +59,8 @@ def add_gwpa_parser(gparser):
                                    help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
     parser_ntcontribs.add_argument("-L", "--read_length", dest="read_length", default=250, type=int,
                                    help="Fragment length")
+    parser_ntcontribs.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
+                                   help="Sequence chunk size. Decrease for lower memory usage.")
     parser_ntcontribs.set_defaults(func=run_ntcontribs)
 
     parser_factiv = gwpa_subparsers.add_parser('factiv', help='Get filter activations.')
