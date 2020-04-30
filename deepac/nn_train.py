@@ -7,26 +7,26 @@ paths to input files and how should be the model trained.
 """
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import os
 
 import errno
 import warnings
 from contextlib import redirect_stdout
 
-from tensorflow.compat.v1.keras.models import Model
-from tensorflow.compat.v1.keras.layers import Dense, Dropout, Activation, Input, Lambda
-from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum, Flatten
-from tensorflow.compat.v1.keras.layers import CuDNNLSTM, LSTM, Bidirectional
-from tensorflow.compat.v1.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
-import tensorflow.compat.v1.keras.backend as K
-from tensorflow.compat.v1.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
-from tensorflow.compat.v1.keras.utils import plot_model
-from tensorflow.compat.v1.keras import regularizers
-from tensorflow.compat.v1.keras.optimizers import Adam
-from tensorflow.compat.v1.keras.layers import BatchNormalization
-from tensorflow.compat.v1.keras.initializers import glorot_uniform, he_uniform, orthogonal
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
+from tensorflow.keras.layers import concatenate, add, multiply, average, maximum, Flatten
+from tensorflow.keras.layers import LSTM, Bidirectional
+from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.keras.models import load_model
 
 from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 
@@ -177,23 +177,19 @@ class RCConfig:
         """Set TF session."""
         # If no GPUs, use CPUs
         if self.n_gpus == 0:
-            # Use as many intra_threads as the CPUs available
-            intra_threads = self.n_cpus
-            # Same for inter_threads
-            inter_threads = intra_threads
-
-            tf_config = tf.ConfigProto(intra_op_parallelism_threads=intra_threads,
-                                       inter_op_parallelism_threads=inter_threads,
-                                       allow_soft_placement=True, device_count={'CPU': self.n_cpus})
-            session = tf.Session(config=tf_config)
-            K.set_session(session)
             self.model_build_device = '/cpu:0'
         elif self.allow_growth:
-            # If using GPUs, allow for GPU memory growth, instead of reserving it all
-            tf_config = tf.ConfigProto(allow_soft_placement=True)
-            tf_config.gpu_options.allow_growth = True
-            session = tf.Session(config=tf_config)
-            K.set_session(session)
+            gpus = tf.config.experimental.list_physical_devices('GPU')
+            if gpus:
+                try:
+                    # Currently, memory growth needs to be the same across GPUs
+                    for gpu in gpus:
+                        tf.config.experimental.set_memory_growth(gpu, True)
+                    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+                    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+                except RuntimeError as e:
+                    # Memory growth must be set before GPUs have been initialized
+                    print(e)
 
 
 class RCNet:
@@ -290,37 +286,22 @@ class RCNet:
 
     def __add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if self.config.n_gpus > 0:
-            x = Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
-                                        recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                         seed=self.config.seed),
-                                        kernel_regularizer=self.config.regularizer,
-                                        return_sequences=return_sequences))(inputs)
-        else:
-            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
-                                   recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                    seed=self.config.seed),
-                                   kernel_regularizer=self.config.regularizer,
-                                   return_sequences=return_sequences,
-                                   recurrent_activation='sigmoid'))(inputs)
+        x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+                               recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                seed=self.config.seed),
+                               kernel_regularizer=self.config.regularizer,
+                               return_sequences=return_sequences,
+                               recurrent_activation='sigmoid'))(inputs)
         return x
 
     def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if self.config.n_gpus > 0:
-            shared_lstm = Bidirectional(CuDNNLSTM(units,
-                                                  kernel_initializer=self.config.initializer,
-                                                  recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                                   seed=self.config.seed),
-                                                  kernel_regularizer=self.config.regularizer,
-                                                  return_sequences=return_sequences))
-        else:
-            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
-                                             recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                              seed=self.config.seed),
-                                             kernel_regularizer=self.config.regularizer,
-                                             return_sequences=return_sequences,
-                                             recurrent_activation='sigmoid'))
+        shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
+                                         recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                          seed=self.config.seed),
+                                         kernel_regularizer=self.config.regularizer,
+                                         return_sequences=return_sequences,
+                                         recurrent_activation='sigmoid'))
         if self.config.device_parallel:
             with tf.device(self.config.device_fwd):
                 x_fwd = shared_lstm(inputs_fwd)
@@ -880,7 +861,7 @@ class RCNet:
         self.callbacks = []
 
         # Set early stopping
-        self.callbacks.append(EarlyStopping(monitor="val_acc", patience=self.config.patience))
+        self.callbacks.append(EarlyStopping(monitor="val_accuracy", patience=self.config.patience))
 
         # Add CSV callback with or without memory log
         if self.config.log_memory:

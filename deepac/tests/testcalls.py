@@ -1,5 +1,6 @@
-import tensorflow.compat.v1.keras.backend as K
-from tensorflow.compat.v1.keras.models import load_model
+import tensorflow as tf
+import tensorflow.keras.backend as K
+from tensorflow.keras.models import load_model
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
@@ -24,6 +25,12 @@ class Tester:
     def __init__(self, n_cpus=8, n_gpus=0, builtin_configs=None, builtin_weights=None,
                  explain=False, gwpa=False, do_all=False, do_quick=False, keep=False):
         self.n_cpus = n_cpus
+        # Use as many intra_threads as the CPUs available
+        intra_threads = self.n_cpus
+        # Same for inter_threads
+        inter_threads = intra_threads
+        tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
+        tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
         self.n_gpus = n_gpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights

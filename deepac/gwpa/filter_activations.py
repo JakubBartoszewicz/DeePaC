@@ -2,8 +2,8 @@ import os
 import csv
 import re
 import numpy as np
-from tensorflow.compat.v1.keras.models import load_model
-from tensorflow.compat.v1.keras import backend as K
+from tensorflow.keras.models import load_model
+from tensorflow.keras import backend as K
 from Bio import SeqIO
 from operator import itemgetter
 from itertools import groupby

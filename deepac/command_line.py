@@ -4,13 +4,13 @@ A DeePaC CLI. Support subcommands, prediction with built-in and custom models, t
 """
 import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import random as rn
 import argparse
 import configparser
 import os
 import shutil
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig
@@ -32,9 +32,8 @@ def main():
     """Run DeePaC CLI."""
     seed = 0
     np.random.seed(seed)
-    tf.set_random_seed(seed)
+    tf.random.set_seed(seed)
     rn.seed(seed)
-    tf.disable_v2_behavior()
     modulepath = os.path.dirname(__file__)
     builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
@@ -42,6 +41,17 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
     runner = MainRunner(builtin_configs, builtin_weights)
     runner.parse()
+
+
+def set_thread_config(n_cpus):
+    if n_cpus <= 0:
+        raise argparse.ArgumentTypeError("%s is an invalid number of cores" % n_cpus)
+    # Use as many intra_threads as the CPUs available
+    intra_threads = n_cpus
+    # Same for inter_threads
+    inter_threads = intra_threads
+    tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
+    tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
 
 
 def run_filter(args):
@@ -97,6 +107,7 @@ class MainRunner:
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
         print("Using {} GPUs.".format(args.n_gpus))
+        set_thread_config(args.n_cpus)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
         elif args.rapid:
@@ -128,8 +139,7 @@ class MainRunner:
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
         print("Using {} GPUs.".format(args.n_gpus))
-        if args.n_cpus <= 0:
-            raise argparse.ArgumentTypeError("%s is an invalid number of cores" % args.n_cpus)
+        set_thread_config(args.n_cpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
@@ -147,6 +157,7 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
+        set_thread_config(args.n_cpus)
         tester = Tester(args.n_cpus, args.n_gpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep)
         tester.run_tests()

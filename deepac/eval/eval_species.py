@@ -5,7 +5,7 @@ Requires a config file describing the data directory, dataset and run name,
 classification threshold and the epoch range.
   
 """
-from tensorflow.compat.v1.keras import backend
+from tensorflow.keras import backend
 import numpy as np
 import csv
 from deepac.eval.eval import get_performance

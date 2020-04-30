@@ -2,9 +2,9 @@ import re
 import os
 import numpy as np
 import csv
-from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
-from tensorflow.compat.v1.keras.utils import to_categorical
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import load_model
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
