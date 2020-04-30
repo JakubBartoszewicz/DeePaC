@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 from tensorflow.compat.v1.keras.models import Model
 from tensorflow.compat.v1.keras.layers import Dense, Dropout, Activation, Input, Lambda
 from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum, Flatten
-from tensorflow.compat.v1.keras.layers import LSTM, Bidirectional
+from tensorflow.compat.v1.keras.layers import CuDNNLSTM, LSTM, Bidirectional
 from tensorflow.compat.v1.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
 import tensorflow.compat.v1.keras.backend as K
 from tensorflow.compat.v1.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
@@ -286,22 +286,38 @@ class RCNet:
 
     def __add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
-                               recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                seed=self.config.seed),
-                               kernel_regularizer=self.config.regularizer,
-                               return_sequences=return_sequences,
-                               recurrent_activation='sigmoid'))(inputs)
+        if self.config.n_gpus > 0:
+            x = Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+                                        recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                         seed=self.config.seed),
+                                        kernel_regularizer=self.config.regularizer,
+                                        return_sequences=return_sequences))(inputs)
+        else:
+            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+                                   recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                    seed=self.config.seed),
+                                   kernel_regularizer=self.config.regularizer,
+                                   return_sequences=return_sequences,
+                                   recurrent_activation='sigmoid'))(inputs)
         return x
 
     def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
-                                         recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
-                                                                          seed=self.config.seed),
-                                         kernel_regularizer=self.config.regularizer,
-                                         return_sequences=return_sequences,
-                                         recurrent_activation='sigmoid'))
+        if self.config.n_gpus > 0:
+            shared_lstm = Bidirectional(CuDNNLSTM(units,
+                                                  kernel_initializer=self.config.initializer,
+                                                  recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                                   seed=self.config.seed),
+                                                  kernel_regularizer=self.config.regularizer,
+                                                  return_sequences=return_sequences))
+        else:
+            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
+                                             recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
+                                                                              seed=self.config.seed),
+                                             kernel_regularizer=self.config.regularizer,
+                                             return_sequences=return_sequences,
+                                             recurrent_activation='sigmoid'))
+
         if self.config.device_parallel:
             with tf.device(self.config.device_fwd):
                 x_fwd = shared_lstm(inputs_fwd)

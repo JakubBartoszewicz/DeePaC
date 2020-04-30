@@ -60,10 +60,10 @@ class Tester:
         self.test_filter()
         if self.do_all or self.explain:
             explaintester = ExplainTester(self.n_cpus, self.n_gpus)
-            print("X-TEST: Maxact (DeepBind)...")
-            explaintester.test_maxact()
             print("X-TEST: Filter contributions (DeepLIFT)...")
             explaintester.test_fcontribs()
+            print("X-TEST: Maxact (DeepBind)...")
+            explaintester.test_maxact()
             print("X-TEST: Filter ranking...")
             explaintester.test_franking()
             print("X-TEST: fa2transfac...")

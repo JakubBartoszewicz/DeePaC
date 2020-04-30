@@ -32,7 +32,6 @@ def main():
     """Run DeePaC CLI."""
     seed = 0
     np.random.seed(seed)
-    #tf.random.set_seed(seed)
     tf.set_random_seed(seed)
     tf.disable_eager_execution()
     rn.seed(seed)
