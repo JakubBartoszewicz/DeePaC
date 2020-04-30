@@ -7,26 +7,26 @@ paths to input files and how should be the model trained.
 """
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import os
 
 import errno
 import warnings
 from contextlib import redirect_stdout
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
-from tensorflow.keras.layers import concatenate, add, multiply, average, maximum, Flatten
-from tensorflow.keras.layers import LSTM, Bidirectional
-from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
-import tensorflow.keras.backend as K
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
-from tensorflow.keras.utils import plot_model
-from tensorflow.keras import regularizers
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
-from tensorflow.keras.models import load_model
+from tensorflow.compat.v1.keras.models import Model
+from tensorflow.compat.v1.keras.layers import Dense, Dropout, Activation, Input, Lambda
+from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum, Flatten
+from tensorflow.compat.v1.keras.layers import LSTM, Bidirectional
+from tensorflow.compat.v1.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+import tensorflow.compat.v1.keras.backend as K
+from tensorflow.compat.v1.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
+from tensorflow.compat.v1.keras.utils import plot_model
+from tensorflow.compat.v1.keras import regularizers
+from tensorflow.compat.v1.keras.optimizers import Adam
+from tensorflow.compat.v1.keras.layers import BatchNormalization
+from tensorflow.compat.v1.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.compat.v1.keras.models import load_model
 
 from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 

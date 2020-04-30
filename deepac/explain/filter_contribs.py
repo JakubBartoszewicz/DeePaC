@@ -6,7 +6,7 @@ import re
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import to_categorical
-import tensorflow.keras.backend as K
+import tensorflow.compat.v1.keras.backend as K
 
 from Bio import SeqIO
 
@@ -315,7 +315,6 @@ def get_lstm_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=False
 
 
 def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_dir):
-    # TODO: correct empty data saving when all_occurrences==True. Handled in filter ranking now.
     if filter_id is None:
         return
     if contribution_data[filter_id] is not None and motifs[filter_id] is not None and \

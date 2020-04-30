@@ -8,7 +8,7 @@ Requires a config file describing the available devices, input filepaths (two fa
  positive reads respectively), output filepath (for data and labels) and additional options.
 
 """
-from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from multiprocessing import Pool

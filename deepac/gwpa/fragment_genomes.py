@@ -4,7 +4,7 @@ from Bio.Alphabet import IUPAC
 from Bio.SeqRecord import SeqRecord
 import math
 import numpy as np
-from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
 
 
 def frag_genomes(args):
