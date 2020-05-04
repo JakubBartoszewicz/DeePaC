@@ -68,6 +68,8 @@ def add_gwpa_parser(gparser):
     parser_factiv.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
     parser_factiv.add_argument("-f", "--test_fasta", required=True, help="Reads of the test data set (.fasta)")
     parser_factiv.add_argument("-o", "--out_dir", default=".", help="Output directory")
+    parser_factiv.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
+                                  help="Perform calculations for this intermediate layer")
     parser_factiv.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
                                help="Sequence chunk size. Decrease for lower memory usage.")
     parser_factiv.set_defaults(func=run_factiv)

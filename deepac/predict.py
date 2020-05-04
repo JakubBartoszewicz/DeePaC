@@ -14,7 +14,6 @@ import itertools
 
 def predict_fasta(model, input_fasta, output, token_cores=8):
     """Predict pathogenic potentials from a fasta file."""
-    p = Pool(processes=token_cores)
 
     alphabet = "ACGT"
     input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
@@ -29,8 +28,9 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
     with open(input_fasta) as input_handle:
         # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
         # Tokenize function is applied to the fasta sequence generator.
-        x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                          read_length=read_length), read_fasta(input_handle)))
+        with Pool(processes=token_cores) as p:
+            x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                              read_length=read_length), read_fasta(input_handle)))
     # Predict
     print("Predicting...")
     y_pred = np.ndarray.flatten(model.predict(x_data))

@@ -40,7 +40,6 @@ def preproc(config):
     """Preprocess the CNN on Illumina reads using the supplied configuration."""
     # Set the number of cores to use
     max_cores = config['Devices'].getint('N_CPUs')
-    p = Pool(processes=max_cores)
     
     # Set input and output paths
     neg_path = config['InputPaths']['Fasta_Class_0']
@@ -59,32 +58,34 @@ def preproc(config):
     alphabet = "ACGT"  
     tokenizer = Tokenizer(char_level=True)
     tokenizer.fit_on_texts(alphabet)
-    
-    # Preprocess #
-    if neg_path != "none":
-        print("Preprocessing negative data...")
-        with open(neg_path) as input_handle:
-            # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-            # Tokenize function is applied to the fasta sequence generator.
-            x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                   read_length=read_length), read_fasta(input_handle)),dtype=datatype)
-        # Count negative samples
-        n_negative = x_train_neg.shape[0]
-    else:
-        x_train_neg = np.zeros((0, read_length, 4),dtype=np.uint8)
-        n_negative = 0
+    # Preprocess
+    with Pool(processes=max_cores) as p:
+        if neg_path != "none":
+            print("Preprocessing negative data...")
+            with open(neg_path) as input_handle:
+                # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+                # Tokenize function is applied to the fasta sequence generator.
+                x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                       read_length=read_length), read_fasta(input_handle)),
+                                         dtype=datatype)
+            # Count negative samples
+            n_negative = x_train_neg.shape[0]
+        else:
+            x_train_neg = np.zeros((0, read_length, 4),dtype=np.uint8)
+            n_negative = 0
 
-    if pos_path != "none":
-        print("Preprocessing positive data...")
-        with open(pos_path) as input_handle:
-            # Parse fasta, tokenize in parallel & concatenate to negative data
-            x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                   read_length=read_length), read_fasta(input_handle)),dtype=datatype)
-        # Count positive samples
-        n_positive = x_train_pos.shape[0]
-    else:
-        x_train_pos = np.zeros((0, read_length, 4),dtype=np.uint8)
-        n_positive = 0
+        if pos_path != "none":
+            print("Preprocessing positive data...")
+            with open(pos_path) as input_handle:
+                # Parse fasta, tokenize in parallel & concatenate to negative data
+                x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                       read_length=read_length), read_fasta(input_handle)),
+                                         dtype=datatype)
+            # Count positive samples
+            n_positive = x_train_pos.shape[0]
+        else:
+            x_train_pos = np.zeros((0, read_length, 4),dtype=np.uint8)
+            n_positive = 0
     # Concatenate
     x_train = np.concatenate((x_train_neg, x_train_pos))
     # Add labels

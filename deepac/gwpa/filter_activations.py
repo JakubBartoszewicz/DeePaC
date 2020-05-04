@@ -14,15 +14,24 @@ def filter_activations(args):
     """Compute activation values genome-wide."""
 
     # Creates the model and loads weights
-    tf.compat.v1.disable_eager_execution()
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Currently, memory growth needs to be the same across GPUs
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            # Memory growth must be set before GPUs have been initialized
+            print(e)
+
     model = load_model(args.model)
-    conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
-    output_layer = 'conv1d_1'
+    conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+    conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
     motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
-
-    layer_dict = dict([(layer.name, layer) for layer in model.layers])
 
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]
@@ -46,16 +55,9 @@ def filter_activations(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
     # Specify input and output of the network
-    input_img = model.layers[0].input
-
-    layer_output_fwd = layer_dict[output_layer].get_output_at(0)
-    iterate_fwd = K.function([input_img, K.learning_phase()],
-                             [layer_output_fwd])
-
-    layer_output_rc = layer_dict[output_layer].get_output_at(1)
-    # index at fwd_output = output size - index at rc_output
-    iterate_rc = K.function([input_img, K.learning_phase()],
-                            [layer_output_rc])
+    model = tf.keras.Model(model.inputs,
+                           (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                            model.get_layer(index=conv_layer_idx).get_output_at(1)))
 
     print("Computing activations ...")
     chunk_size = args.chunk_size
@@ -65,16 +67,12 @@ def filter_activations(args):
         samples_chunk = samples[n:n+chunk_size, :, :]
         reads_info_chunk = reads_info[n:n+chunk_size]
 
-        # activations = iterate([samples_chunk, 0])[0] #activations.shape = [total_num_reads, len_reads, n_filters]
-
-        activations_fwd = iterate_fwd([samples_chunk, 0])[0]
-        activations_rc = iterate_rc([samples_chunk, 0])[0]
-        activations = activations_fwd + activations_rc
+        activations_fwd, activations_rc = model(samples_chunk, training=False)
+        activations = activations_fwd.numpy() + activations_rc.numpy()
 
         n_filters = activations_fwd.shape[-1]
         for filter_index in range(n_filters):
 
-            # print("Processing filter " + str(filter_index) + " ...")
             filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
 
             pos_indices = np.where(activations[:, :, filter_index] > 0)

@@ -75,17 +75,17 @@ def gene_rank(args):
             print("Processing " + patho_file + " ...")
             bedgraph = pybedtools.BedTool(patho_file)
 
-            pool = multiprocessing.Pool(processes=args.n_cpus)
-            # filter gff files for feature of interest
-            filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
-            # compute mean pathogencity score per feature
-            feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
-                                       for filtered_gff in filtered_gffs]
+            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+                # filter gff files for feature of interest
+                filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
+                # compute mean pathogencity score per feature
+                feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
+                                           for filtered_gff in filtered_gffs]
 
-            # save results
-            patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
-                                                    ('bioproject_id', bioproject_id),
-                                                    ('pathogenicity_score', feature_pathogenicities))))
-            patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
-            patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv", sep="\t", index=False)
-            pool.close()
+                # save results
+                patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
+                                                        ('bioproject_id', bioproject_id),
+                                                        ('pathogenicity_score', feature_pathogenicities))))
+                patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
+                patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv", sep="\t",
+                                   index=False)

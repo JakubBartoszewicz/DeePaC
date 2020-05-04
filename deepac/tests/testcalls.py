@@ -85,12 +85,15 @@ class Tester:
             gwpatester.test_genomemap()
             print("X-TEST: Gene ranking...")
             gwpatester.test_granking()
-            print("X-TEST: Nucleotide contribution map...")
-            gwpatester.test_ntcontribs()
             print("X-TEST: Filter activations...")
             gwpatester.test_factiv()
             print("X-TEST: Filter enrichment...")
             gwpatester.test_fenrichment()
+
+        # SHAP
+        if self.do_all or self.gwpa:
+            print("X-TEST: Nucleotide contribution map...")
+            gwpatester.test_ntcontribs()
 
         print("TEST: OK")
 
