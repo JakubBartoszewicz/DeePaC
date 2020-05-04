@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import load_model
 import pandas as pd
 from deepac.predict import predict_npy
 from deepac.tests.datagen import generate_reads
@@ -133,7 +133,7 @@ class GWPATester:
                          test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
                          test_fasta=os.path.join(self.outpath, "genome_frag",
                                                  "sample_genome2_fragmented_genomes.fasta"),
-                         out_dir=os.path.join(self.outpath, "factiv"))
+                         out_dir=os.path.join(self.outpath, "factiv"), chunk_size=500)
         filter_activations(args)
         assert (os.path.isfile(os.path.join(self.outpath, "factiv",
                                             "sample_genome2_fragmented_genomes_filter_31.bed"))), \

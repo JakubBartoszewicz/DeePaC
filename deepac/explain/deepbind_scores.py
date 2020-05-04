@@ -3,8 +3,9 @@ import time
 import os
 import csv
 
-from tensorflow.compat.v1.keras.models import load_model
-from tensorflow.compat.v1.keras import backend as K
+from tensorflow.keras.models import load_model
+from tensorflow.keras import backend as K
+import tensorflow as tf
 from Bio import SeqIO
 from multiprocessing import Pool
 from functools import partial
@@ -62,6 +63,7 @@ def get_maxact(args):
     """Calculates DeepBind scores for all neurons in the convolutional layer
     and extract all motifs for which a filter neuron got a positive score."""
     # Creates the model and loads weights
+    tf.compat.v1.disable_eager_execution()
     model = load_model(args.model)
     print(model.summary())
     do_lstm = args.do_lstm

@@ -6,7 +6,7 @@ import re
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import to_categorical
-import tensorflow.compat.v1.keras.backend as K
+import tensorflow as tf
 
 from Bio import SeqIO
 
@@ -26,7 +26,7 @@ def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
 def get_filter_contribs(args):
     """Calculate DeepLIFT contribution scores for all neurons in the convolutional layer
     and extract all motifs for which a filter neuron got a non-zero contribution score."""
-
+    tf.compat.v1.disable_eager_execution()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     if args.w_norm and not args.do_lstm:
@@ -102,16 +102,17 @@ def get_filter_contribs(args):
 
     def map2layer(x, layer, out_node):
         feed_dict = dict(zip([model.get_layer(index=0).input], [x]))
-        return K.get_session().run(model.get_layer(index=layer).get_output_at(out_node), feed_dict)
+        return tf.compat.v1.keras.backend.get_session().run(model.get_layer(index=layer).get_output_at(out_node),
+                                                            feed_dict)
 
     intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
     intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
 
     explainer = TFDeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
-                                model.get_layer(index=conv_layer_idx).get_output_at(1)],
-                               model.layers[-1].output),
-                              [intermediate_ref_fwd,
-                               intermediate_ref_rc])
+                                  model.get_layer(index=conv_layer_idx).get_output_at(1)],
+                                 model.layers[-1].output),
+                                [intermediate_ref_fwd,
+                                 intermediate_ref_rc])
     filter_range = range(n_filters)
     if args.inter_neuron is not None:
         filter_range = [None]*n_filters

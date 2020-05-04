@@ -2,9 +2,10 @@ import re
 import os
 import numpy as np
 import csv
-from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
-from tensorflow.compat.v1.keras.utils import to_categorical
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import load_model
+import tensorflow as tf
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
@@ -70,7 +71,7 @@ def nt_map(args):
         os.makedirs(args.out_dir)
 
     ref_samples = get_reference_seqs(args, args.read_length)
-
+    tf.compat.v1.disable_eager_execution()
     model = load_model(args.model)
     explainer = DeepExplainer(model, ref_samples)
 

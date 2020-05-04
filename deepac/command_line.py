@@ -4,13 +4,13 @@ A DeePaC CLI. Support subcommands, prediction with built-in and custom models, t
 """
 import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import random as rn
 import argparse
 import configparser
 import os
 import shutil
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig
@@ -32,8 +32,7 @@ def main():
     """Run DeePaC CLI."""
     seed = 0
     np.random.seed(seed)
-    tf.set_random_seed(seed)
-    tf.disable_eager_execution()
+    tf.random.set_seed(seed)
     rn.seed(seed)
     modulepath = os.path.dirname(__file__)
     builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),

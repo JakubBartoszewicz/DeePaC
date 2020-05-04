@@ -1,4 +1,4 @@
-import tensorflow.compat.v1.keras.backend as K
+import tensorflow.keras.backend as K
 from deepac.nn_train import RCConfig, RCNet
 import configparser
 import os

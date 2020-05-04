@@ -1,5 +1,5 @@
-import tensorflow.compat.v1.keras.backend as K
-from tensorflow.compat.v1.keras.models import load_model
+import tensorflow.keras.backend as K
+from tensorflow.keras.models import load_model
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads

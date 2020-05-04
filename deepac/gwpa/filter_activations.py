@@ -2,8 +2,9 @@ import os
 import csv
 import re
 import numpy as np
-from tensorflow.compat.v1.keras.models import load_model
-from tensorflow.compat.v1.keras import backend as K
+from tensorflow.keras.models import load_model
+from tensorflow.keras import backend as K
+import tensorflow as tf
 from Bio import SeqIO
 from operator import itemgetter
 from itertools import groupby
@@ -13,6 +14,7 @@ def filter_activations(args):
     """Compute activation values genome-wide."""
 
     # Creates the model and loads weights
+    tf.compat.v1.disable_eager_execution()
     model = load_model(args.model)
     conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
     output_layer = 'conv1d_1'
@@ -56,7 +58,7 @@ def filter_activations(args):
                             [layer_output_rc])
 
     print("Computing activations ...")
-    chunk_size = 1000
+    chunk_size = args.chunk_size
     n = 0
     while n < total_num_reads:
         print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")

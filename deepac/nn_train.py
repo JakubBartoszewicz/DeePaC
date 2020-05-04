@@ -7,26 +7,26 @@ paths to input files and how should be the model trained.
 """
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import os
 
 import errno
 import warnings
 from contextlib import redirect_stdout
 
-from tensorflow.compat.v1.keras.models import Model
-from tensorflow.compat.v1.keras.layers import Dense, Dropout, Activation, Input, Lambda
-from tensorflow.compat.v1.keras.layers import concatenate, add, multiply, average, maximum, Flatten
-from tensorflow.compat.v1.keras.layers import CuDNNLSTM, LSTM, Bidirectional
-from tensorflow.compat.v1.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
-import tensorflow.compat.v1.keras.backend as K
-from tensorflow.compat.v1.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
-from tensorflow.compat.v1.keras.utils import plot_model
-from tensorflow.compat.v1.keras import regularizers
-from tensorflow.compat.v1.keras.optimizers import Adam
-from tensorflow.compat.v1.keras.layers import BatchNormalization
-from tensorflow.compat.v1.keras.initializers import glorot_uniform, he_uniform, orthogonal
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
+from tensorflow.keras.layers import concatenate, add, multiply, average, maximum, Flatten
+from tensorflow.keras.layers import LSTM, Bidirectional
+from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping, TensorBoard
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras import regularizers
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.keras.models import load_model
 
 from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
 
@@ -287,7 +287,7 @@ class RCNet:
     def __add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if self.config.n_gpus > 0:
-            x = Bidirectional(CuDNNLSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
                                         recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                          seed=self.config.seed),
                                         kernel_regularizer=self.config.regularizer,
@@ -304,7 +304,7 @@ class RCNet:
     def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if self.config.n_gpus > 0:
-            shared_lstm = Bidirectional(CuDNNLSTM(units,
+            shared_lstm = Bidirectional(LSTM(units,
                                                   kernel_initializer=self.config.initializer,
                                                   recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                                    seed=self.config.seed),
