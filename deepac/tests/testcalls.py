@@ -44,6 +44,10 @@ class Tester:
                 for name in dirs:
                     os.rmdir(os.path.join(root, name))
         quick = self.do_quick or self.explain or self.gwpa
+
+        gwpatester = None
+        explaintester = None
+
         print("TEST: Generating data...")
         datagen.generate_sample_data()
         print("TEST: Preprocessing data...")
@@ -58,24 +62,6 @@ class Tester:
         self.test_convert()
         print("TEST: Filtering...")
         self.test_filter()
-        if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus, self.n_gpus)
-            print("X-TEST: Filter contributions (DeepLIFT)...")
-            explaintester.test_fcontribs()
-            print("X-TEST: Maxact (DeepBind)...")
-            explaintester.test_maxact()
-            print("X-TEST: Filter ranking...")
-            explaintester.test_franking()
-            print("X-TEST: fa2transfac...")
-            explaintester.test_fa2transfac()
-            print("X-TEST: Weblogos...")
-            explaintester.test_weblogos()
-            print("X-TEST: Extended weblogos...")
-            explaintester.test_weblogos_extended()
-            print("X-TEST: transfac2IC...")
-            explaintester.test_transfac2ic()
-            print("X-TEST: Motif comparison...")
-            explaintester.test_motif_compare()
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus)
@@ -91,6 +77,29 @@ class Tester:
             gwpatester.test_fenrichment()
 
         # SHAP
+        if self.do_all or self.explain or self.gwpa:
+            print("X-TEST: Using SHAP. Disabling eager execution...")
+
+        if self.do_all or self.explain:
+            explaintester = ExplainTester(self.n_cpus, self.n_gpus)
+            print("X-TEST: Maxact (DeepBind)...")
+
+        if self.do_all or self.explain:
+            print("X-TEST: Filter contributions (DeepLIFT)...")
+            explaintester.test_fcontribs()
+            print("X-TEST: Filter ranking...")
+            explaintester.test_franking()
+            print("X-TEST: fa2transfac...")
+            explaintester.test_fa2transfac()
+            print("X-TEST: Weblogos...")
+            explaintester.test_weblogos()
+            print("X-TEST: Extended weblogos...")
+            explaintester.test_weblogos_extended()
+            print("X-TEST: transfac2IC...")
+            explaintester.test_transfac2ic()
+            print("X-TEST: Motif comparison...")
+            explaintester.test_motif_compare()
+
         if self.do_all or self.gwpa:
             print("X-TEST: Nucleotide contribution map...")
             gwpatester.test_ntcontribs()
