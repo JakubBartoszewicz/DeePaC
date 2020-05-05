@@ -167,6 +167,8 @@ class MainRunner:
         parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                     "with reverse-complement neural networks.")
         parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
+        parser.add_argument('--no-eager', dest="no_eager", help="Disable eager mode.",
+                            default=False, action="store_true")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
         # create the parser for the "predict" command
@@ -177,8 +179,8 @@ class MainRunner:
         predict_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
                                    help='Use the sensitive LSTM model.')
         predict_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
-        predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, already compiled CUSTOM'
-                                                                        ' model.')
+        predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, '
+                                                                         'already compiled CUSTOM model.')
         parser_predict.add_argument('-o', '--output', help="Output file path [.npy].")
         parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
         parser_predict.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
@@ -266,6 +268,9 @@ class MainRunner:
         parser_templates.set_defaults(func=run_templates)
 
         args = parser.parse_args()
+        if args.no_eager:
+            print("Disabling eager mode...")
+            tf.compat.v1.disable_eager_execution()
 
         if args.version:
             print(__version__)
