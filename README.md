@@ -29,7 +29,7 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 
 We recomment setting up an isolated `conda` environment:
 ```
-conda create -n my_env python=3.6
+conda create -n my_env
 conda activate my_env
 ```
 
