@@ -29,7 +29,7 @@ class ExplainTester:
         """Test maxact (DeepBind) scores."""
         args = Namespace(model=self.model, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "maxact"),
-                         n_cpus=self.n_cpus, do_lstm=False, inter_layer=1)
+                         n_cpus=self.n_cpus, do_lstm=False, inter_layer=1, chunk_size=500)
         get_maxact(args)
         assert (os.path.isfile(os.path.join(self.outpath, "maxact", "fasta",
                                             "deepbind_sample_val_data_motifs_filter_31.fasta"))), "Maxact failed."

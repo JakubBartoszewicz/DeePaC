@@ -3,28 +3,18 @@ import csv
 import re
 import numpy as np
 from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
 import tensorflow as tf
 from Bio import SeqIO
 from operator import itemgetter
 from itertools import groupby
+from deepac.utils import set_mem_growth
 
 
 def filter_activations(args):
     """Compute activation values genome-wide."""
 
     # Creates the model and loads weights
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            # Currently, memory growth needs to be the same across GPUs
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-        except RuntimeError as e:
-            # Memory growth must be set before GPUs have been initialized
-            print(e)
+    set_mem_growth()
 
     model = load_model(args.model)
     conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]

@@ -76,13 +76,14 @@ class Tester:
             print("X-TEST: Filter enrichment...")
             gwpatester.test_fenrichment()
 
-        # SHAP
-        if self.do_all or self.explain or self.gwpa:
-            print("X-TEST: Using SHAP. Disabling eager execution...")
-
         if self.do_all or self.explain:
             explaintester = ExplainTester(self.n_cpus, self.n_gpus)
             print("X-TEST: Maxact (DeepBind)...")
+            explaintester.test_maxact()
+
+        # SHAP
+        if self.do_all or self.explain or self.gwpa:
+            print("X-TEST: Using SHAP. Disabling eager execution...")
 
         if self.do_all or self.explain:
             print("X-TEST: Filter contributions (DeepLIFT)...")

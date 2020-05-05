@@ -29,6 +29,8 @@ def add_explain_parser(xparser):
                                help="Interpret elements of the LSTM output")
     parser_maxact.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
                                help="Perform calculations for this intermediate layer")
+    parser_maxact.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
+                                  help="Sequence chunk size. Decrease for lower memory usage.")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')

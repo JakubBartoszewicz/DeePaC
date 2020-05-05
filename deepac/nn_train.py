@@ -28,7 +28,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger
+from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger, set_mem_growth
 
 
 class RCConfig:
@@ -179,17 +179,7 @@ class RCConfig:
         if self.n_gpus == 0:
             self.model_build_device = '/cpu:0'
         elif self.allow_growth:
-            gpus = tf.config.experimental.list_physical_devices('GPU')
-            if gpus:
-                try:
-                    # Currently, memory growth needs to be the same across GPUs
-                    for gpu in gpus:
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-                    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-                except RuntimeError as e:
-                    # Memory growth must be set before GPUs have been initialized
-                    print(e)
+            set_mem_growth()
 
 
 class RCNet:
