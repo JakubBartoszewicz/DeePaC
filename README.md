@@ -14,10 +14,10 @@ Documentation can be found here:
 ### DeePaC-strain
 Basic version of DeePaC comes with built-in models trained to predict pathogenic potentials of NGS reads originating from
 novel *bacteral species*. If you want to predict pathogenicity of novel *strains* of *known* species, try the DeePaC-strain plugin available here:
-<https://gitlab.com/JakubBartoszewicz/DeePaC-strain>. 
+<https://gitlab.com/dacs-hpi/DeePaC-strain>. 
 
 ### DeePaC-vir
-If you want to detect novel human viruses, try the DeePaC-vir plugin: <https://gitlab.com/JakubBartoszewicz/DeePaC-vir>. 
+If you want to detect novel human viruses, try the DeePaC-vir plugin: <https://gitlab.com/dacs-hpi/DeePaC-vir>. 
 
 ### DeePaC-Live
 If you want to run the predictions in real-time during an Illumina sequencing run, try DeePaC-Live: <https://gitlab.com/dacs-hpi/deepac-live>. 
