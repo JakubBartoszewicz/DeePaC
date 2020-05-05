@@ -96,19 +96,19 @@ def preproc(config):
     # All sequences must have the same length. Then x_train is an array and the view below can be created
     # Note: creating a view instead of reversing element-wise saves a lot of memory
 
-    if do_shuffle:
-        indices = np.arange(len(y_train))
-        np.random.shuffle(indices)
-        x_train = x_train[indices, ::, ::]
-        y_train = y_train[indices]
-
     # RC augmentation: Add reverse-complements by reversing both dimensions of the matrix
     # assumes the following order of columns: "ACGT"
     if do_revc:
         print("Augmenting data...")
         x_train = np.concatenate((x_train, x_train[::, ::-1, ::-1]))
         y_train = np.concatenate((y_train, y_train))
-        
+
+    if do_shuffle:
+        indices = np.arange(len(y_train))
+        np.random.shuffle(indices)
+        x_train = x_train[indices, ::, ::]
+        y_train = y_train[indices]
+
     # Save matrices #
     print("Saving data...")
     # Compress output files
