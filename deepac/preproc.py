@@ -49,6 +49,9 @@ def preproc(config):
     
     # Set additional options: shuffle, gzip compression, RC augmentation, data type
     do_shuffle = config['Options'].getboolean('Do_shuffle')
+    if do_shuffle:
+        seed = config['Options'].getint('ShuffleSeed')
+        np.random.seed(seed)
     do_gzip = config['Options'].getboolean('Do_gzip')
     do_revc = config['Options'].getboolean('Do_revc')
     datatype = config['Options']['DataType']
