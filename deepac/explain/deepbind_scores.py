@@ -111,29 +111,31 @@ def get_maxact(args):
         os.makedirs(args.out_dir + "/fasta/")
 
     # Specify input and output of the network
-    # input_img = model.layers[0].input
-    # layer_output_fwd = layer_dict[output_layer].get_output_at(0)
-    # layer_output_rc = layer_dict[output_layer].get_output_at(1)
+    if tf.executing_eagerly():
+        model = tf.keras.Model(model.inputs,
+                               (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        iterate_fwd = None
+        iterate_rc = None
+    else:
+        input_img = model.layers[0].input
+        layer_output_fwd = model.get_layer(index=conv_layer_idx).get_output_at(0)
+        layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
+        if do_lstm:
+            iterate_fwd = K.function([input_img, K.learning_phase()],
+                                     [layer_output_fwd])
+            # index at fwd_output = output size - index at rc_output. returns index at FWD!
+            iterate_rc = K.function([input_img, K.learning_phase()],
+                                    [layer_output_rc])
+        else:
+            iterate_fwd = K.function([input_img, K.learning_phase()],
+                                     [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
 
-    model = tf.keras.Model(model.inputs,
-                           (model.get_layer(index=conv_layer_idx).get_output_at(0),
-                            model.get_layer(index=conv_layer_idx).get_output_at(1)))
-
-    # if do_lstm:
-    #     # iterate_fwd = K.function([input_img, K.learning_phase()],
-    #     #                          [layer_output_fwd])
-    #     # # index at fwd_output = output size - index at rc_output. returns index at FWD!
-    #     # iterate_rc = K.function([input_img, K.learning_phase()],
-    #     #                         [layer_output_rc])
-    # else:
-        # iterate_fwd = K.function([input_img, K.learning_phase()],
-        #                          [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
-        #
-        # layer_output_shape = layer_dict[output_layer].get_output_shape_at(1)
-        # # index at fwd_output = output size - index at rc_output. returns index at FWD!
-        # iterate_rc = K.function([input_img, K.learning_phase()],
-        #                         [K.max(layer_output_rc, axis=1), layer_output_shape[1] - 1 - K.argmax(layer_output_rc,
-        #                                                                                               axis=1)])
+            layer_output_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
+            # index at fwd_output = output size - index at rc_output. returns index at FWD!
+            iterate_rc = K.function([input_img, K.learning_phase()],
+                                    [K.max(layer_output_rc, axis=1),
+                                     layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
 
     start_time = time.time()
 
@@ -150,23 +152,27 @@ def get_maxact(args):
         samples_chunk = samples_chunk.astype('float32')
         reads_chunk = reads[n:n+chunk_size]
         if do_lstm:
-            # act_fwd = iterate_fwd([samples_chunk, 0])[0]
-            # act_rc = iterate_rc([samples_chunk, 0])[0]
-            act_fwd, act_rc = model(samples_chunk, training=False)
-            act_fwd = act_fwd.numpy()
-            act_rc = act_rc.numpy()
+            if tf.executing_eagerly():
+                act_fwd, act_rc = model(samples_chunk, training=False)
+                act_fwd = act_fwd.numpy()
+                act_rc = act_rc.numpy()
+            else:
+                act_fwd = iterate_fwd([samples_chunk, 0])[0]
+                act_rc = iterate_rc([samples_chunk, 0])[0]
             n_filters = act_fwd.shape[-1]
             mot_fwd = np.zeros((chunk_size, n_filters), dtype="int32")
             mot_rc = np.zeros((chunk_size, n_filters), dtype="int32")
             results_fwd = [act_fwd, mot_fwd]
             results_rc = [act_rc, mot_rc]
         else:
-            out_fwd, out_rc = model(samples_chunk, training=False)
-            results_fwd = [K.max(out_fwd, axis=1).numpy(), K.argmax(out_fwd, axis=1).numpy()]
-            out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
-            results_rc = [K.max(out_rc, axis=1).numpy(), out_shape[1] - 1 - K.argmax(out_rc, axis=1).numpy()]
-            # results_fwd = iterate_fwd([samples_chunk, 0])
-            # results_rc = iterate_rc([samples_chunk, 0])
+            if tf.executing_eagerly():
+                out_fwd, out_rc = model(samples_chunk, training=False)
+                results_fwd = [K.max(out_fwd, axis=1).numpy(), K.argmax(out_fwd, axis=1).numpy()]
+                out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
+                results_rc = [K.max(out_rc, axis=1).numpy(), out_shape[1] - 1 - K.argmax(out_rc, axis=1).numpy()]
+            else:
+                results_fwd = iterate_fwd([samples_chunk, 0])
+                results_rc = iterate_rc([samples_chunk, 0])
             n_filters = results_fwd[0].shape[-1]
 
         # for each filter do:

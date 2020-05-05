@@ -3,6 +3,7 @@ import csv
 import re
 import numpy as np
 from tensorflow.keras.models import load_model
+import tensorflow.keras.backend as K
 import tensorflow as tf
 from Bio import SeqIO
 from operator import itemgetter
@@ -45,9 +46,25 @@ def filter_activations(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
     # Specify input and output of the network
-    model = tf.keras.Model(model.inputs,
-                           (model.get_layer(index=conv_layer_idx).get_output_at(0),
-                            model.get_layer(index=conv_layer_idx).get_output_at(1)))
+
+    if tf.executing_eagerly():
+        model = tf.keras.Model(model.inputs,
+                               (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        iterate_fwd = None
+        iterate_rc = None
+    else:
+        # Specify input and output of the network
+        input_img = model.layers[0].input
+
+        layer_output_fwd = model.get_layer(index=conv_layer_idx).get_output_at(0)
+        iterate_fwd = K.function([input_img, K.learning_phase()],
+                                 [layer_output_fwd])
+
+        layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
+        # index at fwd_output = output size - index at rc_output
+        iterate_rc = K.function([input_img, K.learning_phase()],
+                                [layer_output_rc])
 
     print("Computing activations ...")
     chunk_size = args.chunk_size
@@ -56,9 +73,13 @@ def filter_activations(args):
         print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
         samples_chunk = samples[n:n+chunk_size, :, :]
         reads_info_chunk = reads_info[n:n+chunk_size]
-
-        activations_fwd, activations_rc = model(samples_chunk, training=False)
-        activations = activations_fwd.numpy() + activations_rc.numpy()
+        if tf.executing_eagerly():
+            activations_fwd, activations_rc = model(samples_chunk, training=False)
+            activations = activations_fwd.numpy() + activations_rc.numpy()
+        else:
+            activations_fwd = iterate_fwd([samples_chunk, 0])[0]
+            activations_rc = iterate_rc([samples_chunk, 0])[0]
+            activations = activations_fwd + activations_rc
 
         n_filters = activations_fwd.shape[-1]
         for filter_index in range(n_filters):
