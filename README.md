@@ -71,19 +71,18 @@ pip install deepacvir deepacstrain
 
 ### GPU support
 
-To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu from the `defaults` channel before deepac:
+To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu before deepac:
 ```
 conda remove tensorflow
-conda install -c defaults tensorflow-gpu=1.15 
+conda install tensorflow-gpu
 conda install deepac
 ```
-Note: TensorFlow 2.0 is not yet supported.
 
 If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
 you can do the same as above:
 ```
 pip uninstall tensorflow
-pip install tensorflow-gpu==1.15
+pip install tensorflow-gpu
 ```
 
 ### Optional: run tests
@@ -113,7 +112,7 @@ deepac train --help
 # Etc.
 ```
 
-## Prediction
+## Basic use: prediction
 
 You can predict pathogenic potentials with one of the built-in models out of the box:
 ```
@@ -140,7 +139,13 @@ deepac filter input.fasta input_predictions.npy -t 0.75 -p -o output-75.fasta
 deepac filter input.fasta input_predictions.npy -t 0.9 -p -o output-90.fasta
 ```
 
-## Preprocessing
+## Advanced use
+### Config templates
+To get the config templates in the current working directory, simply use:
+```
+deepac templates
+```
+### Preprocessing
 
 For more complex analyzes, it can be useful to preprocess the fasta files by converting them to binary numpy arrays. Use:
 ```
@@ -148,7 +153,7 @@ deepac preproc preproc_config.ini
 ```
 See the `config_templates` directory of the GitLab repository (https://gitlab.com/rki_bioinformatics/DeePaC/) for a sample configuration file.
 
-## Training
+### Training
 You can use the built-in architectures to train a new model:
 ```
 deepac train -r -g 1 -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
@@ -165,7 +170,7 @@ If you train an LSTM on a GPU, a CUDNNLSTM implementation will be used. To conve
 CPU-compatible, use `deepac convert`. You can also use it to save the weights of a model, or recompile a model 
 from a set of weights to use it with a different Python binary.
 
-## Evaluation
+### Evaluation
 
 To evaluate a trained model, use
 ```
@@ -179,7 +184,8 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
-## Filter visualization
+## Intepretability workflows
+### Filter visualization
 To find the most relevant filters and visualize them, use the following minimum workflow: 
 ```
 # Calculate filter and nucleotide contibutions (partial Shapley values) for the first convolutional layer
@@ -203,7 +209,7 @@ deepac explain xlogos -h
 # etc.
 ```
 
-## Genome-wide phenotype potential analysis (GWPA)
+### Genome-wide phenotype potential analysis (GWPA)
 To find interesting regions of a whole genome, use this workflow to generate nucleotide-resolution maps of
 predicted phenotype potentials and nucleotide contributions:
 ```
@@ -231,7 +237,7 @@ deepac gwpa genomemap -h
 deepac gwpa ntcontribs -h
 # etc.
 ```
-## Filter enrichment analysis
+### Filter enrichment analysis
 Finally, you can check for filter enrichment in annotated genes or other genomic features:
 ```
 # Get filter activations, genome-wide

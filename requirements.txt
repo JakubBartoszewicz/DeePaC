@@ -9,8 +9,8 @@ scikit-learn==0.22.1
 six==1.14.0
 statsmodels==0.11.0
 shap==0.35
-tensorboard==1.15.0
-tensorflow==1.15.0
+tensorboard==2.1.0
+tensorflow==2.1.0
 weblogo==3.7.4
 pandas==1.0.3
 scipy==1.4.1
