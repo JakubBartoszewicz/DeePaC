@@ -64,14 +64,16 @@ def get_reference_seqs(args, len_reads):
     return ref_samples
 
 
-def nt_map(args):
+def nt_map(args, allow_eager=False):
     """Create bedgraph files per genome which show the pathogenicity prediction score over all genomic positions."""
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
     ref_samples = get_reference_seqs(args, args.read_length)
-    tf.compat.v1.disable_eager_execution()
+    if tf.executing_eagerly() and not allow_eager:
+        print("Using SHAP. Disabling eager execution...")
+        tf.compat.v1.disable_eager_execution()
     model = load_model(args.model)
     explainer = DeepExplainer(model, ref_samples)
 

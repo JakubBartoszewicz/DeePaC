@@ -48,62 +48,60 @@ class Tester:
         gwpatester = None
         explaintester = None
 
-        print("TEST: Generating data...")
-        datagen.generate_sample_data()
-        print("TEST: Preprocessing data...")
-        self.test_preproc()
-        print("TEST: Training...")
-        self.test_train(quick)
-        print("TEST: Predicting...")
-        self.test_pred(quick)
-        print("TEST: Evaluating...")
-        self.test_eval()
-        print("TEST: Converting...")
-        self.test_convert()
-        print("TEST: Filtering...")
-        self.test_filter()
-
-        if self.do_all or self.gwpa:
-            gwpatester = GWPATester(self.n_cpus)
-            print("X-TEST: Fragmenting genomes...")
-            gwpatester.test_fragment()
-            print("X-TEST: Genome-wide phenotype potential map...")
-            gwpatester.test_genomemap()
-            print("X-TEST: Gene ranking...")
-            gwpatester.test_granking()
-            print("X-TEST: Filter activations...")
-            gwpatester.test_factiv()
-            print("X-TEST: Filter enrichment...")
-            gwpatester.test_fenrichment()
-
-        if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus, self.n_gpus)
-            print("X-TEST: Maxact (DeepBind)...")
-            explaintester.test_maxact()
+        # print("TEST: Generating data...")
+        # datagen.generate_sample_data()
+        # print("TEST: Preprocessing data...")
+        # self.test_preproc()
+        # print("TEST: Training...")
+        # self.test_train(quick)
+        # print("TEST: Predicting...")
+        # self.test_pred(quick)
+        # print("TEST: Evaluating...")
+        # self.test_eval()
+        # print("TEST: Converting...")
+        # self.test_convert()
+        # print("TEST: Filtering...")
+        # self.test_filter()
+        #
+        # if self.do_all or self.gwpa:
+        #     gwpatester = GWPATester(self.n_cpus)
+        #     print("X-TEST: Fragmenting genomes...")
+        #     gwpatester.test_fragment()
+        #     print("X-TEST: Genome-wide phenotype potential map...")
+        #     gwpatester.test_genomemap()
+        #     print("X-TEST: Gene ranking...")
+        #     gwpatester.test_granking()
+        #     print("X-TEST: Filter activations...")
+        #     gwpatester.test_factiv()
+        #     print("X-TEST: Filter enrichment...")
+        #     gwpatester.test_fenrichment()
+        #
+        # if self.do_all or self.explain:
+        #     explaintester = ExplainTester(self.n_cpus, self.n_gpus)
+        #     print("X-TEST: Maxact (DeepBind)...")
+        #     explaintester.test_maxact()
 
         # SHAP
-        if self.do_all or self.explain or self.gwpa:
-            print("X-TEST: Using SHAP. Disabling eager execution...")
-
         if self.do_all or self.explain:
+            explaintester = ExplainTester(self.n_cpus, self.n_gpus)
             print("X-TEST: Filter contributions (DeepLIFT)...")
             explaintester.test_fcontribs()
-            print("X-TEST: Filter ranking...")
-            explaintester.test_franking()
-            print("X-TEST: fa2transfac...")
-            explaintester.test_fa2transfac()
-            print("X-TEST: Weblogos...")
-            explaintester.test_weblogos()
-            print("X-TEST: Extended weblogos...")
-            explaintester.test_weblogos_extended()
-            print("X-TEST: transfac2IC...")
-            explaintester.test_transfac2ic()
-            print("X-TEST: Motif comparison...")
-            explaintester.test_motif_compare()
-
-        if self.do_all or self.gwpa:
-            print("X-TEST: Nucleotide contribution map...")
-            gwpatester.test_ntcontribs()
+        #     print("X-TEST: Filter ranking...")
+        #     explaintester.test_franking()
+        #     print("X-TEST: fa2transfac...")
+        #     explaintester.test_fa2transfac()
+        #     print("X-TEST: Weblogos...")
+        #     explaintester.test_weblogos()
+        #     print("X-TEST: Extended weblogos...")
+        #     explaintester.test_weblogos_extended()
+        #     print("X-TEST: transfac2IC...")
+        #     explaintester.test_transfac2ic()
+        #     print("X-TEST: Motif comparison...")
+        #     explaintester.test_motif_compare()
+        #
+        # if self.do_all or self.gwpa:
+        #     print("X-TEST: Nucleotide contribution map...")
+        #     gwpatester.test_ntcontribs()
 
         print("TEST: OK")
 

@@ -7,10 +7,11 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import to_categorical
 import tensorflow as tf
+from deepac.utils import set_mem_growth
 
 from Bio import SeqIO
 
-from shap.explainers.deep import TFDeepExplainer
+from shap.explainers.deep import DeepExplainer
 
 
 def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
@@ -23,10 +24,13 @@ def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
     return rf
 
 
-def get_filter_contribs(args):
+def get_filter_contribs(args, allow_eager=False):
     """Calculate DeepLIFT contribution scores for all neurons in the convolutional layer
     and extract all motifs for which a filter neuron got a non-zero contribution score."""
-    tf.compat.v1.disable_eager_execution()
+    if tf.executing_eagerly() and not allow_eager:
+        print("Using SHAP. Disabling eager execution...")
+        tf.compat.v1.disable_eager_execution()
+    set_mem_growth()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     if args.w_norm and not args.do_lstm:
@@ -99,16 +103,26 @@ def get_filter_contribs(args):
     print("Running DeepSHAP ...")
     chunk_size = args.chunk_size // num_ref_seqs
     i = 0
+    if tf.executing_eagerly():
+        intermediate_model = tf.keras.Model(model.inputs,
+                                            (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                             model.get_layer(index=conv_layer_idx).get_output_at(1)))
 
-    def map2layer(x, layer, out_node):
-        feed_dict = dict(zip([model.get_layer(index=0).input], [x]))
-        return tf.compat.v1.keras.backend.get_session().run(model.get_layer(index=layer).get_output_at(out_node),
-                                                            feed_dict)
+        def map2layer(input_samples):
+            out = intermediate_model(input_samples, training=False)
+            return out[0].numpy(), out[1].numpy()
 
-    intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
-    intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+        intermediate_ref_fwd, intermediate_ref_rc = map2layer(ref_samples)
+    else:
+        def map2layer(input_samples, layer, out_node):
+            feed_dict = dict(zip([model.get_layer(index=0).input], [input_samples]))
+            return tf.compat.v1.keras.backend.get_session().run(model.get_layer(index=layer).get_output_at(out_node),
+                                                                feed_dict)
 
-    explainer = TFDeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
+        intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
+        intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+
+    explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                   model.get_layer(index=conv_layer_idx).get_output_at(1)],
                                  model.layers[-1].output),
                                 [intermediate_ref_fwd,
@@ -125,8 +139,11 @@ def get_filter_contribs(args):
         samples_chunk = samples[i:i+chunk_size, :, :]
         reads_chunk = reads[i:i+chunk_size]
 
-        intermediate_fwd = map2layer(samples_chunk, conv_layer_idx, 0)
-        intermediate_rc = map2layer(samples_chunk, conv_layer_idx, 1)
+        if tf.executing_eagerly():
+            intermediate_fwd, intermediate_rc = map2layer(ref_samples)
+        else:
+            intermediate_fwd = map2layer(samples_chunk, conv_layer_idx, 0)
+            intermediate_rc = map2layer(samples_chunk, conv_layer_idx, 1)
         inter_diff_fwd = intermediate_fwd - intermediate_ref_fwd
         inter_diff_rc = intermediate_rc - intermediate_ref_rc
 
@@ -369,7 +386,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
         else:
             out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
 
-        explainer_nt = TFDeepExplainer((model.get_layer(index=0).input, out), ref_samples)
+        explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
         # Get difference in activation of the intermediate neuron
