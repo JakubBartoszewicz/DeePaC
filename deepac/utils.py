@@ -47,7 +47,8 @@ class ReadSequence(Sequence):
 
     """
 
-    def __init__(self, x_set, y_set, batch_size, use_subreads, min_subread_length, max_subread_length, dist_subread):
+    def __init__(self, x_set, y_set, batch_size, use_subreads, min_subread_length, max_subread_length, dist_subread,
+                 verbose_id=None):
         """PaPrSequence constructor"""
         self.X, self.y = x_set, y_set
         self.batch_size = batch_size
@@ -56,6 +57,8 @@ class ReadSequence(Sequence):
         self.min_subread_length = min_subread_length
         self.max_subread_length = max_subread_length
         self.dist_subread = dist_subread
+        self.verbose_id = verbose_id
+        self.epoch = 0
         self.on_epoch_end()
 
     def __len__(self):
@@ -79,6 +82,12 @@ class ReadSequence(Sequence):
 
     def on_epoch_end(self):
         """Update indices after each epoch"""
+        if self.verbose_id is not None:
+            if self.epoch == 0:
+                print("::{} sequence INIT".format(self.verbose_id))
+            else:
+                print("\n::{} sequence epoch {} END".format(self.verbose_id, self.epoch))
+            self.epoch = self.epoch + 1
         self.indices = np.arange(len(self.y))
         np.random.shuffle(self.indices)
 

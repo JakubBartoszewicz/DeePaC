@@ -217,11 +217,12 @@ class RCNet:
 
     """
 
-    def __init__(self, config, training_mode=True):
+    def __init__(self, config, training_mode=True, verbose_load=False):
         """RCNet constructor and config parsing"""
         self.config = config
         self.config.set_tf_session()
         self.history = None
+        self.verbose_load = verbose_load
 
         self.__t_sequence = None
         self.__v_sequence = None
@@ -245,31 +246,28 @@ class RCNet:
                     raise
             self.__set_callbacks()
 
-        if K.backend() == 'tensorflow':
-            if self.config.epoch_start > 0:
-                checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
-            else:
-                # Build the model using the CPU or GPU
-                if not self.config.use_tf_data:
-                    self.strategy = None
-                else:
-                    if self.config.multi_gpu:
-                        self.strategy = tf.distribute.MirroredStrategy()
-                    else:
-                        self.strategy = tf.distribute.OneDeviceStrategy(device=self.config.model_build_device)
-
-                with self.get_device_strategy_scope():
-                    if self.config.rc_mode == "full":
-                        self.__build_rc_model()
-                    elif self.config.rc_mode == "siam":
-                        self.__build_siam_model()
-                    elif self.config.rc_mode == "none":
-                        self.__build_simple_model()
-                    else:
-                        raise ValueError('Unrecognized RC mode')
+        if self.config.epoch_start > 0:
+            checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
+            self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
         else:
-            raise NotImplementedError('TensorFlow backend required.')
+            # Build the model using the CPU or GPU
+            if not self.config.use_tf_data:
+                self.strategy = None
+            else:
+                if self.config.multi_gpu:
+                    self.strategy = tf.distribute.MirroredStrategy()
+                else:
+                    self.strategy = tf.distribute.MirroredStrategy(devices=[self.config.model_build_device])
+
+            with self.get_device_strategy_scope():
+                if self.config.rc_mode == "full":
+                    self.__build_rc_model()
+                elif self.config.rc_mode == "siam":
+                    self.__build_siam_model()
+                elif self.config.rc_mode == "none":
+                    self.__build_simple_model()
+                else:
+                    raise ValueError('Unrecognized RC mode')
 
     def get_device_strategy_scope(self):
         if not self.config.use_tf_data:
@@ -288,7 +286,8 @@ class RCNet:
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
             self.__t_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size,
                                              self.config.use_subreads, self.config.min_subread_length,
-                                             self.config.max_subread_length, self.config.dist_subread)
+                                             self.config.max_subread_length, self.config.dist_subread,
+                                             verbose_id="TRAIN" if self.verbose_load else None)
 
             self.training_sequence = self.__t_sequence
             self.length_train = len(self.x_train)
@@ -303,7 +302,8 @@ class RCNet:
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
             self.__v_sequence = ReadSequence(self.x_val, self.y_val, self.config.batch_size,
                                              self.config.use_subreads, self.config.min_subread_length,
-                                             self.config.max_subread_length, self.config.dist_subread)
+                                             self.config.max_subread_length, self.config.dist_subread,
+                                             verbose_id="VAL" if self.verbose_load else None)
             self.validation_data = self.__v_sequence
 
             self.length_val = len(self.x_val)

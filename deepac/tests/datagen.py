@@ -27,7 +27,7 @@ def generate_reads(n, filename, gc=0.5, length=250, append=False, header=None):
             SeqIO.write(reads, output_handle, "fasta")
 
 
-def generate_sample_data(gc_pos=0.7, gc_neg=0.3, n_train=1024, n_val=1024):
+def generate_sample_data(gc_pos=0.7, gc_neg=0.3, n_train=4096, n_val=1024):
     """Generate a sample random dataset."""
     pos_train = np.ceil(n_train/2).astype(int)
     neg_train = n_train - pos_train
