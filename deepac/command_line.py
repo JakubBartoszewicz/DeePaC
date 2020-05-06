@@ -43,7 +43,7 @@ def main():
     runner.parse()
 
 
-def set_thread_config(n_cpus):
+def set_thread_config(n_cpus, n_gpus=None):
     if n_cpus <= 0:
         raise argparse.ArgumentTypeError("%s is an invalid number of cores" % n_cpus)
     # Use as many intra_threads as the CPUs available
@@ -52,6 +52,8 @@ def set_thread_config(n_cpus):
     inter_threads = intra_threads
     tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
     tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
+    if n_gpus is not None and n_gpus == 0:
+        tf.config.set_visible_devices([], 'GPU')
 
 
 def run_filter(args):
@@ -107,7 +109,7 @@ class MainRunner:
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
         print("Using {} GPUs.".format(args.n_gpus))
-        set_thread_config(args.n_cpus)
+        set_thread_config(args.n_cpus, args.n_gpus)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
         elif args.rapid:
@@ -130,7 +132,6 @@ class MainRunner:
             paprconfig.log_dir = os.path.join(paprconfig.log_superpath,
                                               "{runname}-logs".format(runname=paprconfig.runname))
 
-        paprconfig.set_tf_session()
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()
@@ -139,7 +140,7 @@ class MainRunner:
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
         print("Using {} GPUs.".format(args.n_gpus))
-        set_thread_config(args.n_cpus)
+        set_thread_config(args.n_cpus, args.n_gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
@@ -157,7 +158,7 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
-        set_thread_config(args.n_cpus)
+        set_thread_config(args.n_cpus, args.n_gpus)
         tester = Tester(args.n_cpus, args.n_gpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep)
         tester.run_tests()
@@ -168,6 +169,8 @@ class MainRunner:
                                                                     "with reverse-complement neural networks.")
         parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
         parser.add_argument('--no-eager', dest="no_eager", help="Disable eager mode.",
+                            default=False, action="store_true")
+        parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
@@ -271,6 +274,8 @@ class MainRunner:
         if args.no_eager:
             print("Disabling eager mode...")
             tf.compat.v1.disable_eager_execution()
+        if args.debug_device:
+            tf.debugging.set_log_device_placement(True)
 
         if args.version:
             print(__version__)

@@ -53,8 +53,6 @@ class BuiltinLoader:
             paprconfig.device_rc = d_pref + str(min(1, n_gpus-1))
             paprconfig.model_build_device = d_pref + str(min(2, n_gpus-1))
 
-        paprconfig.set_tf_session()
-
         paprnet = RCNet(paprconfig, training_mode)
 
         paprnet.model.load_weights(weights_path)

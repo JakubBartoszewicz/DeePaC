@@ -56,6 +56,12 @@ class RCConfig:
         # Data Loading Config #
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
         self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
+        try:
+            self.use_tf_data = config['DataLoad'].getboolean('UseTFData')
+        except KeyError:
+            self.use_tf_data = False
+        if self.use_tf_data is None:
+            self.use_tf_data = False
         self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch') and self.use_generators_train
         if self.use_generators_train or self.use_generators_val:
             self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
@@ -192,6 +198,7 @@ class RCNet:
     def __init__(self, config, training_mode=True):
         """RCNet constructor and config parsing"""
         self.config = config
+        self.config.set_tf_session()
         self.history = None
 
         self.__t_sequence = None
@@ -222,7 +229,15 @@ class RCNet:
                 self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
             else:
                 # Build the model using the CPU or GPU
-                with tf.device(self.config.model_build_device):
+                if not self.config.use_tf_data:
+                    self.strategy = None
+                else:
+                    if self.config.multi_gpu:
+                        raise NotImplementedError('Mirrored strategy not implemented yet')
+                    else:
+                        self.strategy = tf.distribute.OneDeviceStrategy(device=self.config.model_build_device)
+
+                with self.get_device_strategy_scope():
                     if self.config.rc_mode == "full":
                         self.__build_rc_model()
                     elif self.config.rc_mode == "siam":
@@ -233,6 +248,17 @@ class RCNet:
                         raise ValueError('Unrecognized RC mode')
         else:
             raise NotImplementedError('TensorFlow backend required.')
+
+    def get_device_strategy_scope(self):
+        if not self.config.use_tf_data:
+            device_strategy_scope = tf.device(self.config.model_build_device)
+        else:
+            if self.config.multi_gpu:
+                raise NotImplementedError('Mirrored strategy not implemented yet')
+            else:
+
+                device_strategy_scope = self.strategy.scope()
+        return device_strategy_scope
 
     def load_data(self):
         """Load datasets"""
@@ -895,49 +921,50 @@ class RCNet:
     def train(self):
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
-        if self.config.multi_gpu and not self.config.device_parallel:
-            if self.config.use_generators_train:
-                # Fit a parallel model using generators
-                self.history = self.parallel_model.fit_generator(generator=self.training_sequence,
-                                                                 epochs=self.config.epoch_end,
-                                                                 callbacks=self.callbacks,
-                                                                 validation_data=self.validation_data,
-                                                                 class_weight=self.config.class_weight,
-                                                                 max_queue_size=self.config.batch_queue,
-                                                                 workers=self.config.batch_loading_workers,
-                                                                 use_multiprocessing=self.config.multiprocessing,
-                                                                 initial_epoch=self.config.epoch_start)
+        with self.get_device_strategy_scope():
+            if self.config.multi_gpu and not self.config.device_parallel:
+                if self.config.use_generators_train:
+                    # Fit a parallel model using generators
+                    self.history = self.parallel_model.fit_generator(generator=self.training_sequence,
+                                                                     epochs=self.config.epoch_end,
+                                                                     callbacks=self.callbacks,
+                                                                     validation_data=self.validation_data,
+                                                                     class_weight=self.config.class_weight,
+                                                                     max_queue_size=self.config.batch_queue,
+                                                                     workers=self.config.batch_loading_workers,
+                                                                     use_multiprocessing=self.config.multiprocessing,
+                                                                     initial_epoch=self.config.epoch_start)
+                else:
+                    # Fit a parallel model using data in memory
+                    self.history = self.parallel_model.fit(x=self.x_train,
+                                                           y=self.y_train,
+                                                           batch_size=self.config.batch_size,
+                                                           epochs=self.config.epoch_end,
+                                                           callbacks=self.callbacks,
+                                                           validation_data=self.validation_data,
+                                                           shuffle=True,
+                                                           class_weight=self.config.class_weight,
+                                                           initial_epoch=self.config.epoch_start)
             else:
-                # Fit a parallel model using data in memory
-                self.history = self.parallel_model.fit(x=self.x_train,
-                                                       y=self.y_train,
-                                                       batch_size=self.config.batch_size,
-                                                       epochs=self.config.epoch_end,
-                                                       callbacks=self.callbacks,
-                                                       validation_data=self.validation_data,
-                                                       shuffle=True,
-                                                       class_weight=self.config.class_weight,
-                                                       initial_epoch=self.config.epoch_start)
-        else:
-            if self.config.use_generators_train:
-                # Fit a model using generators
-                self.history = self.model.fit(x=self.training_sequence,
-                                              epochs=self.config.epoch_end,
-                                              callbacks=self.callbacks,
-                                              validation_data=self.validation_data,
-                                              class_weight=self.config.class_weight,
-                                              use_multiprocessing=self.config.multiprocessing,
-                                              max_queue_size=self.config.batch_queue,
-                                              workers=self.config.batch_loading_workers,
-                                              initial_epoch=self.config.epoch_start)
-            else:
-                # Fit a model using data in memory
-                self.history = self.model.fit(x=self.x_train,
-                                              y=self.y_train,
-                                              batch_size=self.config.batch_size,
-                                              epochs=self.config.epoch_end,
-                                              callbacks=self.callbacks,
-                                              validation_data=self.validation_data,
-                                              shuffle=True,
-                                              class_weight=self.config.class_weight,
-                                              initial_epoch=self.config.epoch_start)
+                if self.config.use_generators_train:
+                    # Fit a model using generators
+                    self.history = self.model.fit(x=self.training_sequence,
+                                                  epochs=self.config.epoch_end,
+                                                  callbacks=self.callbacks,
+                                                  validation_data=self.validation_data,
+                                                  class_weight=self.config.class_weight,
+                                                  use_multiprocessing=self.config.multiprocessing,
+                                                  max_queue_size=self.config.batch_queue,
+                                                  workers=self.config.batch_loading_workers,
+                                                  initial_epoch=self.config.epoch_start)
+                else:
+                    # Fit a model using data in memory
+                    self.history = self.model.fit(x=self.x_train,
+                                                  y=self.y_train,
+                                                  batch_size=self.config.batch_size,
+                                                  epochs=self.config.epoch_end,
+                                                  callbacks=self.callbacks,
+                                                  validation_data=self.validation_data,
+                                                  shuffle=True,
+                                                  class_weight=self.config.class_weight,
+                                                  initial_epoch=self.config.epoch_start)
