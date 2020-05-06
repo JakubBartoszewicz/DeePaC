@@ -45,8 +45,8 @@ class BuiltinLoader:
         paprconfig = RCConfig(config)
         paprconfig.log_superpath = log_path
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
-        paprconfig.n_cpus = n_cpus
-        paprconfig.n_gpus = n_gpus
+        paprconfig.set_n_cpus(n_cpus)
+        paprconfig.set_n_gpus(n_gpus)
         paprconfig.device_parallel = device_parallel
         if device_parallel:
             paprconfig.device_fwd = d_pref + str(min(0, n_gpus-1))
@@ -73,8 +73,8 @@ class BuiltinLoader:
         config = configparser.ConfigParser()
         config.read(config_path)
         paprconfig = RCConfig(config)
-        paprconfig.n_cpus = n_cpus
-        paprconfig.n_gpus = n_gpus
+        paprconfig.set_n_cpus(n_cpus)
+        paprconfig.set_n_gpus(n_gpus)
         paprconfig.device_parallel = device_parallel
         if device_parallel:
             paprconfig.device_fwd = d_pref + str(min(0, n_gpus - 1))

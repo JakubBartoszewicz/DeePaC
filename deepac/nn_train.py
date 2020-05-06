@@ -42,16 +42,24 @@ class RCConfig:
         """RCConfig constructor"""
         # Devices Config #
         # Get the number of available GPUs
-        self.n_gpus = config['Devices'].getint('N_GPUs')
-        self.n_cpus = config['Devices'].getint('N_CPUs')
-        self.multi_gpu = True if self.n_gpus > 1 else False
+        self.__n_gpus = 0
+        self.__n_cpus = 0
+        self.multi_gpu = False
+        self.device_parallel = False
+
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
-        self.device_parallel = config['Devices'].getboolean('DeviceParallel') and self.multi_gpu
-        if self.device_parallel:
-            self.device_fwd = config['Devices']['Device_fwd']
-            self.device_rc = config['Devices']['Device_rc']
+        self.__config_device_parallel = config['Devices'].getboolean('DeviceParallel')
+
+        self.set_n_gpus(config['Devices'].getint('N_GPUs'))
+        self.set_n_cpus(config['Devices'].getint('N_CPUs'))
 
         self.model_build_device = config['Devices']['Device_build']
+        try:
+            self.device_fwd = config['Devices']['Device_fwd']
+            self.device_rc = config['Devices']['Device_rc']
+        except KeyError:
+            self.device_fwd = self.model_build_device
+            self.device_rc = self.model_build_device
 
         # Data Loading Config #
         # If using generators to load data batch by batch, set up the number of batch workers and the queue size
@@ -182,10 +190,24 @@ class RCConfig:
     def set_tf_session(self):
         """Set TF session."""
         # If no GPUs, use CPUs
-        if self.n_gpus == 0:
+        if self.__n_gpus == 0:
             self.model_build_device = '/cpu:0'
         elif self.allow_growth:
             set_mem_growth()
+
+    def set_n_cpus(self, n_cpus):
+        self.__n_cpus = n_cpus
+
+    def set_n_gpus(self, n_gpus):
+        self.__n_gpus = n_gpus
+        self.multi_gpu = True if self.__n_gpus > 1 else False
+        self.device_parallel = self.__config_device_parallel and self.multi_gpu
+
+    def get_n_cpus(self):
+        return self.__n_cpus
+
+    def get_n_gpus(self):
+        return self.__n_gpus
 
 
 class RCNet:
@@ -233,7 +255,7 @@ class RCNet:
                     self.strategy = None
                 else:
                     if self.config.multi_gpu:
-                        raise NotImplementedError('Mirrored strategy not implemented yet')
+                        self.strategy = tf.distribute.MirroredStrategy()
                     else:
                         self.strategy = tf.distribute.OneDeviceStrategy(device=self.config.model_build_device)
 
@@ -253,11 +275,7 @@ class RCNet:
         if not self.config.use_tf_data:
             device_strategy_scope = tf.device(self.config.model_build_device)
         else:
-            if self.config.multi_gpu:
-                raise NotImplementedError('Mirrored strategy not implemented yet')
-            else:
-
-                device_strategy_scope = self.strategy.scope()
+            device_strategy_scope = self.strategy.scope()
         return device_strategy_scope
 
     def load_data(self):
@@ -302,7 +320,7 @@ class RCNet:
 
     def __add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.n_gpus > 0:
+        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
                                                                   kernel_initializer=self.config.initializer,
                                                                   recurrent_initializer=orthogonal(
@@ -321,7 +339,7 @@ class RCNet:
 
     def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.n_gpus > 0:
+        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
             shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
                                                                             kernel_initializer=self.config.initializer,
                                                                             recurrent_initializer=orthogonal(
@@ -870,8 +888,8 @@ class RCNet:
             print("Compiling...")
             # If using multiple GPUs, compile a parallel model for data parallelism.
             # Use a wrapper for the parallel model to use the ModelCheckpoint callback
-            if self.config.multi_gpu and not self.config.device_parallel:
-                self.parallel_model = ModelMGPU(self.model, gpus=self.config.n_gpus)
+            if self.config.multi_gpu and not self.config.device_parallel and not self.config.use_tf_data:
+                self.parallel_model = ModelMGPU(self.model, gpus=self.config.get_n_gpus())
                 self.parallel_model.compile(loss='binary_crossentropy',
                                             optimizer=self.config.optimizer,
                                             metrics=['accuracy'])
@@ -922,7 +940,7 @@ class RCNet:
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
         with self.get_device_strategy_scope():
-            if self.config.multi_gpu and not self.config.device_parallel:
+            if self.config.multi_gpu and not self.config.device_parallel and not self.config.use_tf_data:
                 if self.config.use_generators_train:
                     # Fit a parallel model using generators
                     self.history = self.parallel_model.fit_generator(generator=self.training_sequence,
