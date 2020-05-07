@@ -943,15 +943,15 @@ class RCNet:
             if self.config.multi_gpu and not self.config.device_parallel and not self.config.use_tf_data:
                 if self.config.use_generators_train:
                     # Fit a parallel model using generators
-                    self.history = self.parallel_model.fit_generator(generator=self.training_sequence,
-                                                                     epochs=self.config.epoch_end,
-                                                                     callbacks=self.callbacks,
-                                                                     validation_data=self.validation_data,
-                                                                     class_weight=self.config.class_weight,
-                                                                     max_queue_size=self.config.batch_queue,
-                                                                     workers=self.config.batch_loading_workers,
-                                                                     use_multiprocessing=self.config.multiprocessing,
-                                                                     initial_epoch=self.config.epoch_start)
+                    self.history = self.parallel_model.fit(x=self.training_sequence,
+                                                           epochs=self.config.epoch_end,
+                                                           callbacks=self.callbacks,
+                                                           validation_data=self.validation_data,
+                                                           class_weight=self.config.class_weight,
+                                                           use_multiprocessing=self.config.multiprocessing,
+                                                           max_queue_size=self.config.batch_queue,
+                                                           workers=self.config.batch_loading_workers,
+                                                           initial_epoch=self.config.epoch_start)
                 else:
                     # Fit a parallel model using data in memory
                     self.history = self.parallel_model.fit(x=self.x_train,
