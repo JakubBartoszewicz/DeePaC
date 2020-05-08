@@ -23,7 +23,7 @@ from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
 from deepac import __version__
 from deepac import __file__
-
+from deepac.utils import config_gpus, config_cpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
 
@@ -41,19 +41,6 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
     runner = MainRunner(builtin_configs, builtin_weights)
     runner.parse()
-
-
-def set_thread_config(n_cpus, n_gpus=None):
-    if n_cpus <= 0:
-        raise argparse.ArgumentTypeError("%s is an invalid number of cores" % n_cpus)
-    # Use as many intra_threads as the CPUs available
-    intra_threads = n_cpus
-    # Same for inter_threads
-    inter_threads = intra_threads
-    tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
-    tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
-    if n_gpus is not None and n_gpus == 0:
-        tf.config.set_visible_devices([], 'GPU')
 
 
 def run_filter(args):
@@ -108,12 +95,12 @@ class MainRunner:
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
-        print("Using {} GPUs.".format(args.n_gpus))
-        set_thread_config(args.n_cpus, args.n_gpus)
+        config_cpus(args.n_cpus)
+        n_gpus = config_gpus(args.gpus)
         if args.sensitive:
-            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, n_gpus, d_pref=args.d_pref)
         elif args.rapid:
-            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, n_gpus, d_pref=args.d_pref)
         else:
             config = configparser.ConfigParser()
             config.read(args.custom)
@@ -139,15 +126,15 @@ class MainRunner:
 
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
-        print("Using {} GPUs.".format(args.n_gpus))
-        set_thread_config(args.n_cpus, args.n_gpus)
+        config_cpus(args.n_cpus)
+        n_gpus = config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
         if args.sensitive:
-            model = self.bloader.load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_sensitive_model(args.n_cpus, n_gpus, d_pref=args.d_pref, training_mode=False)
         elif args.rapid:
-            model = self.bloader.load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_rapid_model(args.n_cpus, n_gpus, d_pref=args.d_pref, training_mode=False)
         else:
             model = load_model(args.custom)
 
@@ -158,8 +145,9 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
-        set_thread_config(args.n_cpus, args.n_gpus)
-        tester = Tester(args.n_cpus, args.n_gpus, self.builtin_configs, self.builtin_weights,
+        config_cpus(args.n_cpus)
+        n_gpus = config_gpus(args.gpus)
+        tester = Tester(args.n_cpus, n_gpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep)
         tester.run_tests()
 
@@ -171,6 +159,8 @@ class MainRunner:
         parser.add_argument('--no-eager', dest="no_eager", help="Disable eager mode.",
                             default=False, action="store_true")
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
+                            default=False, action="store_true")
+        parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
                             default=False, action="store_true")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
@@ -186,7 +176,8 @@ class MainRunner:
                                                                          'already compiled CUSTOM model.')
         parser_predict.add_argument('-o', '--output', help="Output file path [.npy].")
         parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_predict.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+        parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                    help="GPU devices to use (comma-separated). Default: all")
         parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
                                     default="/device:GPU:")
         parser_predict.set_defaults(func=self.run_predict)
@@ -212,7 +203,8 @@ class MainRunner:
         train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
         train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
         parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_train.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=1, type=int)
+        parser_train.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                  help="GPU devices to use (comma-separated). Default: all")
         parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
                                   default="/device:GPU:")
         parser_train.add_argument('-T', '--train-data', dest="train_data", help="Path to training data.")
@@ -246,7 +238,8 @@ class MainRunner:
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
         parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+        parser_test.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                 help="GPU devices to use (comma-separated). Default: all")
         parser_test.add_argument('-x', '--explain', dest="explain", help="Test explain workflows.",
                                  default=False, action="store_true")
         parser_test.add_argument('-p', '--gwpa', dest="gwpa", help="Test gwpa workflows.",
@@ -276,6 +269,9 @@ class MainRunner:
             tf.compat.v1.disable_eager_execution()
         if args.debug_device:
             tf.debugging.set_log_device_placement(True)
+        if args.force_cpu:
+            tf.config.set_visible_devices([], 'GPU')
+            args.gpus = None
 
         if args.version:
             print(__version__)

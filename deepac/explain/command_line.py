@@ -87,7 +87,7 @@ def add_explain_parser(xparser):
     parser_fa2transfac.add_argument("-o", "--out_dir", required=True, help="Output directory")
     parser_fa2transfac.add_argument("-w", "--weighting", default=False, action="store_true",
                                     help="Weight sequences by their DeepLIFT score")
-    parser_fa2transfac.add_argument("-d", "--weight_dir",
+    parser_fa2transfac.add_argument("-W", "--weight_dir",
                                     help="Directory containing the DeepLIFT scores per filter "
                                          "(only required if --weighting is chosen)")
     parser_fa2transfac.set_defaults(func=run_fa2transfac)

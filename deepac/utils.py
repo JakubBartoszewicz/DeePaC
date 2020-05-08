@@ -160,3 +160,37 @@ def set_mem_growth():
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
             print(e)
+
+
+def config_cpus(n_cpus):
+    if n_cpus is not None:
+        if n_cpus <= 0:
+            raise ValueError("%s is an invalid number of cores" % n_cpus)
+        # Use as many intra_threads as the CPUs available
+        intra_threads = n_cpus
+        # Same for inter_threads
+        inter_threads = intra_threads
+        tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
+        tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
+
+
+def config_gpus(gpus):
+    physical_devices = tf.config.list_physical_devices('GPU')
+    print("Physical GPUs:")
+    print(*[d.name for d in physical_devices], sep=", ")
+    if gpus is None:
+        used_devices = tf.config.get_visible_devices('GPU')
+    else:
+        valid_gpus = [d for d in gpus if d <= len(physical_devices)-1]
+        if len(valid_gpus) == 0:
+            gpus = ["/device:GPU:{}".format(i) for i in gpus]
+            raise ValueError("Devices not found: " + ", ".join(gpus))
+        used_devices = [physical_devices[d] for d in valid_gpus]
+        tf.config.set_visible_devices(used_devices, 'GPU')
+    print("Used GPUs:")
+    if len(used_devices) > 0:
+        print(*[d.name for d in used_devices], sep=", ")
+    else:
+        print("None")
+    n_gpus = len(used_devices)
+    return n_gpus
