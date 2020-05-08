@@ -176,21 +176,21 @@ def config_cpus(n_cpus):
 
 def config_gpus(gpus):
     physical_devices = tf.config.list_physical_devices('GPU')
-    print("Physical GPUs:")
-    print(*[d.name for d in physical_devices], sep=", ")
     if gpus is None:
         used_devices = tf.config.get_visible_devices('GPU')
     else:
         valid_gpus = [d for d in gpus if d <= len(physical_devices)-1]
+        invalid_gpus = [d for d in gpus if d > len(physical_devices)-1]
+        invalid_gpus = ["/device:GPU:{}".format(i) for i in invalid_gpus]
+        print("Devices not found: " + ", ".join(invalid_gpus))
         if len(valid_gpus) == 0:
-            gpus = ["/device:GPU:{}".format(i) for i in gpus]
-            raise ValueError("Devices not found: " + ", ".join(gpus))
+            return config_gpus(None)
         used_devices = [physical_devices[d] for d in valid_gpus]
         tf.config.set_visible_devices(used_devices, 'GPU')
-    print("Used GPUs:")
+    print("Physical GPUs: {}".format(", ".join([d.name for d in physical_devices])))
     if len(used_devices) > 0:
-        print(*[d.name for d in used_devices], sep=", ")
+        print("Used GPUs: {}".format(", ".join([d.name for d in used_devices])))
     else:
-        print("None")
+        print("Used GPUs: None")
     n_gpus = len(used_devices)
     return n_gpus
