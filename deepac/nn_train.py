@@ -201,7 +201,7 @@ class RCConfig:
     def set_n_gpus(self, n_gpus):
         self.__n_gpus = n_gpus
         self.multi_gpu = True if self.__n_gpus > 1 else False
-        self.device_parallel = self.__config_device_parallel and self.multi_gpu
+        self.device_parallel = self.__config_device_parallel and self.multi_gpu and not self.use_tf_data
 
     def get_n_cpus(self):
         return self.__n_cpus
