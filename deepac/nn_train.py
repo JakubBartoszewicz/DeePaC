@@ -254,10 +254,7 @@ class RCNet:
             if not self.config.use_tf_data:
                 self.strategy = None
             else:
-                if self.config.multi_gpu:
-                    self.strategy = tf.distribute.MirroredStrategy()
-                else:
-                    self.strategy = tf.distribute.MirroredStrategy(devices=[self.config.model_build_device])
+                self.strategy = tf.distribute.MirroredStrategy()
 
             with self.get_device_strategy_scope():
                 if self.config.rc_mode == "full":
