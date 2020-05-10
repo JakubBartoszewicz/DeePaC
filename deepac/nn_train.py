@@ -50,6 +50,9 @@ class RCConfig:
         self.allow_growth = config['Devices'].getboolean('AllowGrowth')
         self.__config_device_parallel = config['Devices'].getboolean('DeviceParallel')
 
+        self.base_batch_size = config['Training'].getint('BatchSize')
+        self.batch_size = self.base_batch_size
+
         self.set_n_gpus(config['Devices'].getint('N_GPUs'))
         self.set_n_cpus(config['Devices'].getint('N_CPUs'))
 
@@ -165,7 +168,6 @@ class RCConfig:
         # Set the number op epochs, batch size and the optimizer
         self.epoch_start = config['Training'].getint('EpochStart') - 1
         self.epoch_end = config['Training'].getint('EpochEnd') - 1
-        self.batch_size = config['Training'].getint('BatchSize')
 
         self.patience = config['Training'].getint('Patience')
         self.l2 = config['Training'].getfloat('Lambda_L2')
@@ -202,6 +204,7 @@ class RCConfig:
         self.__n_gpus = n_gpus
         self.multi_gpu = True if self.__n_gpus > 1 else False
         self.device_parallel = self.__config_device_parallel and self.multi_gpu and not self.use_tf_data
+        self.batch_size = self.base_batch_size * self.__n_gpus
 
     def get_n_cpus(self):
         return self.__n_cpus
