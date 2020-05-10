@@ -25,8 +25,6 @@ class BuiltinLoader:
 
     def load_sensitive_model(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
                              training_mode=True):
-        if n_gpus > 1:
-            device_parallel = True
         return self.__load_builtin_model("sensitive", n_cpus, n_gpus, d_pref, device_parallel, log_path,
                                          training_mode)
 
@@ -60,8 +58,6 @@ class BuiltinLoader:
         return paprnet.model
 
     def get_sensitive_training_config(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-        if n_gpus > 1:
-            device_parallel = True
         return self.__get_builtin_training_config("sensitive", n_cpus, n_gpus, d_pref, device_parallel)
 
     def get_rapid_training_config(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
