@@ -57,6 +57,7 @@ class RCConfig:
                 print("Unknown distribution strategy. Using MirroredStrategy.")
                 self.strategy = self.strategy_dict["MirroredStrategy"]
             self.__n_gpus = 0
+            self.tpu_strategy = None
 
             # for using tf.device instead of strategy
             self.simple_build = True
@@ -211,8 +212,9 @@ class RCConfig:
     def get_n_gpus(self):
         return self.__n_gpus
 
-    def set_tpu_strategy(self):
-        self.strategy = self.strategy_dict["TPUStrategy"]
+    def set_tpu_strategy(self, tpu_strategy):
+        if tpu_strategy is not None:
+            self.tpu_strategy = tpu_strategy
 
 
 class RCNet:
@@ -255,7 +257,9 @@ class RCNet:
             checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
             self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
         else:
-            # Build the model using the CPU or GPU
+            # Build the model using the CPU or GPU or TPU
+            if self.config.tpu_strategy is not None:
+                self.strategy = self.config.tpu_strategy
             if self.config.simple_build:
                 self.strategy = None
             else:

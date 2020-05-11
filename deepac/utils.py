@@ -185,3 +185,7 @@ def config_tpus(tpu_name):
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(name)
         tf.config.experimental_connect_to_cluster(resolver)
         tf.tpu.experimental.initialize_tpu_system(resolver)
+        strategy = tf.distribute.experimental.TPUStrategy(resolver)
+        return strategy
+    else:
+        return None
