@@ -160,6 +160,9 @@ class MainRunner:
         parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
         parser.add_argument('--no-eager', dest="no_eager", help="Disable eager mode.",
                             default=False, action="store_true")
+        parser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
+                                                                "0 = max, 3 = min. Default: 2 (errors)",
+                            default=2, type=int)
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
         parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
@@ -266,6 +269,7 @@ class MainRunner:
         parser_templates.set_defaults(func=run_templates)
 
         args = parser.parse_args()
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf)
         if args.no_eager:
             print("Disabling eager mode...")
             tf.compat.v1.disable_eager_execution()
