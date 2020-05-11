@@ -211,6 +211,9 @@ class RCConfig:
     def get_n_gpus(self):
         return self.__n_gpus
 
+    def set_tpu_strategy(self):
+        self.strategy = self.strategy_dict["TPUStrategy"]
+
 
 class RCNet:
 

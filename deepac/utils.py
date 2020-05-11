@@ -3,7 +3,7 @@ Utility classes for DeePaC.
 
 """
 import numpy as np
-
+import os
 import math
 from tensorflow.keras.utils import Sequence
 import psutil
@@ -173,3 +173,13 @@ def config_gpus(gpus):
         print("Used GPUs: None")
     n_gpus = len(used_devices)
     return n_gpus
+
+
+def config_tpus(tpu_name):
+    if tpu_name is not None:
+        if tpu_name.lower() == "colab":
+            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='grpc://' + os.environ['COLAB_TPU_ADDR'])
+        else:
+            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu_name)
+        tf.config.experimental_connect_to_cluster(resolver)
+        tf.tpu.experimental.initialize_tpu_system(resolver)

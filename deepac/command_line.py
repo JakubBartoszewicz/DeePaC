@@ -23,7 +23,7 @@ from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
 from deepac import __version__
 from deepac import __file__
-from deepac.utils import config_gpus, config_cpus
+from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
 
@@ -89,6 +89,21 @@ def run_templates(args):
     shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
 
 
+def global_setup(args):
+    if args.tpu:
+        print("Setting up TPU: {}".format(args.tpu))
+        config_tpus(args.tpu)
+    if args.no_eager:
+        print("Disabling eager mode...")
+        tf.compat.v1.disable_eager_execution()
+    if args.debug_device:
+        tf.debugging.set_log_device_placement(True)
+    if args.force_cpu:
+        tf.config.set_visible_devices([], 'GPU')
+        args.gpus = None
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf)
+
+
 class MainRunner:
     def __init__(self, builtin_configs=None, builtin_weights=None):
         self.builtin_configs = builtin_configs
@@ -97,8 +112,9 @@ class MainRunner:
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
-        config_cpus(args.n_cpus)
-        config_gpus(args.gpus)
+        if args.tpu is None:
+            config_cpus(args.n_cpus)
+            config_gpus(args.gpus)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config()
         elif args.rapid:
@@ -128,8 +144,9 @@ class MainRunner:
 
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
-        config_cpus(args.n_cpus)
-        config_gpus(args.gpus)
+        if args.tpu is None:
+            config_cpus(args.n_cpus)
+            config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
@@ -147,10 +164,12 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
-        n_cpus = config_cpus(args.n_cpus)
-        config_gpus(args.gpus)
+        if args.tpu is None:
+            n_cpus = config_cpus(args.n_cpus)
+            config_gpus(args.gpus)
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
-                        args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale)
+                        args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale,
+                        use_tpu=args.tpu is not None)
         tester.run_tests()
 
     def parse(self):
@@ -165,8 +184,10 @@ class MainRunner:
                             default=2, type=int)
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
-        parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
+        ctpu_group = parser.add_mutually_exclusive_group()
+        ctpu_group.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
                             default=False, action="store_true")
+        ctpu_group.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
         # create the parser for the "predict" command
@@ -268,15 +289,8 @@ class MainRunner:
         parser_templates.set_defaults(func=run_templates)
 
         args = parser.parse_args()
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf)
-        if args.no_eager:
-            print("Disabling eager mode...")
-            tf.compat.v1.disable_eager_execution()
-        if args.debug_device:
-            tf.debugging.set_log_device_placement(True)
-        if args.force_cpu:
-            tf.config.set_visible_devices([], 'GPU')
-            args.gpus = None
+
+        global_setup(args)
 
         if args.version:
             print(__version__)
