@@ -155,8 +155,15 @@ class RCConfig:
                 weights = [sum_count/(2*class_count) for class_count in counts]
                 classes = range(len(counts))
                 self.class_weight = dict(zip(classes, weights))
+                self.log_init = False
+                if self.log_init:
+                    self.output_bias = tf.keras.initializers.Constant(np.log(counts[1]/counts[0]))
+                else:
+                    self.output_bias = 'zeros'
             else:
                 self.class_weight = None
+                self.output_bias = 'zeros'
+
 
             # Paths Config #
             # Set the input data paths
@@ -592,7 +599,7 @@ class RCNet:
 
         # Dense layers
         for i in range(0, self.config.n_dense):
-            x = Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer)(x)
+            x = Dense(self.config.dense_units[i], kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -600,7 +607,7 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
-        x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
+        x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -730,7 +737,7 @@ class RCNet:
         if self.config.n_dense == 0:
             x = self.__add_rc_merge_dense(x, 1)
         else:
-            x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
+            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -885,7 +892,7 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             # Output layer for binary classification
-            x = Dense(1,  kernel_regularizer=self.config.regularizer)(x)
+            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
