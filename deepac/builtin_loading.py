@@ -38,8 +38,6 @@ class BuiltinLoader:
         paprconfig = RCConfig(config)
         paprconfig.log_superpath = log_path
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
-        paprconfig.set_n_cpus(n_cpus)
-        paprconfig.set_n_gpus(n_gpus)
 
         paprnet = RCNet(paprconfig, training_mode)
 
@@ -59,7 +57,5 @@ class BuiltinLoader:
         config = configparser.ConfigParser()
         config.read(config_path)
         paprconfig = RCConfig(config)
-        paprconfig.set_n_cpus(n_cpus)
-        paprconfig.set_n_gpus(n_gpus)
 
         return paprconfig

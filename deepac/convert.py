@@ -16,7 +16,7 @@ from deepac.nn_train import RCConfig, RCNet
 
 
 def convert_cudnn(config, saved_model, no_prep):
-    """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
+    """Rebuild the network using a modified configuration."""
 
     path = saved_model
     if re.search("\.h5$", path) is not None:

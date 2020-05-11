@@ -164,8 +164,6 @@ class Tester:
         paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val_labels.npy")
         paprconfig.epoch_start = 0
         paprconfig.epoch_end = 2
-        paprconfig.set_n_cpus(self.n_cpus)
-        paprconfig.set_n_gpus(self.n_gpus)
         paprconfig.log_superpath = "deepac-tests"
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
 

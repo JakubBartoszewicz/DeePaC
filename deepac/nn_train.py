@@ -28,7 +28,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ModelMGPU, ReadSequence, CSVMemoryLogger, set_mem_growth
+from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth
 
 
 class RCConfig:
@@ -56,28 +56,20 @@ class RCConfig:
             except KeyError:
                 self.strategy = self.strategy_dict["MirroredStrategy"]
             self.__n_gpus = 0
-            self.__n_cpus = 0
 
-            self.multi_gpu = False
-            self.device_parallel = False
-            self.allow_growth = True
-            self.__config_device_parallel = False
-            self.use_tf_data = True
-
+            # for using tf.device instead of strategy
+            self.simple_build = True
             self.base_batch_size = config['Training'].getint('BatchSize')
             self.batch_size = self.base_batch_size
 
-            self.set_n_gpus(config['Devices'].getint('N_GPUs'))
-            self.set_n_cpus(config['Devices'].getint('N_CPUs'))
-
-            #self.model_devices = config['Devices']['Devices']
+            self.set_n_gpus()
             self.model_build_device = config['Devices']['Device_build']
 
             # Data Loading Config #
             # If using generators to load data batch by batch, set up the number of batch workers and the queue size
             self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
-            self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch') and self.use_generators_train
-            if self.use_generators_train or self.use_generators_val:
+            self.use_generators_val = self.use_generators_train
+            if self.use_generators_train:
                 self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
                 self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
                 self.batch_queue = config['DataLoad'].getint('BatchQueue')
@@ -210,20 +202,11 @@ class RCConfig:
         # If no GPUs, use CPUs
         if self.__n_gpus == 0:
             self.model_build_device = '/cpu:0'
-        elif self.allow_growth:
-            set_mem_growth()
+        set_mem_growth()
 
-    def set_n_cpus(self, n_cpus):
-        self.__n_cpus = n_cpus
-
-    def set_n_gpus(self, n_gpus):
-        self.__n_gpus = n_gpus
-        self.multi_gpu = True if self.__n_gpus > 1 else False
-        self.device_parallel = self.__config_device_parallel and self.multi_gpu and not self.use_tf_data
+    def set_n_gpus(self):
+        self.__n_gpus = len(tf.config.get_visible_devices('GPU'))
         self.batch_size = self.base_batch_size * self.__n_gpus if self.__n_gpus > 0 else self.base_batch_size
-
-    def get_n_cpus(self):
-        return self.__n_cpus
 
     def get_n_gpus(self):
         return self.__n_gpus
@@ -270,7 +253,7 @@ class RCNet:
             self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
         else:
             # Build the model using the CPU or GPU
-            if not self.config.use_tf_data:
+            if self.config.simple_build:
                 self.strategy = None
             else:
                 self.strategy = self.config.strategy()
@@ -286,7 +269,7 @@ class RCNet:
                     raise ValueError('Unrecognized RC mode')
 
     def get_device_strategy_scope(self):
-        if not self.config.use_tf_data:
+        if self.config.simple_build:
             device_strategy_scope = tf.device(self.config.model_build_device)
         else:
             device_strategy_scope = self.strategy.scope()
@@ -371,15 +354,8 @@ class RCNet:
                                              return_sequences=return_sequences,
                                              recurrent_activation='sigmoid'))
 
-        if self.config.device_parallel:
-            with tf.device(self.config.device_fwd):
-                x_fwd = shared_lstm(inputs_fwd)
-            # Process the next sequence on another GPU
-            with tf.device(self.config.device_rc):
-                x_rc = shared_lstm(inputs_rc)
-        else:
-            x_fwd = shared_lstm(inputs_fwd)
-            x_rc = shared_lstm(inputs_rc)
+        x_fwd = shared_lstm(inputs_fwd)
+        x_rc = shared_lstm(inputs_rc)
         if return_sequences:
             rev_axes = (1, 2)
         else:
@@ -400,15 +376,8 @@ class RCNet:
     def __add_siam_conv1d(self, inputs_fwd, inputs_rc, units):
         shared_conv = Conv1D(units, self.config.conv_filter_size[0], padding='same',
                              kernel_regularizer=self.config.regularizer)
-        if self.config.device_parallel:
-            with tf.device(self.config.device_fwd):
-                x_fwd = shared_conv(inputs_fwd)
-            # Process the next sequence on another GPU
-            with tf.device(self.config.device_rc):
-                x_rc = shared_conv(inputs_rc)
-        else:
-            x_fwd = shared_conv(inputs_fwd)
-            x_rc = shared_conv(inputs_rc)
+        x_fwd = shared_conv(inputs_fwd)
+        x_rc = shared_conv(inputs_rc)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
                              name="reverse_complement_conv1d_output_{n}".format(n=self.__current_conv+1))
         x_rc = revcomp_out(x_rc)
@@ -438,15 +407,9 @@ class RCNet:
                          name="split_batchnorm_fwd_output_{n}".format(n=self.__current_bn+1))
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
                         name="split_batchnorm_rc_output_{n}".format(n=self.__current_bn+1))
-        if self.config.device_parallel:
-            with tf.device(self.config.device_fwd):
-                x_fwd = fwd_out(out)
-            # Process the next sequence on another GPU
-            with tf.device(self.config.device_rc):
-                x_rc = rc_out(out)
-        else:
-            x_fwd = fwd_out(out)
-            x_rc = rc_out(out)
+
+        x_fwd = fwd_out(out)
+        x_rc = rc_out(out)
         return x_fwd, x_rc
 
     def __add_rc_batchnorm(self, inputs):
@@ -471,15 +434,8 @@ class RCNet:
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc.shape[1:],
                        name="reverse_merging_dense_input_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
-        if self.config.device_parallel:
-            with tf.device(self.config.device_fwd):
-                x_fwd = shared_dense(inputs_fwd)
-            # Process the next sequence on another GPU
-            with tf.device(self.config.device_rc):
-                x_rc = shared_dense(inputs_rc)
-        else:
-            x_fwd = shared_dense(inputs_fwd)
-            x_rc = shared_dense(inputs_rc)
+        x_fwd = shared_dense(inputs_fwd)
+        x_rc = shared_dense(inputs_rc)
         out = merge_function([x_fwd, x_rc])
         return out
 
@@ -902,17 +858,9 @@ class RCNet:
         """Compile model and save model summaries"""
         if self.config.epoch_start == 0:
             print("Compiling...")
-            # If using multiple GPUs, compile a parallel model for data parallelism.
-            # Use a wrapper for the parallel model to use the ModelCheckpoint callback
-            if self.config.multi_gpu and not self.config.device_parallel and not self.config.use_tf_data:
-                self.parallel_model = ModelMGPU(self.model, gpus=self.config.get_n_gpus())
-                self.parallel_model.compile(loss='binary_crossentropy',
-                                            optimizer=self.config.optimizer,
-                                            metrics=['accuracy'])
-            else:
-                self.model.compile(loss='binary_crossentropy',
-                                   optimizer=self.config.optimizer,
-                                   metrics=['accuracy'])
+            self.model.compile(loss='binary_crossentropy',
+                               optimizer=self.config.optimizer,
+                               metrics=['accuracy'])
 
             # Print summary and plot model
             if self.config.summaries:
@@ -956,49 +904,25 @@ class RCNet:
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
         with self.get_device_strategy_scope():
-            if self.config.multi_gpu and not self.config.device_parallel and not self.config.use_tf_data:
-                if self.config.use_generators_train:
-                    # Fit a parallel model using generators
-                    self.history = self.parallel_model.fit(x=self.training_sequence,
-                                                           epochs=self.config.epoch_end,
-                                                           callbacks=self.callbacks,
-                                                           validation_data=self.validation_data,
-                                                           class_weight=self.config.class_weight,
-                                                           use_multiprocessing=self.config.multiprocessing,
-                                                           max_queue_size=self.config.batch_queue,
-                                                           workers=self.config.batch_loading_workers,
-                                                           initial_epoch=self.config.epoch_start)
-                else:
-                    # Fit a parallel model using data in memory
-                    self.history = self.parallel_model.fit(x=self.x_train,
-                                                           y=self.y_train,
-                                                           batch_size=self.config.batch_size,
-                                                           epochs=self.config.epoch_end,
-                                                           callbacks=self.callbacks,
-                                                           validation_data=self.validation_data,
-                                                           shuffle=True,
-                                                           class_weight=self.config.class_weight,
-                                                           initial_epoch=self.config.epoch_start)
+            if self.config.use_generators_train:
+                # Fit a model using generators
+                self.history = self.model.fit(x=self.training_sequence,
+                                              epochs=self.config.epoch_end,
+                                              callbacks=self.callbacks,
+                                              validation_data=self.validation_data,
+                                              class_weight=self.config.class_weight,
+                                              use_multiprocessing=self.config.multiprocessing,
+                                              max_queue_size=self.config.batch_queue,
+                                              workers=self.config.batch_loading_workers,
+                                              initial_epoch=self.config.epoch_start)
             else:
-                if self.config.use_generators_train:
-                    # Fit a model using generators
-                    self.history = self.model.fit(x=self.training_sequence,
-                                                  epochs=self.config.epoch_end,
-                                                  callbacks=self.callbacks,
-                                                  validation_data=self.validation_data,
-                                                  class_weight=self.config.class_weight,
-                                                  use_multiprocessing=self.config.multiprocessing,
-                                                  max_queue_size=self.config.batch_queue,
-                                                  workers=self.config.batch_loading_workers,
-                                                  initial_epoch=self.config.epoch_start)
-                else:
-                    # Fit a model using data in memory
-                    self.history = self.model.fit(x=self.x_train,
-                                                  y=self.y_train,
-                                                  batch_size=self.config.batch_size,
-                                                  epochs=self.config.epoch_end,
-                                                  callbacks=self.callbacks,
-                                                  validation_data=self.validation_data,
-                                                  shuffle=True,
-                                                  class_weight=self.config.class_weight,
-                                                  initial_epoch=self.config.epoch_start)
+                # Fit a model using data in memory
+                self.history = self.model.fit(x=self.x_train,
+                                              y=self.y_train,
+                                              batch_size=self.config.batch_size,
+                                              epochs=self.config.epoch_end,
+                                              callbacks=self.callbacks,
+                                              validation_data=self.validation_data,
+                                              shuffle=True,
+                                              class_weight=self.config.class_weight,
+                                              initial_epoch=self.config.epoch_start)

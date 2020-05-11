@@ -74,7 +74,7 @@ def run_evaluate(args):
 
 
 def run_convert(args):
-    """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
+    """Rebuild the network using a modified configuration."""
     config = configparser.ConfigParser()
     config.read(args.config)
     convert_cudnn(config, args.model, args.from_weights)
