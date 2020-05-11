@@ -178,8 +178,10 @@ def config_gpus(gpus):
 def config_tpus(tpu_name):
     if tpu_name is not None:
         if tpu_name.lower() == "colab":
-            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='grpc://' + os.environ['COLAB_TPU_ADDR'])
+            name = 'grpc://' + os.environ['COLAB_TPU_ADDR']
         else:
-            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu_name)
+            name = tpu_name
+        print("Setting up TPU: {}".format(name))
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(name)
         tf.config.experimental_connect_to_cluster(resolver)
         tf.tpu.experimental.initialize_tpu_system(resolver)

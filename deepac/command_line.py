@@ -91,7 +91,6 @@ def run_templates(args):
 
 def global_setup(args):
     if args.tpu:
-        print("Setting up TPU: {}".format(args.tpu))
         config_tpus(args.tpu)
     if args.no_eager:
         print("Disabling eager mode...")
@@ -112,8 +111,8 @@ class MainRunner:
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
+        config_cpus(args.n_cpus)
         if args.tpu is None:
-            config_cpus(args.n_cpus)
             config_gpus(args.gpus)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config()
@@ -144,8 +143,8 @@ class MainRunner:
 
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
+        config_cpus(args.n_cpus)
         if args.tpu is None:
-            config_cpus(args.n_cpus)
             config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
@@ -164,8 +163,8 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
+        n_cpus = config_cpus(args.n_cpus)
         if args.tpu is None:
-            n_cpus = config_cpus(args.n_cpus)
             config_gpus(args.gpus)
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale,
