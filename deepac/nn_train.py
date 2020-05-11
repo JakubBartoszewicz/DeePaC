@@ -40,8 +40,18 @@ class RCConfig:
 
     def __init__(self, config):
         """RCConfig constructor"""
+
+        self.strategy_dict = {
+            "MirroredStrategy": tf.distribute.MirroredStrategy,
+            "OneDeviceStrategy": tf.distribute.OneDeviceStrategy,
+            "CentralStorageStrategy": tf.distribute.experimental.CentralStorageStrategy,
+            "MultiWorkerMirroredStrategy": tf.distribute.experimental.MultiWorkerMirroredStrategy,
+            "TPUStrategy": tf.distribute.experimental.TPUStrategy,
+        }
+
         # Devices Config #
         # Get the number of available GPUs
+        self.strategy = self.strategy_dict[config['Devices']['DistStrategy']]
         self.__n_gpus = 0
         self.__n_cpus = 0
         self.multi_gpu = False
@@ -257,7 +267,7 @@ class RCNet:
             if not self.config.use_tf_data:
                 self.strategy = None
             else:
-                self.strategy = tf.distribute.MirroredStrategy()
+                self.strategy = self.config.strategy()
 
             with self.get_device_strategy_scope():
                 if self.config.rc_mode == "full":
