@@ -7,6 +7,7 @@ from multiprocessing import Pool
 from functools import partial
 
 from tensorflow.keras.preprocessing.text import Tokenizer
+import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
@@ -33,7 +34,9 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
                                               read_length=read_length), read_fasta(input_handle)))
     # Predict
     print("Predicting...")
-    y_pred = np.ndarray.flatten(model.predict(x_data))
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        y_pred = np.ndarray.flatten(model.predict(x_data))
 
     np.save(file=output, arr=y_pred)
 
@@ -43,7 +46,9 @@ def predict_npy(model, input_npy, output):
     x_data = np.load(input_npy)
     # Predict
     print("Predicting...")
-    y_pred = np.ndarray.flatten(model.predict(x_data))
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        y_pred = np.ndarray.flatten(model.predict(x_data))
 
     np.save(file=output, arr=y_pred)
 

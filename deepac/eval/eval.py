@@ -7,6 +7,7 @@ classification threshold and the epoch range.
 """
 from tensorflow.keras.models import load_model
 from tensorflow.keras import backend
+import tensorflow as tf
 import sklearn.metrics as mtr
 import numpy as np
 import csv
@@ -117,7 +118,9 @@ def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
         dataset_path = evalconfig.dataset_path
     model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch), )
     # Predict class probabilities
-    y_pred = np.ndarray.flatten(model.predict(x_test))
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        y_pred = np.ndarray.flatten(model.predict(x_test))
     # Backup predicted probabilities for future analyses
     if save_as_rc:
         filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
