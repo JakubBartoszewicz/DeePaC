@@ -10,6 +10,7 @@ import argparse
 import configparser
 import os
 import shutil
+import multiprocessing
 from tensorflow.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
@@ -111,8 +112,8 @@ class MainRunner:
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
-        config_cpus(args.n_cpus)
         if args.tpu is None:
+            config_cpus(args.n_cpus)
             config_gpus(args.gpus)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config()
@@ -143,8 +144,8 @@ class MainRunner:
 
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
-        config_cpus(args.n_cpus)
         if args.tpu is None:
+            config_cpus(args.n_cpus)
             config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
@@ -163,9 +164,11 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
-        n_cpus = config_cpus(args.n_cpus)
         if args.tpu is None:
+            n_cpus = config_cpus(args.n_cpus)
             config_gpus(args.gpus)
+        else:
+            n_cpus = multiprocessing.cpu_count()
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale,
                         use_tpu=args.tpu is not None)
@@ -184,7 +187,7 @@ class MainRunner:
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
         parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
-                                default=False, action="store_true")
+                            default=False, action="store_true")
         parser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
