@@ -23,18 +23,13 @@ class BuiltinLoader:
         else:
             self.builtin_weights = builtin_weights
 
-    def load_sensitive_model(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
-                             training_mode=True):
-        return self.__load_builtin_model("sensitive", n_cpus, n_gpus, d_pref, device_parallel, log_path,
-                                         training_mode)
+    def load_sensitive_model(self, n_cpus, n_gpus, log_path="logs", training_mode=True):
+        return self.__load_builtin_model("sensitive", n_cpus, n_gpus, log_path, training_mode)
 
-    def load_rapid_model(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False, log_path="logs",
-                         training_mode=True):
-        return self.__load_builtin_model("rapid", n_cpus, n_gpus, d_pref, device_parallel, log_path,
-                                         training_mode)
+    def load_rapid_model(self, n_cpus, n_gpus, log_path="logs", training_mode=True):
+        return self.__load_builtin_model("rapid", n_cpus, n_gpus, log_path, training_mode)
 
-    def __load_builtin_model(self, modelkey, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False,
-                             log_path="logs", training_mode=True):
+    def __load_builtin_model(self, modelkey, n_cpus, n_gpus, log_path="logs", training_mode=True):
         config_path = self.builtin_configs[modelkey]
         weights_path = self.builtin_weights[modelkey]
         print("Loading {}".format(os.path.basename(weights_path)))
@@ -45,11 +40,6 @@ class BuiltinLoader:
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
         paprconfig.set_n_cpus(n_cpus)
         paprconfig.set_n_gpus(n_gpus)
-        paprconfig.device_parallel = device_parallel
-        if device_parallel:
-            paprconfig.device_fwd = d_pref + str(min(0, n_gpus-1))
-            paprconfig.device_rc = d_pref + str(min(1, n_gpus-1))
-            paprconfig.model_build_device = d_pref + str(min(2, n_gpus-1))
 
         paprnet = RCNet(paprconfig, training_mode)
 
@@ -57,13 +47,13 @@ class BuiltinLoader:
 
         return paprnet.model
 
-    def get_sensitive_training_config(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-        return self.__get_builtin_training_config("sensitive", n_cpus, n_gpus, d_pref, device_parallel)
+    def get_sensitive_training_config(self, n_cpus, n_gpus):
+        return self.__get_builtin_training_config("sensitive", n_cpus, n_gpus)
 
-    def get_rapid_training_config(self, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
-        return self.__get_builtin_training_config("rapid", n_cpus, n_gpus, d_pref, device_parallel)
+    def get_rapid_training_config(self, n_cpus, n_gpus):
+        return self.__get_builtin_training_config("rapid", n_cpus, n_gpus)
 
-    def __get_builtin_training_config(self, modelkey, n_cpus, n_gpus, d_pref="/device:GPU:", device_parallel=False):
+    def __get_builtin_training_config(self, modelkey, n_cpus, n_gpus):
         config_path = self.builtin_configs[modelkey]
         print("Loading {}".format(os.path.basename(config_path)))
         config = configparser.ConfigParser()
@@ -71,10 +61,5 @@ class BuiltinLoader:
         paprconfig = RCConfig(config)
         paprconfig.set_n_cpus(n_cpus)
         paprconfig.set_n_gpus(n_gpus)
-        paprconfig.device_parallel = device_parallel
-        if device_parallel:
-            paprconfig.device_fwd = d_pref + str(min(0, n_gpus - 1))
-            paprconfig.device_rc = d_pref + str(min(1, n_gpus - 1))
-            paprconfig.model_build_device = d_pref + str(min(2, n_gpus - 1))
 
         return paprconfig

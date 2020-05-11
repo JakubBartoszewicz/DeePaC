@@ -134,9 +134,9 @@ class MainRunner:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
         if args.sensitive:
-            model = self.bloader.load_sensitive_model(args.n_cpus, n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_sensitive_model(args.n_cpus, n_gpus, training_mode=False)
         elif args.rapid:
-            model = self.bloader.load_rapid_model(args.n_cpus, n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_rapid_model(args.n_cpus, n_gpus, training_mode=False)
         else:
             model = load_model(args.custom)
 
@@ -184,8 +184,6 @@ class MainRunner:
                                     type=int)
         parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                     help="GPU devices to use (comma-separated). Default: all")
-        parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
-                                    default="/device:GPU:")
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -211,8 +209,6 @@ class MainRunner:
         parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
         parser_train.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                   help="GPU devices to use (comma-separated). Default: all")
-        parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
-                                  default="/device:GPU:")
         parser_train.add_argument('-T', '--train-data', dest="train_data", help="Path to training data.")
         parser_train.add_argument('-t', '--train-labels', dest="train_labels", help="Path to training labels.")
         parser_train.add_argument('-V', '--val-data', dest="val_data", help="Path to validation data.")

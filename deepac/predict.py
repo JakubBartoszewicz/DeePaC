@@ -7,7 +7,6 @@ from multiprocessing import Pool
 from functools import partial
 
 from tensorflow.keras.preprocessing.text import Tokenizer
-import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
