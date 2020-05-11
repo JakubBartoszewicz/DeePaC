@@ -31,10 +31,6 @@ from deepac.gwpa.command_line import add_gwpa_parser
 
 def main():
     """Run DeePaC CLI."""
-    seed = 0
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-    rn.seed(seed)
     modulepath = os.path.dirname(__file__)
     builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
@@ -103,6 +99,10 @@ def global_setup(args):
         tf.config.set_visible_devices([], 'GPU')
         args.gpus = None
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf)
+    seed = 0
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    rn.seed(seed)
     return tpu_strategy
 
 
