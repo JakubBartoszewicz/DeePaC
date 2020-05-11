@@ -149,6 +149,7 @@ def config_cpus(n_cpus):
     inter_threads = intra_threads
     tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
     tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
+    return n_cpus
 
 
 def config_gpus(gpus):

@@ -49,6 +49,11 @@ def gene_rank(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    if args.n_cpus is None:
+        cores = multiprocessing.cpu_count()
+    else:
+        cores = args.n_cpus
+
     # for each species do
     for gff_file in os.listdir(args.gff_dir):
         if gff_file.endswith(".gff") or gff_file.endswith(".gff3"):
@@ -75,7 +80,7 @@ def gene_rank(args):
             print("Processing " + patho_file + " ...")
             bedgraph = pybedtools.BedTool(patho_file)
 
-            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+            with multiprocessing.Pool(processes=cores) as pool:
                 # filter gff files for feature of interest
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
                 # compute mean pathogencity score per feature

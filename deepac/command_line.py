@@ -147,9 +147,9 @@ class MainRunner:
 
     def run_tests(self, args):
         """Run tests."""
-        config_cpus(args.n_cpus)
+        n_cpus = config_cpus(args.n_cpus)
         config_gpus(args.gpus)
-        tester = Tester(args.n_cpus, self.builtin_configs, self.builtin_weights,
+        tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale)
         tester.run_tests()
 

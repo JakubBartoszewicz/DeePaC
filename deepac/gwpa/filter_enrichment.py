@@ -52,6 +52,11 @@ def filter_enrichment(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    if args.n_cpus is None:
+        cores = multiprocessing.cpu_count()
+    else:
+        cores = args.n_cpus
+
     print("Processing gff file ...")
     gff = pybedtools.BedTool(args.gff)
     bioproject_id = os.path.splitext(os.path.basename(args.gff))[0]
@@ -84,15 +89,15 @@ def filter_enrichment(args):
             bed = pybedtools.BedTool(args.bed_dir + "/" + bed_file)
 
             # filter gff files for feature of interest
-            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+            with multiprocessing.Pool(processes=cores) as pool:
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
 
             num_entries = bed.count()
-            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+            with multiprocessing.Pool(processes=cores) as pool:
                 num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed), filtered_gffs)
-            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+            with multiprocessing.Pool(processes=cores) as pool:
                 num_feature_occurences = pool.map(count_num_feature_occurences, filtered_gffs)
-            with multiprocessing.Pool(processes=args.n_cpus) as pool:
+            with multiprocessing.Pool(processes=cores) as pool:
                 len_feature_region = pool.map(count_len_feature_region, filtered_gffs)
             num_possible_hits_feature = [
                 len_feature_region[i] + num_feature_occurences[i] + motif_length * num_feature_occurences[

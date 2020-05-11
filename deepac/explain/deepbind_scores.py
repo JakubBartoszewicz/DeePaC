@@ -7,7 +7,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
 import tensorflow as tf
 from Bio import SeqIO
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from functools import partial
 from deepac.utils import set_mem_growth
 
@@ -142,7 +142,10 @@ def get_maxact(args):
     # number of reads per chunk
     chunk_size = args.chunk_size
     n = 0
-    cores = args.n_cpus
+    if args.n_cpus is None:
+        cores = cpu_count()
+    else:
+        cores = args.n_cpus
 
     # for each read do:
     while n < total_num_reads:

@@ -76,7 +76,7 @@ class Tester:
             gwpatester.test_fenrichment()
 
         if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus, self.n_gpus)
+            explaintester = ExplainTester(self.n_cpus)
             print("X-TEST: Maxact (DeepBind)...")
             explaintester.test_maxact()
             # SHAP

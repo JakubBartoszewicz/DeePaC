@@ -54,6 +54,7 @@ class RCConfig:
             try:
                 self.strategy = self.strategy_dict[config['Devices']['DistStrategy']]
             except KeyError:
+                print("Unknown distribution strategy. Using MirroredStrategy.")
                 self.strategy = self.strategy_dict["MirroredStrategy"]
             self.__n_gpus = 0
 
@@ -155,7 +156,6 @@ class RCConfig:
             else:
                 self.class_weight = None
                 self.output_bias = 'zeros'
-
 
             # Paths Config #
             # Set the input data paths
