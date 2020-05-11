@@ -83,8 +83,10 @@ def run_convert(args):
 def run_templates(args):
     """Get config templates (in this directory)."""
     modulepath = os.path.dirname(__file__)
-    templates_path = os.path.join(modulepath, "builtin", "config_templates")
-    shutil.copytree(templates_path, os.path.join(os.getcwd(), "deepac_config_templates"))
+    extra_templates_path = os.path.join(modulepath, "builtin", "config_templates")
+    training_templates_path = os.path.join(modulepath, "builtin", "config")
+    shutil.copytree(training_templates_path, os.path.join(os.getcwd(), "deepac_training_configs"))
+    shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
 
 
 class MainRunner:
