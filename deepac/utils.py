@@ -159,7 +159,8 @@ def config_gpus(gpus):
         valid_gpus = [d for d in gpus if d <= len(physical_devices)-1]
         invalid_gpus = [d for d in gpus if d > len(physical_devices)-1]
         invalid_gpus = ["/device:GPU:{}".format(i) for i in invalid_gpus]
-        print("Devices not found: " + ", ".join(invalid_gpus))
+        if len(invalid_gpus) > 0:
+            print("Devices not found: " + ", ".join(invalid_gpus))
         if len(valid_gpus) == 0:
             return config_gpus(None)
         used_devices = [physical_devices[d] for d in valid_gpus]

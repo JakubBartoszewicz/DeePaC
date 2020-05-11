@@ -98,11 +98,11 @@ class MainRunner:
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
         config_cpus(args.n_cpus)
-        n_gpus = config_gpus(args.gpus)
+        config_gpus(args.gpus)
         if args.sensitive:
-            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, n_gpus)
+            paprconfig = self.bloader.get_sensitive_training_config()
         elif args.rapid:
-            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, n_gpus)
+            paprconfig = self.bloader.get_rapid_training_config()
         else:
             config = configparser.ConfigParser()
             config.read(args.custom)
@@ -129,14 +129,14 @@ class MainRunner:
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
         config_cpus(args.n_cpus)
-        n_gpus = config_gpus(args.gpus)
+        config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
         if args.sensitive:
-            model = self.bloader.load_sensitive_model(args.n_cpus, n_gpus, training_mode=False)
+            model = self.bloader.load_sensitive_model(training_mode=False)
         elif args.rapid:
-            model = self.bloader.load_rapid_model(args.n_cpus, n_gpus, training_mode=False)
+            model = self.bloader.load_rapid_model(training_mode=False)
         else:
             model = load_model(args.custom)
 
@@ -148,8 +148,8 @@ class MainRunner:
     def run_tests(self, args):
         """Run tests."""
         config_cpus(args.n_cpus)
-        n_gpus = config_gpus(args.gpus)
-        tester = Tester(args.n_cpus, n_gpus, self.builtin_configs, self.builtin_weights,
+        config_gpus(args.gpus)
+        tester = Tester(args.n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale)
         tester.run_tests()
 

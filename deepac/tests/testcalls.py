@@ -21,10 +21,9 @@ class Tester:
 
     """
 
-    def __init__(self, n_cpus=8, n_gpus=0, builtin_configs=None, builtin_weights=None,
+    def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None,
                  explain=False, gwpa=False, do_all=False, do_quick=False, keep=False, scale=1):
         self.n_cpus = n_cpus
-        self.n_gpus = n_gpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(builtin_configs, builtin_weights)
@@ -133,7 +132,7 @@ class Tester:
 
         if not quick:
             print("TEST: Training (rapid)...")
-            paprconfig = self.bloader.get_rapid_training_config(self.n_cpus, self.n_gpus)
+            paprconfig = self.bloader.get_rapid_training_config()
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
@@ -145,7 +144,7 @@ class Tester:
             K.clear_session()
 
             print("TEST: Training (sensitive)...")
-            paprconfig = self.bloader.get_sensitive_training_config(self.n_cpus, self.n_gpus)
+            paprconfig = self.bloader.get_sensitive_training_config()
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
@@ -183,18 +182,18 @@ class Tester:
 
         if not quick:
             print("TEST: Predicting (rapid)...")
-            paprconfig = self.bloader.get_rapid_training_config(self.n_cpus, self.n_gpus)
+            paprconfig = self.bloader.get_rapid_training_config()
             runname = paprconfig.runname
-            model = self.bloader.load_rapid_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
+            model = self.bloader.load_rapid_model(log_path="deepac-tests")
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-rapid.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "val-pred-rapid.npy"))), "Prediction failed."
 
             print("TEST: Predicting (sensitive)...")
-            paprconfig = self.bloader.get_sensitive_training_config(self.n_cpus, self.n_gpus)
+            paprconfig = self.bloader.get_sensitive_training_config()
             runname = paprconfig.runname
-            model = self.bloader.load_sensitive_model(self.n_cpus, self.n_gpus, log_path="deepac-tests")
+            model = self.bloader.load_sensitive_model(log_path="deepac-tests")
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-sensitive.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),

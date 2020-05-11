@@ -1,8 +1,9 @@
-import tensorflow.keras.backend as K
 from deepac.nn_train import RCConfig, RCNet
 import configparser
 import os
 from deepac import __file__
+from deepac.utils import config_gpus, config_cpus
+import tensorflow as tf
 
 
 class BuiltinLoader:
@@ -23,13 +24,13 @@ class BuiltinLoader:
         else:
             self.builtin_weights = builtin_weights
 
-    def load_sensitive_model(self, n_cpus, n_gpus, log_path="logs", training_mode=True):
+    def load_sensitive_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True):
         return self.__load_builtin_model("sensitive", n_cpus, n_gpus, log_path, training_mode)
 
-    def load_rapid_model(self, n_cpus, n_gpus, log_path="logs", training_mode=True):
+    def load_rapid_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True):
         return self.__load_builtin_model("rapid", n_cpus, n_gpus, log_path, training_mode)
 
-    def __load_builtin_model(self, modelkey, n_cpus, n_gpus, log_path="logs", training_mode=True):
+    def __load_builtin_model(self, modelkey, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True):
         config_path = self.builtin_configs[modelkey]
         weights_path = self.builtin_weights[modelkey]
         print("Loading {}".format(os.path.basename(weights_path)))
@@ -39,19 +40,31 @@ class BuiltinLoader:
         paprconfig.log_superpath = log_path
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
 
+        # for backwards compatibility with deepac-live v0.2
+        if n_cpus is not None:
+            config_cpus(n_cpus)
+        if n_gpus is not None:
+            if n_gpus == 0:
+                tf.config.set_visible_devices([], 'GPU')
+            else:
+                physical_devices = tf.config.list_physical_devices('GPU')
+                n_valid_gpus = min(len(physical_devices), n_gpus)
+                valid_gpus = list(range(n_valid_gpus))
+                config_gpus(valid_gpus)
+
         paprnet = RCNet(paprconfig, training_mode)
 
         paprnet.model.load_weights(weights_path)
 
         return paprnet.model
 
-    def get_sensitive_training_config(self, n_cpus, n_gpus):
-        return self.__get_builtin_training_config("sensitive", n_cpus, n_gpus)
+    def get_sensitive_training_config(self):
+        return self.__get_builtin_training_config("sensitive")
 
-    def get_rapid_training_config(self, n_cpus, n_gpus):
-        return self.__get_builtin_training_config("rapid", n_cpus, n_gpus)
+    def get_rapid_training_config(self):
+        return self.__get_builtin_training_config("rapid")
 
-    def __get_builtin_training_config(self, modelkey, n_cpus, n_gpus):
+    def __get_builtin_training_config(self, modelkey):
         config_path = self.builtin_configs[modelkey]
         print("Loading {}".format(os.path.basename(config_path)))
         config = configparser.ConfigParser()
