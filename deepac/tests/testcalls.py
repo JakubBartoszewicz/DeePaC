@@ -122,7 +122,7 @@ class Tester:
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
         paprconfig = RCConfig(config)
-        self.__config_train(paprconfig, use_tpu=self.use_tpu).train()
+        self.__config_train(paprconfig).train()
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "nn-deepac-test-e001.h5"))), "Training failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
@@ -134,7 +134,7 @@ class Tester:
         if not quick:
             print("TEST: Training (rapid)...")
             paprconfig = self.bloader.get_rapid_training_config()
-            self.__config_train(paprconfig, use_tpu=self.use_tpu).train()
+            self.__config_train(paprconfig).train()
             runname = paprconfig.runname
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "nn-{}-e001.h5".format(runname)))), "Training failed."
@@ -146,7 +146,7 @@ class Tester:
 
             print("TEST: Training (sensitive)...")
             paprconfig = self.bloader.get_sensitive_training_config()
-            self.__config_train(paprconfig, use_tpu=self.use_tpu).train()
+            self.__config_train(paprconfig).train()
             runname = paprconfig.runname
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "nn-{}-e001.h5".format(runname)))), "Training failed."
@@ -156,7 +156,7 @@ class Tester:
                                                 "training-{}.csv".format(runname)))), "Training failed."
             K.clear_session()
 
-    def __config_train(self, paprconfig, use_tpu=False):
+    def __config_train(self, paprconfig):
         """Set sample data paths and compile."""
         paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train_data.npy")
         paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train_labels.npy")
@@ -166,7 +166,7 @@ class Tester:
         paprconfig.epoch_end = 2
         paprconfig.log_superpath = "deepac-tests"
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
-        if use_tpu:
+        if self.use_tpu:
             paprconfig.set_tpu_strategy()
 
         paprnet = RCNet(paprconfig)
