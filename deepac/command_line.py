@@ -100,9 +100,9 @@ class MainRunner:
         config_cpus(args.n_cpus)
         n_gpus = config_gpus(args.gpus)
         if args.sensitive:
-            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, n_gpus)
         elif args.rapid:
-            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, n_gpus)
         else:
             config = configparser.ConfigParser()
             config.read(args.custom)
