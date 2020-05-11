@@ -22,7 +22,7 @@ class Tester:
     """
 
     def __init__(self, n_cpus=8, n_gpus=0, builtin_configs=None, builtin_weights=None,
-                 explain=False, gwpa=False, do_all=False, do_quick=False, keep=False):
+                 explain=False, gwpa=False, do_all=False, do_quick=False, keep=False, scale=1):
         self.n_cpus = n_cpus
         self.n_gpus = n_gpus
         self.builtin_configs = builtin_configs
@@ -33,6 +33,7 @@ class Tester:
         self.do_all = do_all
         self.do_quick = do_quick
         self.keep = keep
+        self.scale = scale
 
     def run_tests(self):
         """Generate sample data and run all tests."""
@@ -48,7 +49,7 @@ class Tester:
         gwpatester = None
 
         print("TEST: Generating data...")
-        datagen.generate_sample_data()
+        datagen.generate_sample_data(n_train=1024*self.scale, n_val=1024*self.scale)
         print("TEST: Preprocessing data...")
         self.test_preproc()
         print("TEST: Training...")

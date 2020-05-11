@@ -150,7 +150,7 @@ class MainRunner:
         config_cpus(args.n_cpus)
         n_gpus = config_gpus(args.gpus)
         tester = Tester(args.n_cpus, n_gpus, self.builtin_configs, self.builtin_weights,
-                        args.explain, args.gwpa, args.all, args.quick, args.keep)
+                        args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale)
         tester.run_tests()
 
     def parse(self):
@@ -256,6 +256,8 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
                                  default=False, action="store_true")
+        parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
+                                 default=1, type=int)
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')

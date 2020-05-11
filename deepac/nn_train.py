@@ -146,7 +146,11 @@ class RCConfig:
             # If needed, weight classes
             self.use_weights = config['ClassWeights'].getboolean('UseWeights')
             if self.use_weights:
-                counts = [float(x) for x in config['ClassWeights']['ClassCounts'].split(',')]
+                try:
+                    counts = [float(x) for x in config['ClassWeights']['ClassCounts'].split(',')]
+                except KeyError:
+                    counts = [config['ClassWeights'].getfloat('ClassCount_0'),
+                              config['ClassWeights'].getfloat('ClassCount_1')]
                 sum_count = sum(counts)
                 weights = [sum_count/(2*class_count) for class_count in counts]
                 classes = range(len(counts))
