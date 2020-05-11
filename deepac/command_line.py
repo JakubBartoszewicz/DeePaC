@@ -87,9 +87,9 @@ def run_templates(args):
 
 
 def global_setup(args):
-    tpu_strategy = None
+    tpu_resolver = None
     if args.tpu:
-        tpu_strategy = config_tpus(args.tpu)
+        tpu_resolver = config_tpus(args.tpu)
     if args.no_eager:
         print("Disabling eager mode...")
         tf.compat.v1.disable_eager_execution()
@@ -103,7 +103,7 @@ def global_setup(args):
     np.random.seed(seed)
     tf.random.set_seed(seed)
     rn.seed(seed)
-    return tpu_strategy
+    return tpu_resolver
 
 
 class MainRunner:
@@ -111,7 +111,7 @@ class MainRunner:
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
-        self.tpu_strategy = None
+        self.tpu_resolver = None
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
@@ -174,7 +174,7 @@ class MainRunner:
             n_cpus = multiprocessing.cpu_count()
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale,
-                        tpu_strategy=self.tpu_strategy)
+                        tpu_resolver=self.tpu_resolver)
         tester.run_tests()
 
     def parse(self):
@@ -294,7 +294,7 @@ class MainRunner:
 
         args = parser.parse_args()
 
-        self.tpu_strategy = global_setup(args)
+        self.tpu_resolver = global_setup(args)
 
         if args.version:
             print(__version__)

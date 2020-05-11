@@ -24,14 +24,14 @@ class BuiltinLoader:
         else:
             self.builtin_weights = builtin_weights
 
-    def load_sensitive_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_strategy=None):
+    def load_sensitive_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_resolver=None):
         return self.__load_builtin_model("sensitive", n_cpus, n_gpus, log_path, training_mode)
 
-    def load_rapid_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_strategy=None):
+    def load_rapid_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_resolver=None):
         return self.__load_builtin_model("rapid", n_cpus, n_gpus, log_path, training_mode)
 
     def __load_builtin_model(self, modelkey, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True,
-                             tpu_strategy=None):
+                             tpu_resolver=None):
         config_path = self.builtin_configs[modelkey]
         weights_path = self.builtin_weights[modelkey]
         print("Loading {}".format(os.path.basename(weights_path)))
@@ -53,7 +53,7 @@ class BuiltinLoader:
                 valid_gpus = list(range(n_valid_gpus))
                 config_gpus(valid_gpus)
 
-        paprconfig.set_tpu_strategy(tpu_strategy)
+        paprconfig.set_tpu_resolver(tpu_resolver)
         paprnet = RCNet(paprconfig, training_mode)
 
         paprnet.model.load_weights(weights_path)

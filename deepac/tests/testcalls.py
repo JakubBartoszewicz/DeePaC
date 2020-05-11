@@ -22,7 +22,7 @@ class Tester:
     """
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None,
-                 explain=False, gwpa=False, do_all=False, do_quick=False, keep=False, scale=1, tpu_strategy=None):
+                 explain=False, gwpa=False, do_all=False, do_quick=False, keep=False, scale=1, tpu_resolver=None):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -33,7 +33,7 @@ class Tester:
         self.do_quick = do_quick
         self.keep = keep
         self.scale = scale
-        self.tpu_strategy = tpu_strategy
+        self.tpu_resolver = tpu_resolver
 
     def run_tests(self):
         """Generate sample data and run all tests."""
@@ -166,7 +166,7 @@ class Tester:
         paprconfig.epoch_end = 2
         paprconfig.log_superpath = "deepac-tests"
         paprconfig.log_dir = paprconfig.log_superpath + "/{runname}-logs".format(runname=paprconfig.runname)
-        paprconfig.set_tpu_strategy(self.tpu_strategy)
+        paprconfig.set_tpu_resolver(self.tpu_resolver)
 
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
@@ -186,7 +186,7 @@ class Tester:
             print("TEST: Predicting (rapid)...")
             paprconfig = self.bloader.get_rapid_training_config()
             runname = paprconfig.runname
-            model = self.bloader.load_rapid_model(log_path="deepac-tests", tpu_strategy=self.tpu_strategy)
+            model = self.bloader.load_rapid_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-rapid.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
@@ -195,7 +195,7 @@ class Tester:
             print("TEST: Predicting (sensitive)...")
             paprconfig = self.bloader.get_sensitive_training_config()
             runname = paprconfig.runname
-            model = self.bloader.load_sensitive_model(log_path="deepac-tests", tpu_strategy=self.tpu_strategy)
+            model = self.bloader.load_sensitive_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-sensitive.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),

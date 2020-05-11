@@ -212,9 +212,9 @@ class RCConfig:
     def get_n_gpus(self):
         return self.__n_gpus
 
-    def set_tpu_strategy(self, tpu_strategy):
-        if tpu_strategy is not None:
-            self.tpu_strategy = tpu_strategy
+    def set_tpu_resolver(self, tpu_resolver):
+        if tpu_resolver is not None:
+            self.tpu_strategy = tf.distribute.experimental.TPUStrategy(tpu_resolver)
 
 
 class RCNet:
