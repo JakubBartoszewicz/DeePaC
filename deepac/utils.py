@@ -15,6 +15,7 @@ import csv
 import six
 from collections import OrderedDict
 from collections import Iterable
+import multiprocessing
 
 
 class ModelMGPU(Model):
@@ -163,15 +164,16 @@ def set_mem_growth():
 
 
 def config_cpus(n_cpus):
-    if n_cpus is not None:
-        if n_cpus <= 0:
-            raise ValueError("%s is an invalid number of cores" % n_cpus)
-        # Use as many intra_threads as the CPUs available
-        intra_threads = n_cpus
-        # Same for inter_threads
-        inter_threads = intra_threads
-        tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
-        tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
+    if n_cpus is None:
+        n_cpus = multiprocessing.cpu_count()
+    if n_cpus <= 0:
+        raise ValueError("%s is an invalid number of cores" % n_cpus)
+    # Use as many intra_threads as the CPUs available
+    intra_threads = n_cpus
+    # Same for inter_threads
+    inter_threads = intra_threads
+    tf.config.threading.set_intra_op_parallelism_threads(intra_threads)
+    tf.config.threading.set_inter_op_parallelism_threads(inter_threads)
 
 
 def config_gpus(gpus):

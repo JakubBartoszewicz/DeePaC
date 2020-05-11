@@ -180,7 +180,8 @@ class MainRunner:
         predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, '
                                                                          'already compiled CUSTOM model.')
         parser_predict.add_argument('-o', '--output', help="Output file path [.npy].")
-        parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+        parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.",
+                                    type=int)
         parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                     help="GPU devices to use (comma-separated). Default: all")
         parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
@@ -207,7 +208,7 @@ class MainRunner:
                                  help='Use the sensitive LSTM model.')
         train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
         train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
-        parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+        parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
         parser_train.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                   help="GPU devices to use (comma-separated). Default: all")
         parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
@@ -242,7 +243,7 @@ class MainRunner:
         parser_convert.set_defaults(func=run_convert)
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
-        parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
+        parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
         parser_test.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                  help="GPU devices to use (comma-separated). Default: all")
         parser_test.add_argument('-x', '--explain', dest="explain", help="Test explain workflows.",
