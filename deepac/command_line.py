@@ -183,10 +183,9 @@ class MainRunner:
                             default=2, type=int)
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
-        ctpu_group = parser.add_mutually_exclusive_group()
-        ctpu_group.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
-                            default=False, action="store_true")
-        ctpu_group.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+        parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
+                                default=False, action="store_true")
+        parser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
         # create the parser for the "predict" command
