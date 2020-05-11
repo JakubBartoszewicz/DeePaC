@@ -9,7 +9,7 @@ paths to input files and how should be the model trained.
 import numpy as np
 import tensorflow as tf
 import os
-
+import sys
 import errno
 import warnings
 from contextlib import redirect_stdout
@@ -40,164 +40,159 @@ class RCConfig:
 
     def __init__(self, config):
         """RCConfig constructor"""
-
-        self.strategy_dict = {
-            "MirroredStrategy": tf.distribute.MirroredStrategy,
-            "OneDeviceStrategy": tf.distribute.OneDeviceStrategy,
-            "CentralStorageStrategy": tf.distribute.experimental.CentralStorageStrategy,
-            "MultiWorkerMirroredStrategy": tf.distribute.experimental.MultiWorkerMirroredStrategy,
-            "TPUStrategy": tf.distribute.experimental.TPUStrategy,
-        }
-
-        # Devices Config #
-        # Get the number of available GPUs
-        self.strategy = self.strategy_dict[config['Devices']['DistStrategy']]
-        self.__n_gpus = 0
-        self.__n_cpus = 0
-        self.multi_gpu = False
-        self.device_parallel = False
-
-        self.allow_growth = config['Devices'].getboolean('AllowGrowth')
-        self.__config_device_parallel = config['Devices'].getboolean('DeviceParallel')
-
-        self.base_batch_size = config['Training'].getint('BatchSize')
-        self.batch_size = self.base_batch_size
-
-        self.set_n_gpus(config['Devices'].getint('N_GPUs'))
-        self.set_n_cpus(config['Devices'].getint('N_CPUs'))
-
-        self.model_build_device = config['Devices']['Device_build']
         try:
-            self.device_fwd = config['Devices']['Device_fwd']
-            self.device_rc = config['Devices']['Device_rc']
-        except KeyError:
-            self.device_fwd = self.model_build_device
-            self.device_rc = self.model_build_device
+            self.strategy_dict = {
+                "MirroredStrategy": tf.distribute.MirroredStrategy,
+                "OneDeviceStrategy": tf.distribute.OneDeviceStrategy,
+                "CentralStorageStrategy": tf.distribute.experimental.CentralStorageStrategy,
+                "MultiWorkerMirroredStrategy": tf.distribute.experimental.MultiWorkerMirroredStrategy,
+                "TPUStrategy": tf.distribute.experimental.TPUStrategy,
+            }
 
-        # Data Loading Config #
-        # If using generators to load data batch by batch, set up the number of batch workers and the queue size
-        self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
-        try:
-            self.use_tf_data = config['DataLoad'].getboolean('UseTFData')
-        except KeyError:
-            self.use_tf_data = False
-        if self.use_tf_data is None:
-            self.use_tf_data = False
-        self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch') and self.use_generators_train
-        if self.use_generators_train or self.use_generators_val:
-            self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
-            self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
-            self.batch_queue = config['DataLoad'].getint('BatchQueue')
+            # Devices Config #
+            # Get the number of available GPUs
+            try:
+                self.strategy = self.strategy_dict[config['Devices']['DistStrategy']]
+            except KeyError:
+                self.strategy = self.strategy_dict["MirroredStrategy"]
+            self.__n_gpus = 0
+            self.__n_cpus = 0
 
-        # Input Data Config #
-        # Set the sequence length and the alphabet
-        self.seq_length = config['InputData'].getint('SeqLength')
-        self.alphabet = "ACGT"
-        self.seq_dim = len(self.alphabet)
-        # subread settings (subread = first k nucleotides of a read)
-        self.use_subreads = config['InputData'].getboolean('UseSubreads')
-        self.min_subread_length = config['InputData'].getint('MinSubreadLength')
-        self.max_subread_length = config['InputData'].getint('MaxSubreadLength')
-        self.dist_subread = config['InputData']['DistSubread']
+            self.multi_gpu = False
+            self.device_parallel = False
+            self.allow_growth = True
+            self.__config_device_parallel = False
+            self.use_tf_data = True
 
-        # Architecture Config #
-        # Set the seed
-        self.seed = config['Architecture'].getint('Seed')
-        # Advanced activations (e.g PReLUs) are not implemented yet
-        self.adv_activations = config['Architecture'].getboolean('AdvancedActivations')
-        if self.adv_activations:
-            raise NotImplementedError('Advanced activations not implemented yet')
-        # Set the initializer (choose between He and Glorot uniform)
-        self.init_mode = config['Architecture']['WeightInit']
-        if self.init_mode == 'he_uniform':
-            self.initializer = he_uniform(self.seed)
-        elif self.init_mode == 'glorot_uniform':
-            self.initializer = glorot_uniform(self.seed)
-        else:
-            raise ValueError('Unknown initializer')
-        self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
+            self.base_batch_size = config['Training'].getint('BatchSize')
+            self.batch_size = self.base_batch_size
 
-        # Define the network architecture
-        self.rc_mode = config['Architecture']['RC_Mode']
-        self.n_conv = config['Architecture'].getint('N_Conv')
-        self.n_recurrent = config['Architecture'].getint('N_Recurrent')
-        self.n_dense = config['Architecture'].getint('N_Dense')
-        self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
-        self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
-        self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
-        self.conv_activation = config['Architecture']['Conv_Activation']
-        self.conv_bn = config['Architecture'].getboolean('Conv_BN')
-        self.conv_pooling = config['Architecture']['Conv_Pooling']
-        self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
-        self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
-        self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
-        if self.n_recurrent == 1 and self.recurrent_bn:
-            raise ValueError("RC-BN is intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning"
-                             " sequences.")
-        self.recurrent_dropout = config['Architecture'].getfloat('Recurrent_Dropout')
-        merge_dict = {
-            # motif on fwd fuzzy OR rc (Goedel t-conorm)
-            "maximum": maximum,
-            # motif on fwd fuzzy AND rc (product t-norm)
-            "multiply": multiply,
-            # motif on fwd PLUS/"OR" rc (Shrikumar-style)
-            "add": add,
-            # motif on fwd PLUS/"OR" rc (Shrikumar-style), rescaled
-            "average": average
-        }
-        if self.rc_mode != "none":
-            self.dense_merge = merge_dict.get(config['Architecture']['Dense_Merge'])
-            if self.dense_merge is None:
-                raise ValueError('Unknown dense merge function')
-        self.dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
-        self.dense_activation = config['Architecture']['Dense_Activation']
-        self.dense_bn = config['Architecture'].getboolean('Dense_BN')
-        self.dense_dropout = config['Architecture'].getfloat('Dense_Dropout')
+            self.set_n_gpus(config['Devices'].getint('N_GPUs'))
+            self.set_n_cpus(config['Devices'].getint('N_CPUs'))
 
-        # If needed, weight classes
-        self.use_weights = config['ClassWeights'].getboolean('UseWeights')
-        if self.use_weights:
-            class_count_0 = config['ClassWeights'].getfloat('ClassCount_0')
-            class_count_1 = config['ClassWeights'].getfloat('ClassCount_1')
-            sum_count = class_count_0 + class_count_1
-            self.class_weight = {0: sum_count/(2*class_count_0),
-                                 1: sum_count/(2*class_count_1)}
-        else:
-            self.class_weight = None
+            #self.model_devices = config['Devices']['Devices']
+            self.model_build_device = config['Devices']['Device_build']
 
-        # Paths Config #
-        # Set the input data paths
-        self.x_train_path = config['Paths']['TrainingData']
-        self.y_train_path = config['Paths']['TrainingLabels']
-        self.x_val_path = config['Paths']['ValidationData']
-        self.y_val_path = config['Paths']['ValidationLabels']
-        # Set the run name
-        self.runname = config['Paths']['RunName']
+            # Data Loading Config #
+            # If using generators to load data batch by batch, set up the number of batch workers and the queue size
+            self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
+            self.use_generators_val = config['DataLoad'].getboolean('LoadValidationByBatch') and self.use_generators_train
+            if self.use_generators_train or self.use_generators_val:
+                self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
+                self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
+                self.batch_queue = config['DataLoad'].getint('BatchQueue')
 
-        # Training Config #
-        # Set the number op epochs, batch size and the optimizer
-        self.epoch_start = config['Training'].getint('EpochStart') - 1
-        self.epoch_end = config['Training'].getint('EpochEnd') - 1
+            # Input Data Config #
+            # Set the sequence length and the alphabet
+            self.seq_length = config['InputData'].getint('SeqLength')
+            self.alphabet = "ACGT"
+            self.seq_dim = len(self.alphabet)
+            # subread settings (subread = first k nucleotides of a read)
+            self.use_subreads = config['InputData'].getboolean('UseSubreads')
+            self.min_subread_length = config['InputData'].getint('MinSubreadLength')
+            self.max_subread_length = config['InputData'].getint('MaxSubreadLength')
+            self.dist_subread = config['InputData']['DistSubread']
 
-        self.patience = config['Training'].getint('Patience')
-        self.l2 = config['Training'].getfloat('Lambda_L2')
-        self.regularizer = regularizers.l2(self.l2)
-        self.learning_rate = config['Training'].getfloat('LearningRate')
-        self.optimization_method = config['Training']['Optimizer']
-        if self.optimization_method == "adam":
-            self.optimizer = Adam(lr=self.learning_rate)
-        else:
-            warnings.warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
-            self.optimizer = self.optimization_method
-        # If needed, log the memory usage
-        self.log_memory = config['Training'].getboolean('MemUsageLog')
-        self.summaries = config['Training'].getboolean('Summaries')
-        self.log_superpath = config['Training']['LogPath']
-        self.log_dir = os.path.join(self.log_superpath, "{runname}-logs".format(runname=self.runname))
+            # Architecture Config #
+            # Set the seed
+            self.seed = config['Architecture'].getint('Seed')
+            # Set the initializer (choose between He and Glorot uniform)
+            self.init_mode = config['Architecture']['WeightInit']
+            if self.init_mode == 'he_uniform':
+                self.initializer = he_uniform(self.seed)
+            elif self.init_mode == 'glorot_uniform':
+                self.initializer = glorot_uniform(self.seed)
+            else:
+                raise ValueError('Unknown initializer')
+            self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
-        self.use_tb = config['Training'].getboolean('Use_TB')
-        if self.use_tb:
-            self.tb_hist_freq = config['Training'].getint('TBHistFreq')
+            # Define the network architecture
+            self.rc_mode = config['Architecture']['RC_Mode']
+            self.n_conv = config['Architecture'].getint('N_Conv')
+            self.n_recurrent = config['Architecture'].getint('N_Recurrent')
+            self.n_dense = config['Architecture'].getint('N_Dense')
+            self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
+            self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
+            self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
+            self.conv_activation = config['Architecture']['Conv_Activation']
+            self.conv_bn = config['Architecture'].getboolean('Conv_BN')
+            self.conv_pooling = config['Architecture']['Conv_Pooling']
+            self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+            self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
+            self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
+            if self.n_recurrent == 1 and self.recurrent_bn:
+                raise ValueError("RC-BN is intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning"
+                                 " sequences.")
+            self.recurrent_dropout = config['Architecture'].getfloat('Recurrent_Dropout')
+            merge_dict = {
+                # motif on fwd fuzzy OR rc (Goedel t-conorm)
+                "maximum": maximum,
+                # motif on fwd fuzzy AND rc (product t-norm)
+                "multiply": multiply,
+                # motif on fwd PLUS/"OR" rc (Shrikumar-style)
+                "add": add,
+                # motif on fwd PLUS/"OR" rc (Shrikumar-style), rescaled
+                "average": average
+            }
+            if self.rc_mode != "none":
+                self.dense_merge = merge_dict.get(config['Architecture']['Dense_Merge'])
+                if self.dense_merge is None:
+                    raise ValueError('Unknown dense merge function')
+            self.dense_units = [int(u) for u in config['Architecture']['Dense_Units'].split(',')]
+            self.dense_activation = config['Architecture']['Dense_Activation']
+            self.dense_bn = config['Architecture'].getboolean('Dense_BN')
+            self.dense_dropout = config['Architecture'].getfloat('Dense_Dropout')
+
+            # If needed, weight classes
+            self.use_weights = config['ClassWeights'].getboolean('UseWeights')
+            if self.use_weights:
+                counts = [float(x) for x in config['ClassWeights']['ClassCounts'].split(',')]
+                sum_count = sum(counts)
+                weights = [sum_count/(2*class_count) for class_count in counts]
+                classes = range(len(counts))
+                self.class_weight = dict(zip(classes, weights))
+            else:
+                self.class_weight = None
+
+            # Paths Config #
+            # Set the input data paths
+            self.x_train_path = config['Paths']['TrainingData']
+            self.y_train_path = config['Paths']['TrainingLabels']
+            self.x_val_path = config['Paths']['ValidationData']
+            self.y_val_path = config['Paths']['ValidationLabels']
+            # Set the run name
+            self.runname = config['Paths']['RunName']
+
+            # Training Config #
+            # Set the number op epochs, batch size and the optimizer
+            self.epoch_start = config['Training'].getint('EpochStart') - 1
+            self.epoch_end = config['Training'].getint('EpochEnd') - 1
+
+            self.patience = config['Training'].getint('Patience')
+            self.l2 = config['Training'].getfloat('Lambda_L2')
+            self.regularizer = regularizers.l2(self.l2)
+            self.learning_rate = config['Training'].getfloat('LearningRate')
+            self.optimization_method = config['Training']['Optimizer']
+            if self.optimization_method == "adam":
+                self.optimizer = Adam(lr=self.learning_rate)
+            else:
+                warnings.warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
+                self.optimizer = self.optimization_method
+            # If needed, log the memory usage
+            self.log_memory = config['Training'].getboolean('MemUsageLog')
+            self.summaries = config['Training'].getboolean('Summaries')
+            self.log_superpath = config['Training']['LogPath']
+            self.log_dir = os.path.join(self.log_superpath, "{runname}-logs".format(runname=self.runname))
+
+            self.use_tb = config['Training'].getboolean('Use_TB')
+            if self.use_tb:
+                self.tb_hist_freq = config['Training'].getint('TBHistFreq')
+        except KeyError as ke:
+            sys.exit("The config file is not compatible with this version of DeePaC. "
+                     "Missing keyword: {}".format(ke))
+        except AttributeError as ae:
+            sys.exit("The config file is not compatible with this version of DeePaC. "
+                     "Error: {}".format(ae))
 
     def set_tf_session(self):
         """Set TF session."""
