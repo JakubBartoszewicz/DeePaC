@@ -118,9 +118,7 @@ def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
         dataset_path = evalconfig.dataset_path
     model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch), )
     # Predict class probabilities
-    strategy = tf.distribute.MirroredStrategy()
-    with strategy.scope():
-        y_pred = np.ndarray.flatten(model.predict(x_test))
+    y_pred = np.ndarray.flatten(model.predict(x_test))
     # Backup predicted probabilities for future analyses
     if save_as_rc:
         filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
