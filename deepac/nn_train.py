@@ -293,15 +293,19 @@ class RCNet:
 
             def count_data_items(filenames):
                 n = [int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in filenames]
-                return np.max(n)
+                return np.max(n) + 1
 
             parser = DatasetParser(self.config.seq_length)
             train_filenames = tf.io.gfile.glob(self.config.x_train_path + "/*.tfrec")
             self.length_train = count_data_items(train_filenames)
-            self.training_sequence = parser.read_dataset(train_filenames).batch(self.config.batch_size).prefetch(AUTO)
+            self.training_sequence = \
+                parser.read_dataset(train_filenames).shuffle(buffer_size=self.config.batch_size*self.config.batch_queue)
+            self.training_sequence = self.training_sequence.repeat().batch(self.config.batch_size).prefetch(AUTO)
+
             val_filenames = tf.io.gfile.glob(self.config.x_val_path + "/*.tfrec")
             self.length_val = count_data_items(val_filenames)
-            self.validation_data = parser.read_dataset(val_filenames).batch(self.config.batch_size).prefetch(AUTO)
+            self.validation_data = \
+                parser.read_dataset(val_filenames).repeat().batch(self.config.batch_size).prefetch(AUTO)
         elif self.config.use_generators_keras:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
@@ -938,7 +942,8 @@ class RCNet:
                                               max_queue_size=self.config.batch_queue,
                                               workers=self.config.batch_loading_workers,
                                               initial_epoch=self.config.epoch_start,
-                                              steps_per_epoch=math.ceil(self.length_train/self.config.batch_size))
+                                              steps_per_epoch=math.ceil(self.length_train/self.config.batch_size),
+                                              validation_steps=math.ceil(self.length_val/self.config.batch_size))
 
             elif self.config.use_generators_keras:
                 # Fit a model using generators

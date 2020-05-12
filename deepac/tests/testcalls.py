@@ -111,11 +111,11 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
 
-        # config['Options']['Use_TFData'] = "True"
-        # preproc.preproc(config)
-        # assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
-        #                                     "sample_train_data_0-{}.tfrec".format(127*self.scale)))),\
-        #     "Preprocessing failed."
+        config['Options']['Use_TFData'] = "True"
+        preproc.preproc(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
+                                            "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
+            "TFData Preprocessing failed."
 
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
@@ -124,11 +124,11 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
 
-        # config['Options']['Use_TFData'] = "True"
-        # preproc.preproc(config)
-        # assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
-        #                                     "sample_val_data_0-{}.tfrec".format(127*self.scale)))),\
-        #     "Preprocessing failed."
+        config['Options']['Use_TFData'] = "True"
+        preproc.preproc(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
+                                            "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
+            "TFData Preprocessing failed."
 
     def test_train(self, quick=False):
         """Test training."""
@@ -146,20 +146,20 @@ class Tester:
                                             "training-deepac-test.csv"))), "Training failed."
         K.clear_session()
 
-        # print("TEST: Training (custom - tfrecord)...")
-        # config['DataLoad']['Use_TFData'] = "True"
-        # paprconfig = RCConfig(config)
-        # self.__config_train(paprconfig).train()
-        # assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-        #                                     "nn-deepac-test-e001.h5"))), "Training failed."
-        # assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-        #                                     "nn-deepac-test-e002.h5"))), "Training failed."
-        # assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-        #                                     "training-deepac-test.csv"))), "Training failed."
-        # K.clear_session()
+        print("TEST: Training (custom - tfrecord)...")
+        config['DataLoad']['Use_TFData'] = "True"
+        paprconfig = RCConfig(config)
+        self.__config_train(paprconfig).train()
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "nn-deepac-test-e001.h5"))), "Training failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "nn-deepac-test-e002.h5"))), "Training failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "training-deepac-test.csv"))), "Training failed."
+        K.clear_session()
 
         if not quick:
-            print("TEST: Training (rapid)...")
+            print("TEST: Training (rapid - keras sequence)...")
             paprconfig = self.bloader.get_rapid_training_config()
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
@@ -171,8 +171,34 @@ class Tester:
                                                 "training-{}.csv".format(runname)))), "Training failed."
             K.clear_session()
 
-            print("TEST: Training (sensitive)...")
+            print("TEST: Training (rapid - tfrecord)...")
+            paprconfig = self.bloader.get_rapid_training_config()
+            paprconfig.use_tf_data = True
+            self.__config_train(paprconfig).train()
+            runname = paprconfig.runname
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "nn-{}-e001.h5".format(runname)))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "nn-{}-e002.h5".format(runname)))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "training-{}.csv".format(runname)))), "Training failed."
+            K.clear_session()
+
+            print("TEST: Training (sensitive - keras sequence)...")
             paprconfig = self.bloader.get_sensitive_training_config()
+            self.__config_train(paprconfig).train()
+            runname = paprconfig.runname
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "nn-{}-e001.h5".format(runname)))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "nn-{}-e002.h5".format(runname)))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                "training-{}.csv".format(runname)))), "Training failed."
+            K.clear_session()
+
+            print("TEST: Training (sensitive - tfrecord)...")
+            paprconfig = self.bloader.get_sensitive_training_config()
+            paprconfig.use_tf_data = True
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
