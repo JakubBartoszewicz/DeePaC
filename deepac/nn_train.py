@@ -8,11 +8,13 @@ paths to input files and how should be the model trained.
 
 import numpy as np
 import tensorflow as tf
+import re
 import os
 import sys
 import errno
 import warnings
 from contextlib import redirect_stdout
+import math
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
@@ -28,7 +30,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth
+from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
 
 
 class RCConfig:
@@ -69,9 +71,9 @@ class RCConfig:
 
             # Data Loading Config #
             # If using generators to load data batch by batch, set up the number of batch workers and the queue size
-            self.use_generators_train = config['DataLoad'].getboolean('LoadTrainingByBatch')
-            self.use_generators_val = self.use_generators_train
-            if self.use_generators_train:
+            self.use_generators_keras = config['DataLoad'].getboolean('LoadTrainingByBatch')
+            self.use_tf_data = config['DataLoad'].getboolean('Use_TFData')
+            if self.use_generators_keras:
                 self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
                 self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
                 self.batch_queue = config['DataLoad'].getint('BatchQueue')
@@ -215,6 +217,7 @@ class RCConfig:
     def set_tpu_resolver(self, tpu_resolver):
         if tpu_resolver is not None:
             self.tpu_strategy = tf.distribute.experimental.TPUStrategy(tpu_resolver)
+            self.batch_size = self.base_batch_size * self.tpu_strategy.num_replicas_in_sync
 
 
 class RCNet:
@@ -243,7 +246,6 @@ class RCNet:
         self.validation_data = (self.x_val, self.y_val)
         self.length_val = 0
         self.model = None
-        self.parallel_model = None
 
         if training_mode:
             try:
@@ -286,7 +288,21 @@ class RCNet:
         """Load datasets"""
         print("Loading...")
 
-        if self.config.use_generators_train:
+        if self.config.use_tf_data:
+            AUTO = tf.data.experimental.AUTOTUNE
+
+            def count_data_items(filenames):
+                n = [int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in filenames]
+                return np.max(n)
+
+            parser = DatasetParser(self.config.seq_length)
+            train_filenames = tf.io.gfile.glob(self.config.x_train_path + "/*.tfrec")
+            self.length_train = count_data_items(train_filenames)
+            self.training_sequence = parser.read_dataset(train_filenames).batch(self.config.batch_size).prefetch(AUTO)
+            val_filenames = tf.io.gfile.glob(self.config.x_val_path + "/*.tfrec")
+            self.length_val = count_data_items(val_filenames)
+            self.validation_data = parser.read_dataset(val_filenames).batch(self.config.batch_size).prefetch(AUTO)
+        elif self.config.use_generators_keras:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
@@ -297,12 +313,7 @@ class RCNet:
 
             self.training_sequence = self.__t_sequence
             self.length_train = len(self.x_train)
-        else:
-            # ... or load all the data to memory
-            self.x_train = np.load(self.config.x_train_path)
-            self.y_train = np.load(self.config.y_train_path)
-            self.length_train = self.x_train.shape
-        if self.config.use_generators_val:
+
             # Prepare the generators for loading data batch by batch
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
@@ -314,6 +325,11 @@ class RCNet:
 
             self.length_val = len(self.x_val)
         else:
+            # ... or load all the data to memory
+            self.x_train = np.load(self.config.x_train_path)
+            self.y_train = np.load(self.config.y_train_path)
+            self.length_train = self.x_train.shape
+
             # ... or load all the data to memory
             self.x_val = np.load(self.config.x_val_path)
             self.y_val = np.load(self.config.y_val_path)
@@ -911,7 +927,20 @@ class RCNet:
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
         with self.get_device_strategy_scope():
-            if self.config.use_generators_train:
+            if self.config.use_tf_data:
+                # Fit a model using tf data
+                self.history = self.model.fit(x=self.training_sequence,
+                                              epochs=self.config.epoch_end,
+                                              callbacks=self.callbacks,
+                                              validation_data=self.validation_data,
+                                              class_weight=self.config.class_weight,
+                                              use_multiprocessing=self.config.multiprocessing,
+                                              max_queue_size=self.config.batch_queue,
+                                              workers=self.config.batch_loading_workers,
+                                              initial_epoch=self.config.epoch_start,
+                                              steps_per_epoch=math.ceil(self.length_train/self.config.batch_size))
+
+            elif self.config.use_generators_keras:
                 # Fit a model using generators
                 self.history = self.model.fit(x=self.training_sequence,
                                               epochs=self.config.epoch_end,

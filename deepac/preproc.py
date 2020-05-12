@@ -9,11 +9,14 @@ Requires a config file describing the available devices, input filepaths (two fa
 
 """
 from tensorflow.keras.preprocessing.text import Tokenizer
+import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from multiprocessing import Pool
 from functools import partial
 import gzip
+import os
+import math
 
 
 def tokenize(seq, tokenizer, datatype='int8', read_length=250):
@@ -56,6 +59,8 @@ def preproc(config):
     do_revc = config['Options'].getboolean('Do_revc')
     datatype = config['Options']['DataType']
     read_length = config['Options'].getint('ReadLength')
+    use_tfdata = config['Options'].getboolean('Use_TFData')
+    n_files = config['Options'].getint('N_Files')
     
     # Set alphabet and prepare the tokenizer
     alphabet = "ACGT"  
@@ -111,14 +116,75 @@ def preproc(config):
 
     # Save matrices #
     print("Saving data...")
-    # Compress output files
-    if do_gzip:
-        f_data = gzip.GzipFile(out_data_path + ".gz", "w")
-        f_labels = gzip.GzipFile(out_labels_path + ".gz", "w")
-    else:
-        f_data = out_data_path
-        f_labels = out_labels_path
+
     # Save output
-    np.save(file=f_data, arr=x_train)
-    np.save(file=f_labels, arr=y_train)
+    if not use_tfdata:
+        # Compress output files
+        if do_gzip:
+            f_data = gzip.GzipFile(out_data_path + ".gz", "w")
+            f_labels = gzip.GzipFile(out_labels_path + ".gz", "w")
+        else:
+            f_data = out_data_path
+            f_labels = out_labels_path
+        np.save(file=f_data, arr=x_train)
+        np.save(file=f_labels, arr=y_train)
+    else:
+        out_dir = os.path.splitext(out_data_path)[0]
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
+        n_all = n_negative + n_positive
+        slice_size = math.ceil(n_all/n_files)
+        for i in range(n_files):
+            start = i * slice_size
+            end = min((i+1) * slice_size, n_all)
+            features_dataset = tf.data.Dataset.from_tensor_slices((x_train[start::end], y_train[start::end]))
+
+            def generator():
+                for features in features_dataset:
+                    yield serialize_example(*features)
+
+            serialized_features_dataset = tf.data.Dataset.from_generator(
+                generator, output_types=tf.string, output_shapes=())
+
+            filename = os.path.join(out_dir, os.path.splitext(os.path.basename(out_dir))[0]
+                                    + '_{}-{}.tfrec'.format(start, end - 1))
+            writer = tf.data.experimental.TFRecordWriter(filename)
+            writer.write(serialized_features_dataset)
+
     print("Done!")
+
+
+def _bytes_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    if isinstance(value, type(tf.constant(0))):
+        value = value.numpy() # BytesList won't unpack a string from an EagerTensor.
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def _int64_feature(value):
+    """Returns an int64_list from a bool / enum / int / uint."""
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def serialize_example(x_seq, y_label):
+    """
+    Creates a tf.Example message ready to be written to a file.
+    """
+    # Create a dictionary mapping the feature name to the tf.Example-compatible
+    # data type.
+    feature = {
+        'x_seq': _bytes_feature(tf.io.serialize_tensor(x_seq)),
+        'y_label': _int64_feature(y_label)
+    }
+    # Create a Features message using tf.train.Example.
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
+
+def tf_serialize_example(x_seq, y_label):
+    tf_string = tf.py_function(
+        serialize_example,
+        (x_seq, y_label),  # pass these args to the above function.
+        tf.string)      # the return type is `tf.string`.
+    return tf.reshape(tf_string, ())  # The result is a scalar
