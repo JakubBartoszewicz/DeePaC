@@ -47,11 +47,11 @@ class Tester:
         quick = self.do_quick or self.explain or self.gwpa
 
         gwpatester = None
-
-        print("TEST: Generating data...")
-        datagen.generate_sample_data(n_train=1024*self.scale, n_val=1024*self.scale)
-        print("TEST: Preprocessing data...")
-        self.test_preproc()
+        if not self.keep:
+            print("TEST: Generating data...")
+            datagen.generate_sample_data(n_train=1024*self.scale, n_val=1024*self.scale)
+            print("TEST: Preprocessing data...")
+            self.test_preproc()
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")
