@@ -184,6 +184,13 @@ deepac eval -e eval_ens_config.ini
 See the configs directory for sample configuration files. Note that `deepac eval -s` requires precomputed predictions 
 and a csv file with a number of DNA reads for each species in each of the classes.
 
+### TPU (experimental)
+If you want to use a TPU, run DeePaC with the `--tpu` parameter:
+```
+# Test a TPU
+deepac --tpu colab test
+```
+
 ## Intepretability workflows
 ### Filter visualization
 To find the most relevant filters and visualize them, use the following minimum workflow: 
