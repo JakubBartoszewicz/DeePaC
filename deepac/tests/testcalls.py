@@ -35,11 +35,11 @@ class Tester:
         self.scale = scale
         self.tpu_resolver = tpu_resolver
 
-    def run_datagen(self):
+    def run_datagen(self, npy=True, tfrec=True):
         print("TEST: Generating data...")
         datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
         print("TEST: Preprocessing data...")
-        self.test_preproc()
+        self.test_preproc(npy, tfrec)
 
     def run_tests(self):
         """Generate sample data and run all tests."""
