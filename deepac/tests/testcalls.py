@@ -183,6 +183,7 @@ class Tester:
         if not quick:
             print("TEST: Training (rapid - .npy in memory)...")
             paprconfig = self.bloader.get_rapid_training_config()
+            paprconfig.use_tf_data = False
             paprconfig.use_generators_keras = False
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
@@ -195,6 +196,7 @@ class Tester:
             if self.tpu_resolver is None:
                 print("TEST: Training (rapid - keras sequence)...")
                 paprconfig = self.bloader.get_rapid_training_config()
+                paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = True
                 self.__config_train(paprconfig).train()
                 runname = paprconfig.runname
@@ -219,6 +221,7 @@ class Tester:
 
             print("TEST: Training (sensitive - .npy in memory)...")
             paprconfig = self.bloader.get_sensitive_training_config()
+            paprconfig.use_tf_data = False
             paprconfig.use_generators_keras = False
             self.__config_train(paprconfig).train()
             runname = paprconfig.runname
@@ -232,6 +235,7 @@ class Tester:
             if self.tpu_resolver is None:
                 print("TEST: Training (sensitive - keras sequence)...")
                 paprconfig = self.bloader.get_sensitive_training_config()
+                paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = True
                 self.__config_train(paprconfig).train()
                 runname = paprconfig.runname
