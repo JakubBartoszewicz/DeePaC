@@ -54,7 +54,7 @@ class Tester:
 
         gwpatester = None
         if not self.keep:
-            self.run_datagen()
+            self.run_datagen(npy=True, tfrec=True if self.tpu_resolver is None else False)
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")

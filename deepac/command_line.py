@@ -182,7 +182,7 @@ class MainRunner:
         parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                     "with reverse-complement neural networks.")
         parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
-        parser.add_argument('--no-eager', dest="no_eager", help="Disable eager mode.",
+        parser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
                             default=False, action="store_true")
         parser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
                                                                 "0 = max, 3 = min. Default: 2 (errors)",
