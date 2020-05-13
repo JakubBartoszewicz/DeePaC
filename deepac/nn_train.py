@@ -304,7 +304,8 @@ class RCNet:
             self.length_train = count_data_items(train_filenames)
             self.training_sequence = \
                 parser.read_dataset(train_filenames).shuffle(buffer_size=self.config.batch_size*self.config.batch_queue)
-            self.training_sequence = self.training_sequence.repeat().batch(self.config.batch_size).prefetch(prefetch_size)
+            self.training_sequence = \
+                self.training_sequence.repeat().batch(self.config.batch_size).prefetch(prefetch_size)
 
             val_filenames = tf.io.gfile.glob(self.config.x_val_path + "/*.tfrec")
             self.length_val = count_data_items(val_filenames)
