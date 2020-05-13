@@ -176,14 +176,22 @@ def config_gpus(gpus):
 def config_tpus(tpu_name):
     if tpu_name is not None:
         if tpu_name.lower() == "colab":
-            name = 'grpc://' + os.environ['COLAB_TPU_ADDR']
+            try:
+                name = 'grpc://' + os.environ['COLAB_TPU_ADDR']
+            except KeyError:
+                print("TPU not found (COLAB_TPU_ADDR not set).")
+                return None
         else:
             name = tpu_name
         print("Setting up TPU: {}".format(name))
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(name)
-        tf.config.experimental_connect_to_cluster(resolver)
-        tf.tpu.experimental.initialize_tpu_system(resolver)
-        return resolver
+        try:
+            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(name)
+            tf.config.experimental_connect_to_cluster(resolver)
+            tf.tpu.experimental.initialize_tpu_system(resolver)
+            return resolver
+        except (ValueError, tf.errors.NotFoundError):
+            print("TPU not found.")
+            return None
     else:
         return None
 
