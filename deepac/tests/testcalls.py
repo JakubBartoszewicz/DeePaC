@@ -107,11 +107,10 @@ class Tester:
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train.ini"))
 
-        if self.tpu_resolver is None:
-            config['Options']['Use_TFData'] = "False"
-            preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
+        config['Options']['Use_TFData'] = "False"
+        preproc.preproc(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
 
         config['Options']['Use_TFData'] = "True"
         p = Process(target=preproc.preproc, args=(config,))
@@ -123,11 +122,10 @@ class Tester:
 
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
-        if self.tpu_resolver is None:
-            config['Options']['Use_TFData'] = "False"
-            preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
+        config['Options']['Use_TFData'] = "False"
+        preproc.preproc(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
 
         config['Options']['Use_TFData'] = "True"
         p = Process(target=preproc.preproc, args=(config,))
@@ -139,10 +137,10 @@ class Tester:
 
     def test_train(self, quick=False):
         """Test training."""
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
         if self.tpu_resolver is None:
             print("TEST: Training (custom - keras sequence)...")
-            config = configparser.ConfigParser()
-            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
             config['DataLoad']['Use_TFData'] = "False"
             paprconfig = RCConfig(config)
             self.__config_train(paprconfig).train()
