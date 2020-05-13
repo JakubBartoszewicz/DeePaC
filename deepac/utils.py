@@ -5,9 +5,7 @@ Utility classes for DeePaC.
 import numpy as np
 import os
 import math
-from tensorflow.keras.utils import Sequence
 import psutil
-from tensorflow.keras.callbacks import CSVLogger
 import tensorflow as tf
 import csv
 import six
@@ -16,7 +14,7 @@ from collections import Iterable
 import multiprocessing
 
 
-class ReadSequence(Sequence):
+class ReadSequence(tf.keras.utils.Sequence):
 
     """
     A Keras sequence for yielding batches from a numpy array loaded in mmap mode.
@@ -75,7 +73,7 @@ def get_memory_usage():
     return mem
 
 
-class CSVMemoryLogger(CSVLogger):
+class CSVMemoryLogger(tf.keras.callbacks.CSVLogger):
 
     """
     A Keras CSV logger with a memory usage field.

@@ -6,7 +6,7 @@ from deepac.preproc import read_fasta, tokenize
 from multiprocessing import Pool
 from functools import partial
 
-from tensorflow.keras.preprocessing.text import Tokenizer
+import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
@@ -21,7 +21,7 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
     datatype = 'int8'
 
     # Preproc
-    tokenizer = Tokenizer(char_level=True)
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
     tokenizer.fit_on_texts(alphabet)
 
     print("Preprocessing data...")

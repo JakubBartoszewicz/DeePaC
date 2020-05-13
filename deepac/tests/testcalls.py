@@ -1,5 +1,4 @@
-import tensorflow.keras.backend as K
-from tensorflow.keras.models import load_model
+import tensorflow as tf
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
@@ -10,6 +9,7 @@ from deepac.builtin_loading import BuiltinLoader
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
 from deepac.gwpa.tests import GWPATester
+from multiprocessing import Process
 import configparser
 import os
 
@@ -112,7 +112,9 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
 
         config['Options']['Use_TFData'] = "True"
-        preproc.preproc(config)
+        p = Process(target=preproc.preproc, args=(config,))
+        p.start()
+        p.join()
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
                                             "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
             "TFData Preprocessing failed."
@@ -125,7 +127,9 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
 
         config['Options']['Use_TFData'] = "True"
-        preproc.preproc(config)
+        p = Process(target=preproc.preproc, args=(config,))
+        p.start()
+        p.join()
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
                                             "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
             "TFData Preprocessing failed."
@@ -144,7 +148,6 @@ class Tester:
                                             "nn-deepac-test-e002.h5"))), "Training failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "training-deepac-test.csv"))), "Training failed."
-        K.clear_session()
 
         print("TEST: Training (custom - tfrecord)...")
         config['DataLoad']['Use_TFData'] = "True"
@@ -156,7 +159,7 @@ class Tester:
                                             "nn-deepac-test-e002.h5"))), "Training failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "training-deepac-test.csv"))), "Training failed."
-        K.clear_session()
+
 
         if not quick:
             print("TEST: Training (rapid - keras sequence)...")
@@ -169,7 +172,6 @@ class Tester:
                                                 "nn-{}-e002.h5".format(runname)))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "training-{}.csv".format(runname)))), "Training failed."
-            K.clear_session()
 
             print("TEST: Training (rapid - tfrecord)...")
             paprconfig = self.bloader.get_rapid_training_config()
@@ -182,7 +184,6 @@ class Tester:
                                                 "nn-{}-e002.h5".format(runname)))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "training-{}.csv".format(runname)))), "Training failed."
-            K.clear_session()
 
             print("TEST: Training (sensitive - keras sequence)...")
             paprconfig = self.bloader.get_sensitive_training_config()
@@ -194,7 +195,7 @@ class Tester:
                                                 "nn-{}-e002.h5".format(runname)))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "training-{}.csv".format(runname)))), "Training failed."
-            K.clear_session()
+
 
             print("TEST: Training (sensitive - tfrecord)...")
             paprconfig = self.bloader.get_sensitive_training_config()
@@ -207,11 +208,10 @@ class Tester:
                                                 "nn-{}-e002.h5".format(runname)))), "Training failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "training-{}.csv".format(runname)))), "Training failed."
-            K.clear_session()
 
     def __config_train(self, paprconfig):
         """Set sample data paths and compile."""
-        if paprconfig.use_tf_data:
+        if paprconfig.use_tf_data and tf.executing_eagerly():
             paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train_data")
             paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train_labels")
             paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val_data")
@@ -235,7 +235,7 @@ class Tester:
     def test_pred(self, quick=False):
         """Test predicting."""
         print("TEST: Predicting (custom)...")
-        model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                     os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
@@ -284,7 +284,7 @@ class Tester:
 
     def test_filter(self):
         """Test filtering."""
-        model = load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5"))
         predict_fasta(model, os.path.join("deepac-tests", "sample-val-pos.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
                                    "deepac-test-e002-predictions-sample_val-pos.npy"))

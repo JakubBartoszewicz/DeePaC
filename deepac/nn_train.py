@@ -230,6 +230,10 @@ class RCNet:
     def __init__(self, config, training_mode=True, verbose_load=False):
         """RCNet constructor and config parsing"""
         self.config = config
+        if self.config.use_tf_data and not tf.executing_eagerly():
+            warnings.warn("Training with TFRecordDatasets supported only in eager mode. Looking for .npy files...")
+            self.config.use_tf_data = False
+
         self.config.set_tf_session()
         self.history = None
         self.verbose_load = verbose_load
@@ -289,7 +293,7 @@ class RCNet:
         print("Loading...")
 
         if self.config.use_tf_data:
-            AUTO = tf.data.experimental.AUTOTUNE
+            prefetch_size = tf.data.experimental.AUTOTUNE
 
             def count_data_items(filenames):
                 n = [int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in filenames]
@@ -300,12 +304,12 @@ class RCNet:
             self.length_train = count_data_items(train_filenames)
             self.training_sequence = \
                 parser.read_dataset(train_filenames).shuffle(buffer_size=self.config.batch_size*self.config.batch_queue)
-            self.training_sequence = self.training_sequence.repeat().batch(self.config.batch_size).prefetch(AUTO)
+            self.training_sequence = self.training_sequence.repeat().batch(self.config.batch_size).prefetch(prefetch_size)
 
             val_filenames = tf.io.gfile.glob(self.config.x_val_path + "/*.tfrec")
             self.length_val = count_data_items(val_filenames)
             self.validation_data = \
-                parser.read_dataset(val_filenames).repeat().batch(self.config.batch_size).prefetch(AUTO)
+                parser.read_dataset(val_filenames).repeat().batch(self.config.batch_size).prefetch(prefetch_size)
         elif self.config.use_generators_keras:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')

@@ -11,7 +11,6 @@ import configparser
 import os
 import shutil
 import multiprocessing
-from tensorflow.keras.models import load_model
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig
@@ -159,7 +158,7 @@ class MainRunner:
         elif args.rapid:
             model = self.bloader.load_rapid_model(training_mode=False)
         else:
-            model = load_model(args.custom)
+            model = tf.keras.models.load_model(args.custom)
 
         if args.array:
             predict_npy(model, args.input, args.output)

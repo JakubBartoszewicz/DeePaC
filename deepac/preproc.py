@@ -8,7 +8,6 @@ Requires a config file describing the available devices, input filepaths (two fa
  positive reads respectively), output filepath (for data and labels) and additional options.
 
 """
-from tensorflow.keras.preprocessing.text import Tokenizer
 import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -35,21 +34,21 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250):
 def read_fasta(in_handle):
     """Read fasta file with a fast, memory-efficient generator."""
     # Generators save memory compared to lists. SimpleFastaParser is faster than SeqIO.parse.
-    for title, seq in SimpleFastaParser(in_handle):        
+    for title, seq in SimpleFastaParser(in_handle):
         yield seq
 
-        
+
 def preproc(config):
     """Preprocess the CNN on Illumina reads using the supplied configuration."""
     # Set the number of cores to use
     max_cores = config['Devices'].getint('N_CPUs')
-    
+
     # Set input and output paths
     neg_path = config['InputPaths']['Fasta_Class_0']
     pos_path = config['InputPaths']['Fasta_Class_1']
     out_data_path = config['OutputPaths']['OutData']
     out_labels_path = config['OutputPaths']['OutLabels']
-    
+
     # Set additional options: shuffle, gzip compression, RC augmentation, data type
     do_shuffle = config['Options'].getboolean('Do_shuffle')
     if do_shuffle:
@@ -61,39 +60,50 @@ def preproc(config):
     read_length = config['Options'].getint('ReadLength')
     use_tfdata = config['Options'].getboolean('Use_TFData')
     n_files = config['Options'].getint('N_Files')
-    
+
     # Set alphabet and prepare the tokenizer
-    alphabet = "ACGT"  
-    tokenizer = Tokenizer(char_level=True)
+    alphabet = "ACGT"
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
     tokenizer.fit_on_texts(alphabet)
     # Preprocess
-    with Pool(processes=max_cores) as p:
-        if neg_path != "none":
-            print("Preprocessing negative data...")
-            with open(neg_path) as input_handle:
-                # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-                # Tokenize function is applied to the fasta sequence generator.
-                x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                       read_length=read_length), read_fasta(input_handle)),
+    if neg_path != "none":
+        print("Preprocessing negative data...")
+        with open(neg_path) as input_handle:
+            # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+            # Tokenize function is applied to the fasta sequence generator.
+            if max_cores > 1:
+                with Pool(processes=max_cores) as p:
+                    x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                           read_length=read_length), read_fasta(input_handle)),
+                                             dtype=datatype)
+            else:
+                x_train_neg = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                          read_length=read_length), read_fasta(input_handle))),
                                          dtype=datatype)
-            # Count negative samples
-            n_negative = x_train_neg.shape[0]
-        else:
-            x_train_neg = np.zeros((0, read_length, 4),dtype=np.uint8)
-            n_negative = 0
+        # Count negative samples
+        n_negative = x_train_neg.shape[0]
+    else:
+        x_train_neg = np.zeros((0, read_length, 4),dtype=np.uint8)
+        n_negative = 0
 
-        if pos_path != "none":
-            print("Preprocessing positive data...")
-            with open(pos_path) as input_handle:
-                # Parse fasta, tokenize in parallel & concatenate to negative data
-                x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                       read_length=read_length), read_fasta(input_handle)),
+    if pos_path != "none":
+        print("Preprocessing positive data...")
+        with open(pos_path) as input_handle:
+            # Parse fasta, tokenize in parallel & concatenate to negative data
+            if max_cores > 1:
+                with Pool(processes=max_cores) as p:
+                    x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                           read_length=read_length), read_fasta(input_handle)),
+                                             dtype=datatype)
+            else:
+                x_train_pos = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                          read_length=read_length), read_fasta(input_handle))),
                                          dtype=datatype)
-            # Count positive samples
-            n_positive = x_train_pos.shape[0]
-        else:
-            x_train_pos = np.zeros((0, read_length, 4),dtype=np.uint8)
-            n_positive = 0
+        # Count positive samples
+        n_positive = x_train_pos.shape[0]
+    else:
+        x_train_pos = np.zeros((0, read_length, 4),dtype=np.uint8)
+        n_positive = 0
     # Concatenate
     x_train = np.concatenate((x_train_neg, x_train_pos))
     # Add labels
@@ -140,17 +150,16 @@ def preproc(config):
             end = min((i+1) * slice_size, n_all)
             features_dataset = tf.data.Dataset.from_tensor_slices((x_train[start::end], y_train[start::end]))
 
-            def generator():
-                for features in features_dataset:
-                    yield serialize_example(*features)
-
-            serialized_features_dataset = tf.data.Dataset.from_generator(
-                generator, output_types=tf.string, output_shapes=())
+            serialized_features_dataset = features_dataset.map(tf_serialize_example)
 
             filename = os.path.join(out_dir, os.path.splitext(os.path.basename(out_dir))[0]
                                     + '_{}-{}.tfrec'.format(start, end - 1))
             writer = tf.data.experimental.TFRecordWriter(filename)
-            writer.write(serialized_features_dataset)
+            if tf.executing_eagerly():
+                writer.write(serialized_features_dataset)
+            else:
+                with tf.compat.v1.Session() as sess:
+                    sess.run(writer.write(serialized_features_dataset))
 
     print("Done!")
 
