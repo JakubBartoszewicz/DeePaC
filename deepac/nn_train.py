@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 import math
 
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda
+from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda, Masking
 from tensorflow.keras.layers import concatenate, add, multiply, average, maximum, Flatten
 from tensorflow.keras.layers import LSTM, Bidirectional
 from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D, GlobalAveragePooling1D, MaxPooling1D, AveragePooling1D
@@ -83,6 +83,10 @@ class RCConfig:
             self.seq_length = config['InputData'].getint('SeqLength')
             self.alphabet = "ACGT"
             self.seq_dim = len(self.alphabet)
+            try:
+                self.mask_zeros = config['InputData'].getboolean('MaskZeros')
+            except KeyError:
+                self.mask_zeros = False
             # subread settings (subread = first k nucleotides of a read)
             self.use_subreads = config['InputData'].getboolean('UseSubreads')
             self.min_subread_length = config['InputData'].getint('MinSubreadLength')
@@ -488,12 +492,16 @@ class RCNet:
         self.__current_recurrent = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
+        if self.config.mask_zeros:
+            x = Masking()(inputs)
+        else:
+            x = inputs
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs)
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x)
         else:
             x = inputs
         # First convolutional/recurrent layer
@@ -610,12 +618,16 @@ class RCNet:
         self.__current_bn = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
+        if self.config.mask_zeros:
+            x = Masking()(inputs)
+        else:
+            x = inputs
         # The last recurrent layer should return the output for the last unit only.
         #  Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs)
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x)
         else:
             x = inputs
         # First convolutional/recurrent layer
@@ -740,15 +752,19 @@ class RCNet:
         self.__current_bn = 0
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
+        if self.config.mask_zeros:
+            x_fwd = Masking()(inputs_fwd)
+        else:
+            x_fwd = inputs_fwd
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
                             name="reverse_complement_input_{n}".format(n=self.__current_recurrent+1))
-        inputs_rc = revcomp_in(inputs_fwd)
+        inputs_rc = revcomp_in(x_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs_fwd)
+            x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(x_fwd)
             x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs_rc)
         else:
             x_fwd = inputs_fwd
