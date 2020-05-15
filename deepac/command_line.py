@@ -266,7 +266,7 @@ class MainRunner:
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
         parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
         parser_test.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
-                                 help="GPU devices to use (comma-separated). Default: all")
+                                 help="GPU devices to use. Default: all")
         parser_test.add_argument('-x', '--explain', dest="explain", help="Test explain workflows.",
                                  default=False, action="store_true")
         parser_test.add_argument('-p', '--gwpa', dest="gwpa", help="Test gwpa workflows.",
