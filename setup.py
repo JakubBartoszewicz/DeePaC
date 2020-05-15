@@ -7,7 +7,7 @@ def readme():
 
 
 setup(name='deepac',
-      version='0.11.0',
+      version='0.12.0',
       description='Predicting pathogenic potentials of novel DNA with reverse-complement neural networks.',
       long_description=readme(),
       long_description_content_type='text/markdown',
