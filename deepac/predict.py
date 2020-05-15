@@ -12,13 +12,12 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
 
 
-def predict_fasta(model, input_fasta, output, token_cores=8):
+def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32'):
     """Predict pathogenic potentials from a fasta file."""
 
     alphabet = "ACGT"
     input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
     read_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
-    datatype = 'int8'
 
     # Preproc
     tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
