@@ -273,7 +273,7 @@ class RCNet:
             # Build the model using the CPU or GPU or TPU
             if self.config.tpu_strategy is not None:
                 self.strategy = self.config.tpu_strategy
-            if self.config.simple_build:
+            elif self.config.simple_build:
                 self.strategy = None
             else:
                 self.strategy = self.config.strategy()
