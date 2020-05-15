@@ -5,7 +5,7 @@ from Bio.SeqRecord import SeqRecord
 import os
 
 
-def __generate_read(gc=0.5, length=250, header=None):
+def generate_read(gc=0.5, length=250, header=None):
     """Generate a random read."""
     if header is None:
         header = "random seq gc {}%".format(gc * 100)
