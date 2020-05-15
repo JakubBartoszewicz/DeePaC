@@ -92,14 +92,14 @@ Optionally, you can run explicit tests of your installation. Note that it may ta
 deepac test
 # Run quick tests (eg. on CPUs)
 deepac test -q
-# Test using a GPU
-deepac test -g 1
+# Test using specific GPUs (here: /device:GPU:0 and /device:GPU:1) 
+deepac test -g 0 1
 # Test explainability and gwpa workflows
 deepac test -xp
 # Full tests
-deepac test -a -g 1
+deepac test -a
 # Full quick tests (eg. on GPUs with limited memory)
-deepac test -aq -g 1
+deepac test -aq
 ```
 
 ### Help
@@ -120,8 +120,6 @@ You can predict pathogenic potentials with one of the built-in models out of the
 deepac predict -r input.fasta
 # A sensitive LSTM (trained on IMG/M data)
 deepac predict -s input.fasta
-# With GPU support
-deepac predict -s -g 1 input.fasta
 ```
 
 The rapid and the sensitive models are trained to predict pathogenic potentials of novel bacterial species.
@@ -156,8 +154,8 @@ See the `config_templates` directory of the GitLab repository (https://gitlab.co
 ### Training
 You can use the built-in architectures to train a new model:
 ```
-deepac train -r -g 1 -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
-deepac train -s -g 1 -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
+deepac train -r -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
+deepac train -s -T train_data.npy -t train_labels.npy -V val_data.npy -v val_labels.npy
 
 ```
 
