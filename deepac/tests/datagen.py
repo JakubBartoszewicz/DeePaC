@@ -18,7 +18,7 @@ def generate_read(gc=0.5, length=250, header=None):
 
 def generate_reads(n, filename, gc=0.5, length=250, append=False, header=None):
     """Generate random reads to a fasta file."""
-    reads = [__generate_read(gc, length, header) for i in range(0, n)]
+    reads = [generate_read(gc, length, header) for i in range(0, n)]
     if append:
         with open(filename, "a") as output_handle:
             SeqIO.write(reads, output_handle, "fasta")
