@@ -203,13 +203,14 @@ class DatasetParser:
     """
 
     def __init__(self, read_length, use_subreads=False, min_subread_length=None, max_subread_length=None,
-                 dist_subread=None):
+                 dist_subread=None, dtype=tf.int32):
         """DatasetParser constructor"""
         self.read_length = read_length
         self.use_subreads = use_subreads
         self.min_subread_length = min_subread_length
         self.max_subread_length = max_subread_length
         self.dist_subread = dist_subread
+        self.dtype=dtype
         self.feature_description = {
             'x_seq': tf.io.FixedLenFeature([], tf.string, default_value=''),
             'y_label': tf.io.FixedLenFeature([], tf.int64, default_value=0),
@@ -220,8 +221,8 @@ class DatasetParser:
 
         # Parse the input `tf.Example` proto using the dictionary above.
         example = tf.io.parse_single_example(example_proto, self.feature_description)
-        x_seq = tf.reshape(tf.io.parse_tensor(example["x_seq"], out_type=tf.int8), [self.read_length, 4])
-        y_label = tf.reshape(tf.cast(example["y_label"], tf.int8), [1])
+        x_seq = tf.reshape(tf.io.parse_tensor(example["x_seq"], out_type=self.dtype), [self.read_length, 4])
+        y_label = tf.reshape(tf.cast(example["y_label"], self.dtype), [1])
         return x_seq, y_label
 
     def read_dataset(self, filenames):

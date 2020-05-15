@@ -54,10 +54,10 @@ class RCConfig:
             # Devices Config #
             # Get the number of available GPUs
             try:
-                self.strategy = self.strategy_dict[config['Devices']['DistStrategy']]
+                self.strategy = config['Devices']['DistStrategy']
             except KeyError:
                 print("Unknown distribution strategy. Using MirroredStrategy.")
-                self.strategy = self.strategy_dict["MirroredStrategy"]
+                self.strategy = "MirroredStrategy"
             self.__n_gpus = 0
             self.tpu_strategy = None
 
@@ -275,8 +275,10 @@ class RCNet:
                 self.strategy = self.config.tpu_strategy
             elif self.config.simple_build:
                 self.strategy = None
+            elif self.config.strategy == "OneDeviceStrategy":
+                self.strategy = self.config.strategy_dict[self.config.strategy](self.config.model_build_device)
             else:
-                self.strategy = self.config.strategy()
+                self.strategy = self.config.strategy_dict[self.config.strategy]()
 
             with self.get_device_strategy_scope():
                 if self.config.rc_mode == "full":
