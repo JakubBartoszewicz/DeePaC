@@ -36,7 +36,7 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
     print("Predicting...")
     y_pred = np.ndarray.flatten(model.predict(x_data))
     end = time.time()
-    print("Predicted {} reads in {} s".format(y_pred.shape[0], end - start))
+    print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
 
 
@@ -48,7 +48,7 @@ def predict_npy(model, input_npy, output):
     start = time.time()
     y_pred = np.ndarray.flatten(model.predict(x_data))
     end = time.time()
-    print("Predicted {} reads in {} s".format(y_pred.shape[0], end - start))
+    print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
 
 
