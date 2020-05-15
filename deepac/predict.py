@@ -5,7 +5,7 @@ Predict pathogenic potentials and use them to filter sequences of interest.
 from deepac.preproc import read_fasta, tokenize
 from multiprocessing import Pool
 from functools import partial
-
+import time
 import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -25,6 +25,7 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
     tokenizer.fit_on_texts(alphabet)
 
     print("Preprocessing data...")
+    start = time.time()
     with open(input_fasta) as input_handle:
         # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
         # Tokenize function is applied to the fasta sequence generator.
@@ -34,7 +35,8 @@ def predict_fasta(model, input_fasta, output, token_cores=8):
     # Predict
     print("Predicting...")
     y_pred = np.ndarray.flatten(model.predict(x_data))
-
+    end = time.time()
+    print("Predicted {} reads in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
 
 
@@ -43,8 +45,10 @@ def predict_npy(model, input_npy, output):
     x_data = np.load(input_npy)
     # Predict
     print("Predicting...")
+    start = time.time()
     y_pred = np.ndarray.flatten(model.predict(x_data))
-
+    end = time.time()
+    print("Predicted {} reads in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
 
 
