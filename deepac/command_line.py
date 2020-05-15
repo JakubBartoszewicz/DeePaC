@@ -110,13 +110,14 @@ def global_setup(args):
 def add_global_parser(gparser):
     gparser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
     gparser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
-                        default=False, action="store_true")
+                         default=False, action="store_true")
     gparser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
-                                                            "0 = max, 3 = min. Default: 2 (errors)", type=int)
+                                                             "0 = max, 3 = min. Default: 2 (errors);"
+                                                             " 3 for tests (muted)", type=int)
     gparser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
-                        default=False, action="store_true")
+                         default=False, action="store_true")
     gparser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
-                        default=False, action="store_true")
+                         default=False, action="store_true")
     gparser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
 
     return gparser
