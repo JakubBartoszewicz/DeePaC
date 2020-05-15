@@ -62,7 +62,10 @@ class RCConfig:
             self.tpu_strategy = None
 
             # for using tf.device instead of strategy
-            self.simple_build = config['Devices'].getboolean('SimpleBuild')
+            try:
+                self.simple_build = config['Devices'].getboolean('SimpleBuild')
+            except KeyError:
+                self.simple_build = False
             self.base_batch_size = config['Training'].getint('BatchSize')
             self.batch_size = self.base_batch_size
 
