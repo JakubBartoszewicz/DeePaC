@@ -107,6 +107,21 @@ def global_setup(args):
     return tpu_resolver
 
 
+def add_global_parser(gparser):
+    gparser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
+    gparser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
+                        default=False, action="store_true")
+    gparser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
+                                                            "0 = max, 3 = min. Default: 2 (errors)", type=int)
+    gparser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
+                        default=False, action="store_true")
+    gparser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
+                        default=False, action="store_true")
+    gparser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+
+    return gparser
+
+
 class MainRunner:
     def __init__(self, builtin_configs=None, builtin_weights=None):
         self.builtin_configs = builtin_configs
@@ -182,16 +197,7 @@ class MainRunner:
         """Parse DeePaC CLI arguments."""
         parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                     "with reverse-complement neural networks.")
-        parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
-        parser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
-                            default=False, action="store_true")
-        parser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
-                                                                "0 = max, 3 = min. Default: 2 (errors)", type=int)
-        parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
-                            default=False, action="store_true")
-        parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
-                            default=False, action="store_true")
-        parser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+        parser = add_global_parser(parser)
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
         # create the parser for the "predict" command
