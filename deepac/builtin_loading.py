@@ -25,10 +25,10 @@ class BuiltinLoader:
             self.builtin_weights = builtin_weights
 
     def load_sensitive_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_resolver=None):
-        return self.__load_builtin_model("sensitive", n_cpus, n_gpus, log_path, training_mode)
+        return self.__load_builtin_model("sensitive", n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
 
     def load_rapid_model(self, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True, tpu_resolver=None):
-        return self.__load_builtin_model("rapid", n_cpus, n_gpus, log_path, training_mode)
+        return self.__load_builtin_model("rapid", n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
 
     def __load_builtin_model(self, modelkey, n_cpus=None, n_gpus=None, log_path="logs", training_mode=True,
                              tpu_resolver=None):
