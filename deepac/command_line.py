@@ -101,7 +101,8 @@ def global_setup(args):
     if args.force_cpu:
         tf.config.set_visible_devices([], 'GPU')
         args.gpus = None
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf)
+    default_verbosity = '3' if args.subparser == 'test' else '2'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf) if args.debug_tf is not None else default_verbosity
 
     return tpu_resolver
 
@@ -185,8 +186,7 @@ class MainRunner:
         parser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
                             default=False, action="store_true")
         parser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
-                                                                "0 = max, 3 = min. Default: 2 (errors)",
-                            default=2, type=int)
+                                                                "0 = max, 3 = min. Default: 2 (errors)", type=int)
         parser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
                             default=False, action="store_true")
         parser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
