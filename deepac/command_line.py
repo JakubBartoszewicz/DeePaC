@@ -157,6 +157,7 @@ class MainRunner:
             paprconfig.log_dir = os.path.join(paprconfig.log_superpath,
                                               "{runname}-logs".format(runname=paprconfig.runname))
 
+        paprconfig.set_tpu_resolver(self.tpu_resolver)
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()
@@ -171,11 +172,16 @@ class MainRunner:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
         if args.sensitive:
-            model = self.bloader.load_sensitive_model(training_mode=False)
+            model = self.bloader.load_sensitive_model(training_mode=False, tpu_resolver=self.tpu_resolver)
         elif args.rapid:
-            model = self.bloader.load_rapid_model(training_mode=False)
+            model = self.bloader.load_rapid_model(training_mode=False, tpu_resolver=self.tpu_resolver)
         else:
-            model = tf.keras.models.load_model(args.custom)
+            if self.tpu_resolver is not None:
+                tpu_strategy = tf.distribute.experimental.TPUStrategy(self.tpu_resolver)
+                with tpu_strategy.scope():
+                    model = tf.keras.models.load_model(args.custom)
+            else:
+                model = tf.keras.models.load_model(args.custom)
 
         if args.array:
             predict_npy(model, args.input, args.output)
