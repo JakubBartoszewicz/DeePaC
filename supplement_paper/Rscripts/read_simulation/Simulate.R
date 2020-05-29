@@ -141,7 +141,7 @@ if (Do.Balance) {
     validation.Fix.Coverage <- F
 } else {
     TrainingReadNumber <- TotalTrainingReadNumber * ReadLength / sum(IMGdata$Genome.Size[IMGdata$fold1 == "train"]) # coverage
-    ValidationReadNumber = TotalValidationReadNumber * ReadLength / sum(IMGdata$Genome.Size[IMGdata$fold1 == "val"]) # coverage
+    ValidationReadNumber <- TotalValidationReadNumber * ReadLength / sum(IMGdata$Genome.Size[IMGdata$fold1 == "val"]) # coverage
     training.Fix.Coverage <- T
     validation.Fix.Coverage <- T
 }
@@ -149,7 +149,7 @@ if (Do.Balance.test) {
     TestReadNumber <- TotalTestReadNumber / 2 # per class across all genomes
     test.Fix.Coverage <- F
 } else {
-    TestReadNumber = TotalTestReadNumber * ReadLength / sum(IMGdata$Genome.Size[IMGdata$fold1 == "test"]) # coverage
+    TestReadNumber <- TotalTestReadNumber * ReadLength / sum(IMGdata$Genome.Size[IMGdata$fold1 == "test"]) # coverage
     test.Fix.Coverage <- T
 }
 
