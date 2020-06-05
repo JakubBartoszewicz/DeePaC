@@ -277,8 +277,7 @@ class RCNet:
             self.strategy = self.config.strategy_dict[self.config.strategy]()
 
         if self.config.epoch_start > 0:
-            checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-            self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
+            self.model = None
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
@@ -958,6 +957,9 @@ class RCNet:
         """Train the NN on Illumina reads using the supplied configuration."""
         print("Training...")
         with self.get_device_strategy_scope():
+            if self.config.epoch_start > 0:
+                checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
+                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
             if self.config.use_tf_data:
                 # Fit a model using tf data
                 self.history = self.model.fit(x=self.training_sequence,
