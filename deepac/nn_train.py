@@ -265,13 +265,9 @@ class RCNet:
                 if e.errno != errno.EEXIST:
                     raise
             self.__set_callbacks()
-
-        if self.config.epoch_start > 0:
-            checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-            self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
-        else:
-            # Build the model using the CPU or GPU or TPU
-            if self.config.tpu_strategy is not None:
+            
+        # Set strategy
+        if self.config.tpu_strategy is not None:
                 self.strategy = self.config.tpu_strategy
             elif self.config.simple_build:
                 self.strategy = None
@@ -280,6 +276,12 @@ class RCNet:
             else:
                 self.strategy = self.config.strategy_dict[self.config.strategy]()
 
+        if self.config.epoch_start > 0:
+            checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
+            with self.get_device_strategy_scope():
+                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
+        else:
+            # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
                 if self.config.rc_mode == "full":
                     self.__build_rc_model()
