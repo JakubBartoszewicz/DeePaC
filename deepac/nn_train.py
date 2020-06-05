@@ -278,8 +278,7 @@ class RCNet:
 
         if self.config.epoch_start > 0:
             checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
-            with self.get_device_strategy_scope():
-                self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
+            self.model = load_model(checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start-1))
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
