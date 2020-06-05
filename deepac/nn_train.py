@@ -268,13 +268,13 @@ class RCNet:
             
         # Set strategy
         if self.config.tpu_strategy is not None:
-                self.strategy = self.config.tpu_strategy
-            elif self.config.simple_build:
-                self.strategy = None
-            elif self.config.strategy == "OneDeviceStrategy":
-                self.strategy = self.config.strategy_dict[self.config.strategy](self.config.model_build_device)
-            else:
-                self.strategy = self.config.strategy_dict[self.config.strategy]()
+            self.strategy = self.config.tpu_strategy
+        elif self.config.simple_build:
+            self.strategy = None
+        elif self.config.strategy == "OneDeviceStrategy":
+            self.strategy = self.config.strategy_dict[self.config.strategy](self.config.model_build_device)
+        else:
+            self.strategy = self.config.strategy_dict[self.config.strategy]()
 
         if self.config.epoch_start > 0:
             checkpoint_name = self.config.log_dir + "/nn-{runname}-".format(runname=self.config.runname)
