@@ -97,7 +97,7 @@ def get_weblogos_ext(args):
         else:
             prior = parse_prior(str(gc_content), seqs.alphabet)
             data = LogoData.from_seqs(seqs, prior)
-            out_file_name = args.out_dir + "/weblogo_extended_" + file_fasta[0].replace(".fasta", ".jpeg")
+            out_file_name = args.out_dir + "/weblogo_extended_" + file_fasta.replace(".fasta", ".jpeg")
 
         seq_names = [seq.name for seq in seqs]
         seen = set()
