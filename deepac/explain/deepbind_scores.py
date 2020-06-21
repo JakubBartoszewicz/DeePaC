@@ -186,7 +186,7 @@ def get_maxact(args):
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir),
                       range(n_filters))
-                p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir, rc=True),
                       range(n_filters))
@@ -196,7 +196,7 @@ def get_maxact(args):
                              reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                              out_dir=args.out_dir),
                      range(n_filters)))
-            list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+            list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                              reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                              out_dir=args.out_dir, rc=True),
                      range(n_filters)))
