@@ -74,7 +74,7 @@ def add_explain_parser(xparser):
                                                                               "rel_pred_class"],
                                  help="Use original filter scores or normalize scores relative to "
                                       "true or predicted classes.")
-    parser_franking.add_argument("-f", "--scores_dir", required=True,
+    parser_franking.add_argument("-f", "--scores-dir", required=True,
                                  help="Directory containing filter contribution scores (.csv)")
     parser_franking.add_argument("-y", "--true-label", required=True, help="File with true read labels (.npy)")
     parser_franking.add_argument("-p", "--pred-label", required=True, help="File with predicted read labels (.npy)")
