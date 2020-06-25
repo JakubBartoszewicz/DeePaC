@@ -92,6 +92,7 @@ def filter_enrichment(args):
             with multiprocessing.Pool(processes=cores) as pool:
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
 
+            filtered_gffs = [b.merge() for b in filtered_gffs]
             num_entries = bed.count()
             with multiprocessing.Pool(processes=cores) as pool:
                 num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed), filtered_gffs)

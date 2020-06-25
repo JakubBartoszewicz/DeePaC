@@ -69,6 +69,7 @@ def filter_activations(args):
     print("Computing activations ...")
     chunk_size = args.chunk_size
     n = 0
+    all_filter_rows = None
     while n < total_num_reads:
         print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
         samples_chunk = samples[n:n+chunk_size, :, :]
@@ -82,12 +83,10 @@ def filter_activations(args):
             activations = activations_fwd + activations_rc
 
         n_filters = activations_fwd.shape[-1]
+        if all_filter_rows is None:
+            all_filter_rows = [[] for f in range(n_filters)]
         for filter_index in range(n_filters):
-
-            filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
-
             pos_indices = np.where(activations[:, :, filter_index] > 0)
-            rows = []
             for i in range(len(pos_indices[0])):
                 read = pos_indices[0][i]
                 neuron = pos_indices[1][i]
@@ -97,18 +96,20 @@ def filter_activations(args):
                     continue
                 else:
                     activation_score = activations[read, neuron, filter_index]
-                    rows.append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
-                                 "filter_"+str(filter_index), '%.4g' % activation_score])
-
-            # sort by sequence and filter start position
-            rows.sort(key=itemgetter(0, 1))
-            # remove duplicates (due to overlapping reads) or take max of two scores at the same genomic position
-            # (can occur if filter motif is recognized at the border of one read)
-            rows = [max(g, key=itemgetter(4)) for k, g in groupby(rows, itemgetter(0, 1))]
-
-            with open(filter_bed_file, 'a') as csv_file:
-                file_writer = csv.writer(csv_file, delimiter='\t')
-                for r in rows:
-                    file_writer.writerow(r)
-
+                    all_filter_rows[filter_index].append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
+                                                          "filter_"+str(filter_index), '%.4g' % activation_score])
         n += chunk_size
+
+    for filter_index in range(n_filters):
+        rows = all_filter_rows[filter_index]
+        filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
+        # sort by sequence and filter start position
+        rows.sort(key=itemgetter(0, 1))
+        # remove duplicates (due to overlapping reads) or take max of two scores at the same genomic position
+        # (can occur if filter motif is recognized at the border of one read)
+        rows = [max(g, key=itemgetter(4)) for k, g in groupby(rows, itemgetter(0, 1))]
+
+        with open(filter_bed_file, 'w') as csv_file:
+            file_writer = csv.writer(csv_file, delimiter='\t')
+            for r in rows:
+                file_writer.writerow(r)
