@@ -75,7 +75,7 @@ def filter_enrichment(args):
     all_feature_types = sorted(list(set(all_feature_types)))
     motif_length = args.motif_length
     genome_size = gff.total_coverage()
-    num_possible_hits = genome_size - motif_length + 1
+    num_possible_hits = 2 * (genome_size - motif_length + 1)
     min_overlap = motif_length//3
 
     # one bed file per filter motif
@@ -101,8 +101,8 @@ def filter_enrichment(args):
             with multiprocessing.Pool(processes=cores) as pool:
                 len_feature_region = pool.map(count_len_feature_region, filtered_gffs)
             num_possible_hits_feature = [
-                len_feature_region[i] + num_feature_occurences[i] + motif_length * num_feature_occurences[
-                    i] - 2 * min_overlap * num_feature_occurences[i] for i in range(len(all_feature_types))]
+                2 * (len_feature_region[i] + num_feature_occurences[i] + motif_length * num_feature_occurences[
+                    i] - 2 * min_overlap * num_feature_occurences[i]) for i in range(len(all_feature_types))]
             num_possible_hits_outside_feature = [num_possible_hits - num_possible_hits_feature[i] for i in
                                                  range(len(all_feature_types))]
             num_hits_outside_feature = [num_entries - num_hits_feature[i] for i in range(len(all_feature_types))]

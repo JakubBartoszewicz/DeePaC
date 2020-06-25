@@ -72,6 +72,8 @@ def add_gwpa_parser(gparser):
                                   help="Perform calculations for this intermediate layer")
     parser_factiv.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                help="Sequence chunk size. Decrease for lower memory usage.")
+    parser_factiv.add_argument("-F", "--inter-neuron", nargs='*', dest="inter_neuron", type=int,
+                               help="Perform calculations for this filter only")
     parser_factiv.set_defaults(func=run_factiv)
 
     parser_fenrichment = gwpa_subparsers.add_parser('fenrichment', help='Run filter enrichment analysis.')
