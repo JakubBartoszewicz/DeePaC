@@ -11,6 +11,10 @@ def featuretype_filter(feature, featuretype):
     if feature[2] == 'gene':
         if feature.attrs.get('gene', None) == featuretype:
             return True
+        elif feature.attrs.get('Name', None) == featuretype:
+            return True
+        elif feature.attrs.get('ID', None) == featuretype:
+            return True
 
     if feature[2] == 'CDS':
         if feature.attrs.get('product', None) == featuretype:
@@ -67,6 +71,11 @@ def gene_rank(args):
                 if feature[2] == 'gene':
                     if 'gene' in feature.attrs:
                         all_feature_types.append(feature.attrs['gene'])
+                    elif args.extended:
+                        if 'Name' in feature.attrs:
+                            all_feature_types.append(feature.attrs['Name'])
+                        elif 'ID' in feature.attrs:
+                            all_feature_types.append(feature.attrs['ID'])
                 if args.extended and feature[2] == 'CDS':
                     if 'product' in feature.attrs:
                         all_feature_types.append(feature.attrs['product'])
@@ -92,5 +101,12 @@ def gene_rank(args):
                                                         ('bioproject_id', bioproject_id),
                                                         ('pathogenicity_score', feature_pathogenicities))))
                 patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
-                patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv", sep="\t",
-                                   index=False)
+
+                if args.extended:
+                    patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity_extended.csv",
+                                       sep="\t",
+                                       index=False)
+                else:
+                    patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv",
+                                       sep="\t",
+                                       index=False)
