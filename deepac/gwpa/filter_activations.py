@@ -98,6 +98,8 @@ def filter_activations(args):
                                 motif_length, rc=True)
         n += chunk_size
 
+    print("Done " + str(total_num_reads) + " sequences. Saving data...")
+
     for filter_index in filter_range:
         rows_fwd = all_filter_rows_fwd[filter_index]
         rows_rc = all_filter_rows_rc[filter_index]
