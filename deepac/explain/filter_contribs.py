@@ -394,7 +394,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
             diff = intermediate_diff[seq_id, filter_id]
         else:
             diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
-        scores_nt = explainer_nt.shap_values(sample)
+        scores_nt = explainer_nt.shap_values(sample, check_additivity=False)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
         partials = partials.reshape(partials.shape[1], partials.shape[2])
