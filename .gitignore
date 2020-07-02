@@ -1,4 +1,5 @@
 /.project
+/.idea
 
 # Compiled python modules.
 *.pyc
@@ -14,4 +15,5 @@
 
 # Test logs
 /deepac-tests
-/deepac_config_templates
+/deepac_training_configs
+/deepac_extra_configs
