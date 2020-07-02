@@ -14,10 +14,10 @@ accept.anything <- Vectorize(function (x,y) {
 })
 
 get.performance <- function (prediction, y, P=0, N=0) {
-    TP <- sum(prediction==T & y==T)
-    TN <- sum(prediction==F & y==F)    
-    FP <- sum(prediction==T & y==F)    
-    FN <- sum(prediction==F & y==T)
+    TP <- sum(prediction==T & y==T, na.rm = TRUE)
+    TN <- sum(prediction==F & y==F, na.rm = TRUE)    
+    FP <- sum(prediction==T & y==F, na.rm = TRUE)    
+    FN <- sum(prediction==F & y==T, na.rm = TRUE)
     
     if (P<0) P = TP + FN
     if (N<0) N = TN + FP
