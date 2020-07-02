@@ -13,13 +13,13 @@ accept.anything <- Vectorize(function (x,y) {
 })
 
 get.performance <- function (prediction, y, P=0, N=0) {
-    TP <- sum(prediction==T & y==T)
-    TN <- sum(prediction==F & y==F)    
-    FP <- sum(prediction==T & y==F)    
-    FN <- sum(prediction==F & y==T)
+    TP <- sum(prediction==T & y==T, na.rm = TRUE)
+    TN <- sum(prediction==F & y==F, na.rm = TRUE)    
+    FP <- sum(prediction==T & y==F, na.rm = TRUE)    
+    FN <- sum(prediction==F & y==T, na.rm = TRUE)
     
-    if (P==0) P = TP + FN
-    if (N==0) N = TN + FP
+    if (P<0) P = TP + FN
+    if (N<0) N = TN + FP
     
     # sensitivity or true positive rate / recall (TPR)
     sensitivity = TP/(TP+FN)
@@ -73,7 +73,8 @@ for (trainingSet in c("AllTrainingGenomes", "AllStrains")){
         rownames(species.R) <- sapply(file.data.R, function(x){return(x$QuerySpecies[1])})
         species.join <-  merge(species.L, species.R, by = "QuerySpecies", all = TRUE, suffixes = c(".L", ".R"))
         species.join$Prediction <- accept.anything(species.join$MatchedLabel.L, species.join$MatchedLabel.R)
-        species.pred <- species.join[!is.na(species.join$Prediction),]         
+        species.pred <- species.join[!is.na(species.join$Prediction),]   
+        species.pred$QueryLabel.L[is.na(species.pred$QueryLabel.L)] <- species.pred$QueryLabel.R[is.na(species.pred$QueryLabel.L)]
     }
     
     test.L <- get.performance(species.L$MatchedLabel[!is.na(species.L$MatchedLabel)], species.L$QueryLabel[!is.na(species.L$MatchedLabel)], P, N)
