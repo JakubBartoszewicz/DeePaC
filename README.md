@@ -166,7 +166,15 @@ deepac train -c nn_train_config.ini
 
 If you train an LSTM on a GPU, a CUDNNLSTM implementation will be used. To convert the resulting model to be 
 CPU-compatible, use `deepac convert`. You can also use it to save the weights of a model, or recompile a model 
-from a set of weights to use it with a different Python binary.
+from a set of weights:
+
+```
+# Save model weights and convert the model to an equivalent with the same architecture and weights.
+# Other config parameters can be adjusted
+deepac convert model_config.ini saved_model.h5
+# Recompile the model
+deepac convert saved_model_config.ini saved_model_weights.h5 -w
+```
 
 ### Evaluation
 
@@ -204,7 +212,7 @@ deepac explain franking -f fcontribs/filter_scores -y test_labels.npy -p test_pr
 deepac explain fa2transfac -i fcontribs/fasta -o fcnotribs/transfac -w -d fcontribs/filter_scores
 
 # Visualize nucleotide contribution sequence logos
-deepac explain xlogos -f fcontribs/fasta -s fcontribs/filter_scores -l fcnotribs/transfac -t train_data.npy -o xlogos
+deepac explain xlogos -i fcontribs/fasta -s fcontribs/filter_scores -I fcnotribs/transfac -t train_data.npy -o xlogos
 ```
 You can browse through other supplementary functionalities and parameters by checking the help:
 ```
