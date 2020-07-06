@@ -3,6 +3,8 @@ A DeePaC gwpa CLI. Support GWPA tools.
 
 """
 import warnings
+import os
+import re
 from deepac.gwpa.fragment_genomes import frag_genomes
 from deepac.gwpa.gene_ranking import gene_rank
 from deepac.gwpa.genome_pathogenicity import genome_map
@@ -85,6 +87,11 @@ def add_gwpa_parser(gparser):
     parser_fenrichment.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", type=int)
     parser_fenrichment.set_defaults(func=run_fenrichment)
 
+    parser_gff2genome = gwpa_subparsers.add_parser('gff2genome', help='Generate .genome files.')
+    parser_gff2genome.add_argument('gff3_dir', help='Input directory.')
+    parser_gff2genome.add_argument('out_dir', help='Output directory.')
+    parser_gff2genome.set_defaults(func=run_gff2genome)
+
     return gparser
 
 
@@ -119,3 +126,28 @@ def run_factiv(args):
 def run_fenrichment(args):
     """Run filter enrichment analysis."""
     filter_enrichment(args)
+
+
+def run_gff2genome(args):
+    """Generate .genome files."""
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
+    for file in os.listdir(args.gff3_dir):
+        if file.endswith(".gff") or file.endswith(".gff3"):
+            pre, ext = os.path.splitext(file)
+            out_file = pre + ".genome"
+            gff2genome(os.path.join(args.gff3_dir, file), os.path.join(args.out_dir, out_file))
+
+
+def gff2genome(gff3_path, out_path):
+    """Generate a .genome file."""
+    ptrn = re.compile(r'\sregion')
+    out_lines = []
+    with open(gff3_path) as in_file:
+        for line in in_file:
+            region = ptrn.search(line)
+            if region:
+                out_lines.append(line.split()[0] + "\t" + line.split()[4] + "\n")
+    with open(out_path, 'w') as out_file:
+        out_file.writelines(out_lines)
+

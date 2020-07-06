@@ -10,6 +10,7 @@ from deepac.gwpa.gene_ranking import gene_rank
 from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
+from deepac.gwpa.command_line import run_gff2genome
 
 
 class GWPATester:
@@ -46,11 +47,6 @@ class GWPATester:
                        length=contigs[2], header="SAMPLE{i}3.1".format(i=s_id), append=True)
         generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)),
                        gc=1.0 - gc, length=contigs[3], header="SAMPLE{i}4.1".format(i=s_id), append=True)
-
-        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), contigs[0]], ["SAMPLE{i}2.1".format(i=s_id), contigs[1]],
-                           ["SAMPLE{i}3.1".format(i=s_id), contigs[2]], ["SAMPLE{i}4.1".format(i=s_id), contigs[3]]])
-        df.to_csv(os.path.join(self.outpath, "genome", "sample_genome{i}.genome".format(i=s_id)), sep="\t",
-                  header=False, index=False)
 
         df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), "Genbank", "region", "1", contigs[0], ".", "+", ".",
                             "ID=SAMPLE{i}1.1".format(i=s_id)],
@@ -148,3 +144,11 @@ class GWPATester:
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
             "Fenrichment failed."
+
+    def test_gff2genome(self):
+        """Test .genome file creation."""
+        args = Namespace(gff3_dir=os.path.join(self.outpath, "genome_gff3"),
+                         out_dir=os.path.join(self.outpath, "genome"))
+        run_gff2genome(args)
+        assert (len(os.listdir(os.path.join(self.outpath, "genome"))) > 0), \
+            "gff2genome failed."

@@ -75,6 +75,8 @@ class Tester:
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus)
+            print("X-TEST: gff2genome...")
+            gwpatester.test_gff2genome()
             print("X-TEST: Fragmenting genomes...")
             gwpatester.test_fragment()
             print("X-TEST: Genome-wide phenotype potential map...")
