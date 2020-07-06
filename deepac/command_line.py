@@ -188,6 +188,36 @@ class MainRunner:
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus)
 
+    def run_getmodels(self, args):
+        """Get built-in weights and rebuild built-in models."""
+        out_dir = "deepac_builtin_models"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
+        modulepath = os.path.dirname(__file__)
+        builtin_weights_path = os.path.join(modulepath, "builtin", "weights")
+        out_weights_path = os.path.join(out_dir, "weights")
+        if os.path.exists(out_weights_path):
+            for root, dirs, files in os.walk(out_weights_path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+        os.rmdir(out_weights_path)
+        shutil.copytree(builtin_weights_path, out_weights_path)
+
+        if args.sensitive:
+            model = self.bloader.load_sensitive_model(training_mode=False, tpu_resolver=self.tpu_resolver)
+            model.summary()
+            save_path = os.path.basename(self.builtin_weights["sensitive"])
+            model.save(os.path.join(out_dir, save_path))
+
+        if args.rapid:
+            model = self.bloader.load_rapid_model(training_mode=False, tpu_resolver=self.tpu_resolver)
+            model.summary()
+            save_path = os.path.basename(self.builtin_weights["rapid"])
+            model.save(os.path.join(out_dir, save_path))
+
     def run_tests(self, args):
         """Run tests."""
         if args.tpu is None:
@@ -215,7 +245,7 @@ class MainRunner:
         parser_predict.add_argument('-a', '--array', dest='array', action='store_true', help='Use .npy input instead.')
         predict_group = parser_predict.add_mutually_exclusive_group(required=True)
         predict_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
-                                   help='Use the sensitive LSTM model.')
+                                   help='Use the sensitive model.')
         predict_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
         predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, '
                                                                          'already compiled CUSTOM model.')
@@ -243,7 +273,7 @@ class MainRunner:
         parser_train = subparsers.add_parser('train', help='Train a new model.')
         train_group = parser_train.add_mutually_exclusive_group(required=True)
         train_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
-                                 help='Use the sensitive LSTM model.')
+                                 help='Use the sensitive model.')
         train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
         train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
         parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
@@ -271,12 +301,21 @@ class MainRunner:
         parser_eval.set_defaults(func=run_evaluate)
 
         # create the parser for the "convert" command
-        parser_convert = subparsers.add_parser('convert', help='Convert a CuDNNLSTM to a CPU-compatible LSTM.')
+        parser_convert = subparsers.add_parser('convert', help='Convert and compile a model to an equivalent.')
         parser_convert.add_argument('config', help='Training config file.')
         parser_convert.add_argument('model', help='Saved model.')
         parser_convert.add_argument('-w', '--weights', dest='from_weights', help="Use prepared weights instead of the "
                                                                                  "model file.", action="store_true")
         parser_convert.set_defaults(func=run_convert)
+
+        # create the parser for the "getmodels" command
+        parser_getmodel = subparsers.add_parser('getmodels', help='Get built-in weights and rebuild built-in models.')
+        getmodel_group = parser_getmodel.add_argument_group()
+        getmodel_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
+                                    help='Rebuild the sensitive model.')
+        getmodel_group.add_argument('-r', '--rapid', dest='rapid', action='store_true',
+                                    help='Rebuild the rapid CNN model.')
+        parser_getmodel.set_defaults(func=self.run_getmodels)
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
         parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
