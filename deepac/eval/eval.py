@@ -69,7 +69,7 @@ def evaluate_reads(config):
                               "recall", "spec", "mcc", "f1"))
 
     # Evaluate for each saved model in epoch range
-    for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end):
+    for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end + 1):
         print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
         if evalconfig.do_pred:
             y_pred_1 = predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=evalconfig.do_rc)

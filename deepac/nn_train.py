@@ -178,7 +178,7 @@ class RCConfig:
             # Training Config #
             # Set the number op epochs, batch size and the optimizer
             self.epoch_start = config['Training'].getint('EpochStart') - 1
-            self.epoch_end = config['Training'].getint('EpochEnd') - 1
+            self.epoch_end = config['Training'].getint('EpochEnd')
 
             self.patience = config['Training'].getint('Patience')
             self.l2 = config['Training'].getfloat('Lambda_L2')
