@@ -21,8 +21,8 @@ class Tester:
 
     """
 
-    def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None,
-                 explain=False, gwpa=False, do_all=False, do_quick=False, keep=False, scale=1, tpu_resolver=None):
+    def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
+                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -34,6 +34,12 @@ class Tester:
         self.keep = keep
         self.scale = scale
         self.tpu_resolver = tpu_resolver
+        # all by default, unless using a TPU when it defaults to memory
+        self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
+        # all are true by default, unless input_modes is specified
+        self.input_modes_dict = {"memory": self.input_modes is None or "memory" in input_modes,
+                                 "sequence": self.input_modes is None or "sequence" in input_modes,
+                                 "tfdata": self.input_modes is None or "tfdata" in input_modes}
 
     def run_datagen(self, npy=True, tfrec=True):
         print("TEST: Generating data...")
@@ -54,7 +60,8 @@ class Tester:
 
         gwpatester = None
         if not self.keep:
-            self.run_datagen(npy=True, tfrec=True if self.tpu_resolver is None else False)
+            self.run_datagen(npy=True,
+                             tfrec=self.input_modes_dict["tfdata"])
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")
@@ -144,19 +151,20 @@ class Tester:
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
 
-        print("TEST: Training (custom - .npy in memory)...")
-        config['DataLoad']['Use_TFData'] = "False"
-        config['DataLoad']['LoadTrainingByBatch'] = "False"
-        paprconfig = RCConfig(config)
-        self.__config_train(paprconfig).train()
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "nn-deepac-test-e001.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "nn-deepac-test-e002.h5"))), "Training failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "training-deepac-test.csv"))), "Training failed."
+        if self.input_modes_dict["memory"]:
+            print("TEST: Training (custom - .npy in memory)...")
+            config['DataLoad']['Use_TFData'] = "False"
+            config['DataLoad']['LoadTrainingByBatch'] = "False"
+            paprconfig = RCConfig(config)
+            self.__config_train(paprconfig).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "nn-deepac-test-e001.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "nn-deepac-test-e002.h5"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "training-deepac-test.csv"))), "Training failed."
 
-        if self.tpu_resolver is None:
+        if self.input_modes_dict["sequence"]:
             print("TEST: Training (custom - keras sequence)...")
             config['DataLoad']['Use_TFData'] = "False"
             config['DataLoad']['LoadTrainingByBatch'] = "True"
@@ -169,6 +177,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "training-deepac-test.csv"))), "Training failed."
 
+        if self.input_modes_dict["tfdata"]:
             print("TEST: Training (custom - tfrecord)...")
             config['DataLoad']['Use_TFData'] = "True"
             paprconfig = RCConfig(config)
@@ -181,19 +190,20 @@ class Tester:
                                                 "training-deepac-test.csv"))), "Training failed."
 
         if not quick:
-            print("TEST: Training (rapid - .npy in memory)...")
-            paprconfig = self.bloader.get_rapid_training_config()
-            paprconfig.use_tf_data = False
-            paprconfig.use_generators_keras = False
-            self.__config_train(paprconfig).train()
-            runname = paprconfig.runname
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "nn-{}-e001.h5".format(runname)))), "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "nn-{}-e002.h5".format(runname)))), "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "training-{}.csv".format(runname)))), "Training failed."
-            if self.tpu_resolver is None:
+            if self.input_modes_dict["memory"]:
+                print("TEST: Training (rapid - .npy in memory)...")
+                paprconfig = self.bloader.get_rapid_training_config()
+                paprconfig.use_tf_data = False
+                paprconfig.use_generators_keras = False
+                self.__config_train(paprconfig).train()
+                runname = paprconfig.runname
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "nn-{}-e001.h5".format(runname)))), "Training failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "nn-{}-e002.h5".format(runname)))), "Training failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "training-{}.csv".format(runname)))), "Training failed."
+            if self.input_modes_dict["sequence"]:
                 print("TEST: Training (rapid - keras sequence)...")
                 paprconfig = self.bloader.get_rapid_training_config()
                 paprconfig.use_tf_data = False
@@ -207,6 +217,7 @@ class Tester:
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
 
+            if self.input_modes_dict["tfdata"]:
                 print("TEST: Training (rapid - tfrecord)...")
                 paprconfig = self.bloader.get_rapid_training_config()
                 paprconfig.use_tf_data = True
@@ -219,20 +230,21 @@ class Tester:
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
 
-            print("TEST: Training (sensitive - .npy in memory)...")
-            paprconfig = self.bloader.get_sensitive_training_config()
-            paprconfig.use_tf_data = False
-            paprconfig.use_generators_keras = False
-            self.__config_train(paprconfig).train()
-            runname = paprconfig.runname
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "nn-{}-e001.h5".format(runname)))), "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "nn-{}-e002.h5".format(runname)))), "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
-                                                "training-{}.csv".format(runname)))), "Training failed."
+            if self.input_modes_dict["memory"]:
+                print("TEST: Training (sensitive - .npy in memory)...")
+                paprconfig = self.bloader.get_sensitive_training_config()
+                paprconfig.use_tf_data = False
+                paprconfig.use_generators_keras = False
+                self.__config_train(paprconfig).train()
+                runname = paprconfig.runname
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "nn-{}-e001.h5".format(runname)))), "Training failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "nn-{}-e002.h5".format(runname)))), "Training failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
+                                                    "training-{}.csv".format(runname)))), "Training failed."
 
-            if self.tpu_resolver is None:
+            if self.input_modes_dict["sequence"]:
                 print("TEST: Training (sensitive - keras sequence)...")
                 paprconfig = self.bloader.get_sensitive_training_config()
                 paprconfig.use_tf_data = False
@@ -246,6 +258,7 @@ class Tester:
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
 
+            if self.input_modes_dict["tfdata"]:
                 print("TEST: Training (sensitive - tfrecord)...")
                 paprconfig = self.bloader.get_sensitive_training_config()
                 paprconfig.use_tf_data = True
@@ -294,9 +307,6 @@ class Tester:
             print("TEST: Predicting (rapid)...")
             paprconfig = self.bloader.get_rapid_training_config()
             runname = paprconfig.runname
-            if self.tpu_resolver is not None:
-                paprconfig.use_tf_data = False
-                paprconfig.use_generators_keras = False
             model = self.bloader.load_rapid_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-rapid.npy"))
@@ -305,9 +315,6 @@ class Tester:
 
             print("TEST: Predicting (sensitive)...")
             paprconfig = self.bloader.get_sensitive_training_config()
-            if self.tpu_resolver is not None:
-                paprconfig.use_tf_data = False
-                paprconfig.use_generators_keras = False
             runname = paprconfig.runname
             model = self.bloader.load_sensitive_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
             predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),

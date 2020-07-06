@@ -76,10 +76,9 @@ class RCConfig:
             # If using generators to load data batch by batch, set up the number of batch workers and the queue size
             self.use_generators_keras = config['DataLoad'].getboolean('LoadTrainingByBatch')
             self.use_tf_data = config['DataLoad'].getboolean('Use_TFData')
-            if self.use_generators_keras:
-                self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
-                self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
-                self.batch_queue = config['DataLoad'].getint('BatchQueue')
+            self.multiprocessing = config['DataLoad'].getboolean('Multiprocessing')
+            self.batch_loading_workers = config['DataLoad'].getint('BatchWorkers')
+            self.batch_queue = config['DataLoad'].getint('BatchQueue')
 
             # Input Data Config #
             # Set the sequence length and the alphabet

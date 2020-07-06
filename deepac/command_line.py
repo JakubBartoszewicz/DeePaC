@@ -192,12 +192,14 @@ class MainRunner:
         """Run tests."""
         if args.tpu is None:
             n_cpus = config_cpus(args.n_cpus)
-            config_gpus(args.gpus)
+            n_gpus = config_gpus(args.gpus)
+            scale = args.scale * max(1, n_gpus)
         else:
             n_cpus = multiprocessing.cpu_count()
+            scale = args.scale
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
-                        args.explain, args.gwpa, args.all, args.quick, args.keep, args.scale,
-                        tpu_resolver=self.tpu_resolver)
+                        args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
+                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes)
         tester.run_tests()
 
     def parse(self):
@@ -292,6 +294,8 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
                                  default=1, type=int)
+        parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
+                                 help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
