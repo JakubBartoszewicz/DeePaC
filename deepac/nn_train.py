@@ -181,8 +181,12 @@ class RCConfig:
             self.epoch_end = config['Training'].getint('EpochEnd')
 
             self.patience = config['Training'].getint('Patience')
+            try:
+                self.l1 = config['Training'].getfloat('Lambda_L1')
+            except KeyError:
+                self.l1 = 0.0
             self.l2 = config['Training'].getfloat('Lambda_L2')
-            self.regularizer = regularizers.l2(self.l2)
+            self.regularizer = regularizers.L1L2(self.l1, self.l2)
             self.learning_rate = config['Training'].getfloat('LearningRate')
             self.optimization_method = config['Training']['Optimizer']
             if self.optimization_method == "adam":
