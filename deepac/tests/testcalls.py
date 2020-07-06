@@ -123,6 +123,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
+            config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()
@@ -139,6 +140,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
+            config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()

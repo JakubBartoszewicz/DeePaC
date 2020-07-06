@@ -9,10 +9,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 
-"""
-Define own color rules (color depends on position and nucleotide)
-"""
+
 class SymbolIndexColor(ColorRule):
+    """
+    Define own color rules (color depends on position and nucleotide)
+    """
 
     def __init__(self, symbols, indices, color, description=None):
         self.symbols = symbols.upper()
@@ -44,7 +45,6 @@ def get_weblogos_ext(args):
     colormap = plt.cm.coolwarm
 
     # for each convolutional filter
-    #for filter_index in range(512):
     for file_fasta in os.listdir(args.fasta_dir):
         if bool(re.search("_motifs_filter_[0-9]+.*" + ".fasta", file_fasta)) and \
                 os.stat(args.fasta_dir + "/" + file_fasta).st_size > 0:
@@ -57,7 +57,7 @@ def get_weblogos_ext(args):
         file_transfac = []
         file_scores = [filename for filename in os.listdir(args.scores_dir)
                        if bool(re.search("rel_filter_"+str(filter_index)+"_nucleotides\.csv", filename))]
-        assert len(file_scores) == 1, "Multiple score files for filter {}".format(filter_index)
+        assert len(file_scores) < 2, "Multiple score files for filter {}".format(filter_index)
 
         # load transfac files
         if args.logo_dir:
