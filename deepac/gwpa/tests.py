@@ -21,7 +21,7 @@ class GWPATester:
 
     def __init__(self, n_cpus=8):
         self.n_cpus = n_cpus
-        self.model = os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5")
+        self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5")
         self.outpath = os.path.join("deepac-tests", "gwpa")
         self.__gen_data()
 

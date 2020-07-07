@@ -18,7 +18,7 @@ class ExplainTester:
 
     def __init__(self, n_cpus=8):
         self.n_cpus = n_cpus
-        self.model = os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5")
+        self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5")
         self.neg_fasta = os.path.join("deepac-tests", "sample-val-neg.fasta")
         self.pos_fasta = os.path.join("deepac-tests", "sample-val-pos.fasta")
         self.test_data = os.path.join("deepac-tests", "sample_val_data.npy")
