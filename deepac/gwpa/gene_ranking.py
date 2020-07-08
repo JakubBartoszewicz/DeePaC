@@ -8,16 +8,20 @@ from collections import OrderedDict
 
 def featuretype_filter(feature, featuretype):
     """Check if feature is a feature of interest (genes, CDSs and RNAs)."""
+    # CDS
+    if feature[2] == featuretype:
+        return True
+
+    if feature[2] == 'CDS':
+        if feature.attrs.get('product', None) == featuretype:
+            return True
+
     if feature[2] == 'gene':
         if feature.attrs.get('gene', None) == featuretype:
             return True
         elif feature.attrs.get('Name', None) == featuretype:
             return True
         elif feature.attrs.get('ID', None) == featuretype:
-            return True
-
-    if feature[2] == 'CDS':
-        if feature.attrs.get('product', None) == featuretype:
             return True
 
     elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
