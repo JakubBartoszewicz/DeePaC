@@ -14,8 +14,16 @@ def featuretype_filter(feature, featuretype):
     if feature[2] == featuretype:
         return True
 
+    if feature[2] == 'CDS':
+        if feature.attrs.get('product', None) == featuretype:
+            return True
+
     elif feature[2] == 'gene':
         if feature.attrs.get('gene', None) == featuretype:
+            return True
+        elif feature.attrs.get('Name', None) == featuretype:
+            return True
+        elif feature.attrs.get('ID', None) == featuretype:
             return True
 
     elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
@@ -65,9 +73,16 @@ def filter_enrichment(args):
     for feature in gff:
         if feature[2] == 'CDS':
             all_feature_types.append('CDS')
+            if args.extended and 'product' in feature.attrs:
+                all_feature_types.append(feature.attrs['product'])
         if feature[2] == 'gene':
             if 'gene' in feature.attrs:
                 all_feature_types.append(feature.attrs['gene'])
+            elif args.extended:
+                if 'Name' in feature.attrs:
+                    all_feature_types.append(feature.attrs['Name'])
+                elif 'ID' in feature.attrs:
+                    all_feature_types.append(feature.attrs['ID'])
         elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
             if 'product' in feature.attrs:
                 all_feature_types.append(feature.attrs['product'])
@@ -155,8 +170,11 @@ def filter_enrichment(args):
             # save results
             motif_results.to_csv(out_file, sep="\t", index=False)
 
+            if args.extended:
+                out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_sorted_filtered_extended.csv"
+            else:
+                out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_sorted_filtered.csv"
             # filtering out entries with FDR >= 0.05
-            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_sorted_filtered.csv"
             motif_results = motif_results[motif_results.fisher_q_value_feature < 0.05]
             motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
             if len(motif_results.index):

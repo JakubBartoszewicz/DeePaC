@@ -76,8 +76,9 @@ def gene_rank(args):
                             all_feature_types.append(feature.attrs['Name'])
                         elif 'ID' in feature.attrs:
                             all_feature_types.append(feature.attrs['ID'])
-                if args.extended and feature[2] == 'CDS':
-                    if 'product' in feature.attrs:
+                if feature[2] == 'CDS':
+                    all_feature_types.append('CDS')
+                    if args.extended and 'product' in feature.attrs:
                         all_feature_types.append(feature.attrs['product'])
                 elif feature[2] in ["rRNA", "tRNA", "tmRNA", "ncRNA"]:
                     if 'product' in feature.attrs:

@@ -137,7 +137,9 @@ def get_activation_data(activations, filter_index, all_filter_rows, reads_info_c
                                                       "filter_"+str(filter_index), '%.4g' % activation_score])
 
 
-def get_activation_data_new(activations, filter_range, all_filter_rows, reads_info_chunk, pad_left, motif_length, rc=False):
+def get_activation_data_new(activations, filter_range, all_filter_rows, reads_info_chunk, pad_left, motif_length,
+                            rc=False):
+    # assumes ReLUs
     pos_indices = np.where(activations[:, :, filter_range] > 0)
     reads = pos_indices[0][:]
     neurons = pos_indices[1][:]

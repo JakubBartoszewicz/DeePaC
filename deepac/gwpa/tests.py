@@ -140,7 +140,7 @@ class GWPATester:
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),
-                         motif_length=15, n_cpus=self.n_cpus)
+                         motif_length=15, n_cpus=self.n_cpus, extended=True)
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
             "Fenrichment failed."

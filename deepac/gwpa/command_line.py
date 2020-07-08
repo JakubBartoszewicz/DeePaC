@@ -42,7 +42,7 @@ def add_gwpa_parser(gparser):
                                  help="Directory containing the annotation data of the species (.gff)")
     parser_granking.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_granking.add_argument('-x', '--extended', dest='extended', action='store_true',
-                                 help='Check for multiple CDSs per gene.')
+                                 help='Check for multiple CDSs per gene and unnamed genes.')
     parser_granking.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", type=int)
     parser_granking.set_defaults(func=run_granking)
 
@@ -85,6 +85,8 @@ def add_gwpa_parser(gparser):
     parser_fenrichment.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_fenrichment.add_argument("-l", "--motif-length", default=15, type=int, help="Motif length")
     parser_fenrichment.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", type=int)
+    parser_fenrichment.add_argument('-x', '--extended', dest='extended', action='store_true',
+                                    help='Check for multiple CDSs per gene and unnamed genes.')
     parser_fenrichment.set_defaults(func=run_fenrichment)
 
     parser_gff2genome = gwpa_subparsers.add_parser('gff2genome', help='Generate .genome files.')
