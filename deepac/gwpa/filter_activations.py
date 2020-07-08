@@ -1,13 +1,10 @@
 import os
-import csv
 import re
 import numpy as np
 from tensorflow.keras.models import load_model
 import tensorflow.keras.backend as K
 import tensorflow as tf
 from Bio import SeqIO
-from operator import itemgetter
-from itertools import groupby
 from deepac.utils import set_mem_growth
 import pandas as pd
 from math import floor, log10
