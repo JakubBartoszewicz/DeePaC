@@ -151,6 +151,7 @@ def get_activation_data_new(activations, filter_range, all_filter_rows, reads_in
     reads = reads[genomic_ends > 0]
     neurons = neurons[genomic_ends > 0]
     region_names = read_info_name[genomic_ends > 0]
+    genomic_ends = genomic_ends[genomic_ends > 0]
 
     for filter_index in filter_range:
         activation_scores = activations[reads, neurons, filter_index]
@@ -159,7 +160,7 @@ def get_activation_data_new(activations, filter_range, all_filter_rows, reads_in
                 'region': region_names,
                 'start': np.maximum(0, genomic_starts),
                 'end': genomic_ends,
-                'filter': np.repeat("filter_" + str(filter_index) + "_rc", read_info_name.shape[0]),
+                'filter': np.repeat("filter_" + str(filter_index) + "_rc", region_names.shape[0]),
                 'activation': activation_scores.flatten()
                 })
         else:
@@ -167,7 +168,7 @@ def get_activation_data_new(activations, filter_range, all_filter_rows, reads_in
                 'region': region_names,
                 'start': np.maximum(0, genomic_starts),
                 'end': genomic_ends,
-                'filter': np.repeat("filter_" + str(filter_index), read_info_name.shape[0]),
+                'filter': np.repeat("filter_" + str(filter_index), region_names.shape[0]),
                 'activation': activation_scores.flatten()
                 })
 
