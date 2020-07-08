@@ -9,6 +9,8 @@ from Bio import SeqIO
 from operator import itemgetter
 from itertools import groupby
 from deepac.utils import set_mem_growth
+import pandas as pd
+from math import floor, log10
 
 
 def filter_activations(args):
@@ -79,6 +81,8 @@ def filter_activations(args):
         reads_info_chunk = reads_info[n:n+chunk_size]
         if tf.executing_eagerly():
             activations_fwd, activations_rc = model(samples_chunk, training=False)
+            activations_fwd = activations_fwd.numpy()
+            activations_rc = activations_rc.numpy()
         else:
             activations_fwd = iterate_fwd([samples_chunk, 0])[0]
             activations_rc = iterate_rc([samples_chunk, 0])[0]
@@ -91,33 +95,30 @@ def filter_activations(args):
         if all_filter_rows_fwd is None:
             all_filter_rows_fwd = [[] for f in range(n_filters)]
             all_filter_rows_rc = [[] for f in range(n_filters)]
-        for filter_index in filter_range:
-            get_activation_data(activations_fwd, filter_index, all_filter_rows_fwd, reads_info_chunk, pad_left,
-                                motif_length, rc=False)
-            get_activation_data(activations_rc, filter_index, all_filter_rows_rc, reads_info_chunk, pad_left,
-                                motif_length, rc=True)
+        get_activation_data_new(activations_fwd, filter_range, all_filter_rows_fwd, reads_info_chunk,
+                                pad_left, motif_length, rc=False)
+        get_activation_data_new(activations_rc, filter_range, all_filter_rows_rc, reads_info_chunk,
+                                pad_left, motif_length, rc=True)
+
         n += chunk_size
 
     print("Done " + str(total_num_reads) + " sequences. Saving data...")
 
     for filter_index in filter_range:
-        rows_fwd = all_filter_rows_fwd[filter_index]
-        rows_rc = all_filter_rows_rc[filter_index]
+        rows_fwd = pd.concat(all_filter_rows_fwd[filter_index], ignore_index=True)
+        rows_rc = pd.concat(all_filter_rows_rc[filter_index], ignore_index=True)
         filter_bed_file = args.out_dir + "/" + test_data_set_name + "_filter_" + str(filter_index) + ".bed"
         # sort by sequence and filter start position
-        rows_fwd.sort(key=itemgetter(0, 1))
-        rows_rc.sort(key=itemgetter(0, 1))
+        rows_fwd = rows_fwd.sort_values(['region', 'start', 'end', 'activation'], ascending=[True, True, True, False])
+        rows_rc = rows_rc.sort_values(['region', 'start', 'end', 'activation'], ascending=[True, True, True, False])
         # remove duplicates (due to overlapping reads) or take max of two scores at the same genomic position
         # (can occur if filter motif is recognized at the border of one read)
-        rows_fwd = [max(g, key=itemgetter(4)) for k, g in groupby(rows_fwd, itemgetter(0, 1))]
-        rows_rc = [max(g, key=itemgetter(4)) for k, g in groupby(rows_rc, itemgetter(0, 1))]
+        rows_fwd = rows_fwd.drop_duplicates(['region', 'start', 'end'])
+        rows_rc = rows_rc.drop_duplicates(['region', 'start', 'end'])
 
-        with open(filter_bed_file, 'w') as csv_file:
-            file_writer = csv.writer(csv_file, delimiter='\t')
-            for r in rows_fwd:
-                file_writer.writerow(r)
-            for r in rows_rc:
-                file_writer.writerow(r)
+        all_rows = pd.concat([rows_fwd, rows_rc], ignore_index=True)
+        all_rows['activation'] = all_rows['activation'].apply(lambda x: round(x, 3 - int(floor(log10(abs(x))))))
+        all_rows.to_csv(filter_bed_file, sep="\t", index=False, header=False)
 
 
 def get_activation_data(activations, filter_index, all_filter_rows, reads_info_chunk, pad_left, motif_length, rc=False):
@@ -137,3 +138,40 @@ def get_activation_data(activations, filter_index, all_filter_rows, reads_info_c
             else:
                 all_filter_rows[filter_index].append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
                                                       "filter_"+str(filter_index), '%.4g' % activation_score])
+
+
+def get_activation_data_new(activations, filter_range, all_filter_rows, reads_info_chunk, pad_left, motif_length, rc=False):
+    pos_indices = np.where(activations[:, :, filter_range] > 0)
+    reads = pos_indices[0][:]
+    neurons = pos_indices[1][:]
+    read_info_name = np.array([reads_info_chunk[read][0] for read in reads])
+    read_info_start = np.array([reads_info_chunk[read][1] for read in reads])
+    genomic_starts = neurons - pad_left + read_info_start
+    genomic_ends = genomic_starts + motif_length
+
+    # if genomic_start <= 0 and genomic_end <= 0: continue
+    genomic_starts = genomic_starts[genomic_ends > 0]
+    reads = reads[genomic_ends > 0]
+    neurons = neurons[genomic_ends > 0]
+    region_names = read_info_name[genomic_ends > 0]
+
+    for filter_index in filter_range:
+        activation_scores = activations[reads, neurons, filter_index]
+        if rc:
+            row_data = pd.DataFrame({
+                'region': region_names,
+                'start': np.maximum(0, genomic_starts),
+                'end': genomic_ends,
+                'filter': np.repeat("filter_" + str(filter_index) + "_rc", read_info_name.shape[0]),
+                'activation': activation_scores.flatten()
+                })
+        else:
+            row_data = pd.DataFrame({
+                'region': region_names,
+                'start': np.maximum(0, genomic_starts),
+                'end': genomic_ends,
+                'filter': np.repeat("filter_" + str(filter_index), read_info_name.shape[0]),
+                'activation': activation_scores.flatten()
+                })
+
+        all_filter_rows[filter_index].append(row_data)
