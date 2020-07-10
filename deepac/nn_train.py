@@ -279,7 +279,7 @@ class RCNet:
         else:
             self.strategy = self.config.strategy_dict[self.config.strategy]()
 
-        if self.config.epoch_start > 0:
+        if float(tf.__version__[:3]) > 2.1 and self.config.epoch_start > 0:
             checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
@@ -296,6 +296,13 @@ class RCNet:
                     self.__build_simple_model()
                 else:
                     raise ValueError('Unrecognized RC mode')
+            if self.config.epoch_start > 0:
+                checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
+                model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
+                path = re.sub("\.h5$", "", model_file)
+                weights_path = path + "_weights.h5"
+                print("Loading " + weights_path)
+                self.model.load_weights(weights_path)
 
     def get_device_strategy_scope(self):
         if self.config.simple_build:
@@ -916,7 +923,7 @@ class RCNet:
 
     def compile_model(self):
         """Compile model and save model summaries"""
-        if self.config.epoch_start == 0:
+        if float(tf.__version__[:3]) < 2.2 or self.config.epoch_start == 0:
             print("Compiling...")
             self.model.compile(loss='binary_crossentropy',
                                optimizer=self.config.optimizer,
