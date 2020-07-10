@@ -302,6 +302,7 @@ class RCNet:
                 path = re.sub("\.h5$", "", model_file)
                 weights_path = path + "_weights.h5"
                 print("Loading " + weights_path)
+                print("Warning: this will reset the optimizer state. Please update to TF>=2.2.")
                 self.model.load_weights(weights_path)
 
     def get_device_strategy_scope(self):
