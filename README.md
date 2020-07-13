@@ -8,7 +8,8 @@ reads) with interpretable reverse-complement neural networks. For details, see o
 For details regarding the interpretability functionalities of DeePaC, see the preprint here: <https://www.biorxiv.org/content/10.1101/2020.01.29.925354v2>
 
 Documentation can be found here:
-<https://rki_bioinformatics.gitlab.io/DeePaC/>.
+<https://rki_bioinformatics.gitlab.io/DeePaC/>. 
+See also the main repo here: <https://gitlab.com/rki_bioinformatics/DeePaC>.
 
 ## Plug-ins
 ### DeePaC-strain
