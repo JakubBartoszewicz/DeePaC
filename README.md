@@ -210,10 +210,10 @@ deepac explain fcontribs -m model.h5 -eb -t test_data.npy -N test_nonpatho.fasta
 deepac explain franking -f fcontribs/filter_scores -y test_labels.npy -p test_predictions.npy -o franking
 
 # Prepare transfac files for filter visualization (weighted by filter contribution)
-deepac explain fa2transfac -i fcontribs/fasta -o fcnotribs/transfac -w -d fcontribs/filter_scores
+deepac explain fa2transfac -i fcontribs/fasta -o fcontribs/transfac -w -W fcontribs/filter_scores
 
 # Visualize nucleotide contribution sequence logos
-deepac explain xlogos -i fcontribs/fasta -s fcontribs/filter_scores -I fcnotribs/transfac -t train_data.npy -o xlogos
+deepac explain xlogos -i fcontribs/fasta -s fcontribs/nuc_scores -I fcontribs/transfac -t train_data.npy -o xlogos
 ```
 You can browse through other supplementary functionalities and parameters by checking the help:
 ```
