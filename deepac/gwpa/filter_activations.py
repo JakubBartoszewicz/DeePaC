@@ -92,9 +92,9 @@ def filter_activations(args):
         if all_filter_rows_fwd is None:
             all_filter_rows_fwd = [[] for f in range(n_filters)]
             all_filter_rows_rc = [[] for f in range(n_filters)]
-        get_activation_data_new(activations_fwd, filter_range, all_filter_rows_fwd, reads_info_chunk,
+        get_activation_data(activations_fwd, filter_range, all_filter_rows_fwd, reads_info_chunk,
                                 pad_left, motif_length, rc=False)
-        get_activation_data_new(activations_rc, filter_range, all_filter_rows_rc, reads_info_chunk,
+        get_activation_data(activations_rc, filter_range, all_filter_rows_rc, reads_info_chunk,
                                 pad_left, motif_length, rc=True)
 
         n += chunk_size
@@ -118,26 +118,7 @@ def filter_activations(args):
         all_rows.to_csv(filter_bed_file, sep="\t", index=False, header=False)
 
 
-def get_activation_data(activations, filter_index, all_filter_rows, reads_info_chunk, pad_left, motif_length, rc=False):
-    pos_indices = np.where(activations[:, :, filter_index] > 0)
-    for i in range(len(pos_indices[0])):
-        read = pos_indices[0][i]
-        neuron = pos_indices[1][i]
-        genomic_start = neuron - pad_left + reads_info_chunk[read][1]
-        genomic_end = genomic_start + motif_length
-        if genomic_start <= 0 and genomic_end <= 0:
-            continue
-        else:
-            activation_score = activations[read, neuron, filter_index]
-            if rc:
-                all_filter_rows[filter_index].append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
-                                                      "filter_" + str(filter_index) + "_rc", '%.4g' % activation_score])
-            else:
-                all_filter_rows[filter_index].append([reads_info_chunk[read][0], max(0, genomic_start), genomic_end,
-                                                      "filter_"+str(filter_index), '%.4g' % activation_score])
-
-
-def get_activation_data_new(activations, filter_range, all_filter_rows, reads_info_chunk, pad_left, motif_length,
+def get_activation_data(activations, filter_range, all_filter_rows, reads_info_chunk, pad_left, motif_length,
                             rc=False):
     # assumes ReLUs
     pos_indices = np.where(activations[:, :, filter_range] > 0)
