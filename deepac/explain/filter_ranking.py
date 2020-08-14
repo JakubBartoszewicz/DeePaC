@@ -87,7 +87,7 @@ def get_filter_ranking(args):
                 plt.ylabel("#reads")
                 plt.legend(loc='upper right',  prop={'size': 10})
                 plt.savefig(out_dir + "/distr_contribution_scores_" +
-                            c_filter + "_wo_zeros_4_classes_" + args.mode + ".png")
+                            c_filter + "_wo_zeros_4_classes_" + args.mode + ".png", dpi=300)
                 plt.gcf().clear()
 
                 # plot distribution of contribution scores per filter (excluding zeros) as boxplots
@@ -96,7 +96,7 @@ def get_filter_ranking(args):
                 plt.title('distribution of contribution scores of ' + c_filter+'\n(' + args.mode + ')')
                 plt.ylabel("contribution score")
                 plt.savefig(out_dir + "/boxplots_contribution_scores_" +
-                            c_filter + "_wo_zeros_4_classes_" + args.mode + ".png")
+                            c_filter + "_wo_zeros_4_classes_" + args.mode + ".png", dpi=300)
                 plt.gcf().clear()
 
     print("Rank filters according to their pathogenicity/non-pathogenicity potential")

@@ -93,11 +93,13 @@ def get_weblogos_ext(args):
             motif = Motif.read_transfac(fin)
             prior = parse_prior(str(gc_content), motif.alphabet)
             data = LogoData.from_counts(motif.alphabet, motif, prior)
-            out_file_name = args.out_dir + "/weblogo_extended_" + file_transfac[0].replace(".transfac", ".jpeg")
+            out_png_name = args.out_dir + "/weblogo_extended_" + file_transfac[0].replace(".transfac", ".png")
+            out_eps_name = args.out_dir + "/weblogo_extended_" + file_transfac[0].replace(".transfac", ".eps")
         else:
             prior = parse_prior(str(gc_content), seqs.alphabet)
             data = LogoData.from_seqs(seqs, prior)
-            out_file_name = args.out_dir + "/weblogo_extended_" + file_fasta.replace(".fasta", ".jpeg")
+            out_png_name = args.out_dir + "/weblogo_extended_" + file_fasta.replace(".fasta", ".png")
+            out_eps_name = args.out_dir + "/weblogo_extended_" + file_fasta.replace(".fasta", ".eps")
 
         seq_names = [seq.name for seq in seqs]
         seen = set()
@@ -134,9 +136,13 @@ def get_weblogos_ext(args):
         options.logo_title = "filter " + str(filter_index)
         options.color_scheme = ColorScheme(color_rules)
         options.stack_width = std_sizes["large"]
+        options.resolution = 300
 
         # save filter logo
         l_format = LogoFormat(data, options)
-        jpeg = jpeg_formatter(data, l_format)
-        with open(out_file_name, 'wb') as out_file:
-            out_file.write(jpeg)
+        png = png_formatter(data, l_format)
+        with open(out_png_name, 'wb') as out_file:
+            out_file.write(png)
+        eps = eps_formatter(data, l_format)
+        with open(out_eps_name, 'wb') as out_file:
+            out_file.write(eps)

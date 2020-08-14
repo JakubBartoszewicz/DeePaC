@@ -56,9 +56,13 @@ def get_weblogos(args):
             options.logo_title = "filter " + filter_index
             options.color_scheme = classic
             options.stack_width = std_sizes["large"]
+            options.resolution = 300
 
             # save filter logo
             l_format = LogoFormat(data, options)
-            jpeg = jpeg_formatter(data, l_format)
-            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".jpeg"), 'wb') as out_file:
-                out_file.write(jpeg)
+            png = png_formatter(data, l_format)
+            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".png"), 'wb') as out_file:
+                out_file.write(png)
+            eps = eps_formatter(data, l_format)
+            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".eps"), 'wb') as out_file:
+                out_file.write(eps)
