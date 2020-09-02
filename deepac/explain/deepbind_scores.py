@@ -182,10 +182,12 @@ def get_maxact(args):
         if cores > 1:
             with Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
+            with Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir),
                       range(n_filters))
+            with Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir, rc=True),

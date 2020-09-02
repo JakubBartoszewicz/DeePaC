@@ -129,10 +129,10 @@ class GWPATester:
                          test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
                          test_fasta=os.path.join(self.outpath, "genome_frag",
                                                  "sample_genome2_fragmented_genomes.fasta"),
-                         out_dir=os.path.join(self.outpath, "factiv"), chunk_size=500, inter_layer=1, inter_neuron=[31])
+                         out_dir=os.path.join(self.outpath, "factiv"), chunk_size=500, inter_layer=1, inter_neuron=[1])
         filter_activations(args)
         assert (os.path.isfile(os.path.join(self.outpath, "factiv",
-                                            "sample_genome2_fragmented_genomes_filter_31.bed"))), \
+                                            "sample_genome2_fragmented_genomes_filter_1.bed"))), \
             "Factiv failed."
 
     def test_fenrichment(self):
