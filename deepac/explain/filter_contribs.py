@@ -482,7 +482,7 @@ def get_reference_seqs(args, len_reads):
     # generate reference sequence with N's
     if args.ref_mode == "N":
 
-        print("Generating reference sequence with all N's...")
+        print("Generating reference sequence with all Ns...")
         num_ref_seqs = 1
         ref_samples = np.zeros((num_ref_seqs, len_reads, 4))
 

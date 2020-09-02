@@ -97,7 +97,7 @@ class ExplainTester:
         args = Namespace(in_dir=in_dir, file_ext=".transfac", train_data=self.test_data, out_dir=out_dir)
         get_weblogos(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "weblogos",
-                                            "weblogo_sample_val_data_motifs_filter_31_seq_weighting.jpeg"))),\
+                                            "weblogo_sample_val_data_motifs_filter_31_seq_weighting.png"))),\
             "Weblogos failed."
 
     def test_weblogos_extended(self):
@@ -111,7 +111,7 @@ class ExplainTester:
         get_weblogos_ext(args)
         assert (os.path.isfile(
             os.path.join(self.outpath, "fcontribs", "weblogos_ext",
-                         "weblogo_extended_sample_val_data_motifs_filter_31_seq_weighting.jpeg"))),\
+                         "weblogo_extended_sample_val_data_motifs_filter_31_seq_weighting.png"))),\
             "Extended weblogos failed."
 
     def test_transfac2ic(self):
