@@ -116,6 +116,7 @@ class RCConfig:
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
+            self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
             self.conv_activation = config['Architecture']['Conv_Activation']
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
@@ -429,8 +430,8 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def __add_siam_conv1d(self, inputs_fwd, inputs_rc, units):
-        shared_conv = Conv1D(units, self.config.conv_filter_size[0], padding='same',
+    def __add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate):
+        shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='same',
                              kernel_regularizer=self.config.regularizer)
         x_fwd = shared_conv(inputs_fwd)
         x_rc = shared_conv(inputs_rc)
@@ -439,11 +440,11 @@ class RCNet:
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
-    def __add_rc_conv1d(self, inputs, units):
+    def __add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self.__current_conv+1))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self.__add_siam_conv1d(inputs, inputs_rc, units)
+        x_fwd, x_rc = self.__add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
@@ -528,7 +529,7 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
-            x = Conv1D(self.config.conv_units[0], self.config.conv_filter_size[0], padding='same',
+            x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0], padding='same',
                        kernel_regularizer=self.config.regularizer)(x)
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -565,7 +566,7 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             # Standard convolutional layer
-            x = Conv1D(self.config.conv_units[i], self.config.conv_filter_size[i], padding='same',
+            x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i], padding='same',
                        kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer)(x)
             # Add batch norm
             if self.config.conv_bn:
@@ -653,7 +654,8 @@ class RCNet:
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
-            x = self.__add_rc_conv1d(x, self.config.conv_units[0])
+            x = self.__add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
+                                     dilation_rate=self.config.conv_dilation[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self.__add_rc_batchnorm(x)
@@ -691,7 +693,8 @@ class RCNet:
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
-            x = self.__add_rc_conv1d(x, self.config.conv_units[i])
+            x = self.__add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
+                                     dilation_rate=self.config.conv_dilation[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self.__add_rc_batchnorm(x)
@@ -793,7 +796,9 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Reverse-complement convolutional layer
-            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, self.config.conv_units[0])
+            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
+                                                 kernel_size=self.config.conv_filter_size[0],
+                                                 dilation_rate=self.config.conv_dilation[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
@@ -840,7 +845,9 @@ class RCNet:
                 x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc)
             # Add layer
             # Reverse-complement convolutional layer
-            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, self.config.conv_units[i])
+            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
+                                                 kernel_size=self.config.conv_filter_size[i],
+                                                 dilation_rate=self.config.conv_dilation[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
