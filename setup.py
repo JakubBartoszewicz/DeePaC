@@ -29,7 +29,7 @@ setup(name='deepac',
       python_requires='>=3',
       install_requires=[
           'tensorflow>=2.1',
-          'biopython>=1.77',
+          'biopython>=1.78',
           'scikit-learn>=0.22.1',
           'matplotlib>=3.1.3',
           'numpy>=1.17',
