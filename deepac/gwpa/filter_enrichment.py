@@ -153,7 +153,6 @@ def filter_enrichment(args):
             # save enrichment results per motif
             out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + ".csv"
             motif_results.to_csv(out_file, sep="\t", index=False)
-            pool.close()
 
             # multiple testing correction
             fisher_q_value_2sided = multipletests(motif_results.fisher_p_value_2sided, alpha=0.05, method="fdr_bh")[1]

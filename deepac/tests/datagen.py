@@ -5,12 +5,13 @@ from Bio.SeqRecord import SeqRecord
 import os
 
 
-def generate_read(gc=0.5, length=250, header=None):
+def generate_read(gc=0.5, length=250, header=None, ns=0.01):
     """Generate a random read."""
     if header is None:
         header = "random seq gc {}%".format(gc * 100)
-    at = 1 - gc
-    arr = np.random.choice(['A', 'C', 'G', 'T'], size=length, p=[at/2, gc/2, gc/2, at/2])
+    at_corr = 1 - gc - (ns/2)
+    gc_corr = gc - (ns/2)
+    arr = np.random.choice(['A', 'C', 'G', 'T', 'N'], size=length, p=[at_corr/2, gc_corr/2, gc_corr/2, at_corr/2, ns])
     seq = "".join(arr)
     rec = SeqRecord(Seq(seq), header, '', '')
     return rec
