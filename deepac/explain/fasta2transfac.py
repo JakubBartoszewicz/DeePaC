@@ -40,10 +40,17 @@ def fa2transfac(args):
             instances = []
             with open(args.in_dir + "/" + file, "rU") as handle:
                 for record in SeqIO.parse(handle, "fasta"):
+                    try:
+                        # Received an old-style alphabet
+                        if record.seq.alphabet is not None:
+                            record.seq.alphabet = ambiguous_dna
+                    except AttributeError:
+                        pass
                     instances.append(record.seq)
 
             # build motif from sequences
-            m = transfac.Motif(instances=Instances(instances, ambiguous_dna), alphabet=ambiguous_dna)
+            instances = Instances(instances, alphabet=ambiguous_dna)
+            m = transfac.Motif(instances=instances, alphabet=ambiguous_dna)
             m["ID"] = c_filter
 
             # weight sequences according to their DeepLIFT score
