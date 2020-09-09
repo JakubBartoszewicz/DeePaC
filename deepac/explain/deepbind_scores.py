@@ -2,7 +2,7 @@ import numpy as np
 import time
 import os
 import csv
-
+from multiprocessing import get_context
 from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
 import tensorflow as tf
@@ -18,7 +18,7 @@ def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, m
     filter_activations = activation_list[:, filter_id]
     filter_motif_starts = motif_start_list[:, filter_id]
 
-    pos_act_ids = [i for i, j in enumerate(filter_activations) if j > 0.0]
+    pos_act_ids = np.where(filter_activations > 0.0)[0]
     motifs = [reads_chunk[i][filter_motif_starts[i]:filter_motif_starts[i] + motif_length] for i in pos_act_ids]
     activation_scores = [[reads_chunk[i].id, filter_motif_starts[i], filter_activations[i]] for i in pos_act_ids]
     # save filter contribution scores
@@ -180,14 +180,12 @@ def get_maxact(args):
 
         # for each filter do:
         if cores > 1:
-            with Pool(processes=min(cores, n_filters)) as p:
+            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
-            with Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir),
                       range(n_filters))
-            with Pool(processes=min(cores, n_filters)) as p:
                 p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                               reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
                               out_dir=args.out_dir, rc=True),
