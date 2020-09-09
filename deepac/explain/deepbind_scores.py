@@ -7,9 +7,10 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras import backend as K
 import tensorflow as tf
 from Bio import SeqIO
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
 from functools import partial
 from deepac.utils import set_mem_growth
+from deepac.explain.filter_contribs import get_rf_size
 
 
 def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, motif_length, test_data_set_name,
@@ -48,16 +49,6 @@ def get_max_strand(filter_id, dat_fwd, dat_rc):
             dat_rc[0][seq_id, filter_id] = 0.0
         else:
             dat_fwd[0][seq_id, filter_id] = 0.0
-
-
-def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
-    """Calculate receptor field size (motif length)"""
-    if idx == 0:
-        rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
-    else:
-        rf = get_rf_size(mdl, idx-1, conv_ids) + \
-             (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
-    return rf
 
 
 def get_maxact(args):

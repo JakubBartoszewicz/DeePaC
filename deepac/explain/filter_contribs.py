@@ -14,8 +14,8 @@ from Bio import SeqIO
 from shap.explainers.deep import DeepExplainer
 
 
-def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1):
-    """Calculate receptor field size (motif length)"""
+def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1, dilation=1):
+    """Calculate receptive field size (motif length)"""
     if idx == 0:
         rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
     else:
