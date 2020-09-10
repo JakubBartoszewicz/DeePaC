@@ -66,19 +66,19 @@ def get_filter_ranking(args):
                 fn = filter_scores[c_filter][np.array(y_truth[read_ids[c_filter]] == 1) &
                                              np.array(y_pred[read_ids[c_filter]] == 0)]
 
-                if len(tp) > 1:
+                if len(tp) >= 1:
                     plt.hist(tp, alpha=0.3, bins=100, label="TP", color="blue")
                     data.append(tp)
                     boxplot_labels.append("TP")
-                if len(tn) > 1:
+                if len(tn) >= 1:
                     plt.hist(tn, alpha=0.3, bins=100, label="TN", color="green")
                     data.append(tn)
                     boxplot_labels.append("TN")
-                if len(fp) > 1:
+                if len(fp) >= 1:
                     plt.hist(fp, alpha=0.3, bins=100, label="FP", color="red")
                     data.append(fp)
                     boxplot_labels.append("FP")
-                if len(fn) > 1:
+                if len(fn) >= 1:
                     plt.hist(fn, alpha=0.3, bins=100, label="FN", color="orange")
                     data.append(fn)
                     boxplot_labels.append("FN")

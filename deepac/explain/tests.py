@@ -92,6 +92,14 @@ class ExplainTester:
 
     def test_weblogos(self):
         """Test sequence logos."""
+        in_dir = os.path.join(self.outpath, "maxact", "fasta")
+        out_dir = os.path.join(self.outpath, "maxact", "weblogos")
+        args = Namespace(in_dir=in_dir, file_ext=".fasta", train_data=self.test_data, out_dir=out_dir)
+        get_weblogos(args)
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact", "weblogos",
+                                            "weblogo_deepbind_sample_val_data_motifs_filter_1.png"))), \
+            "Weblogos failed."
+
         in_dir = os.path.join(self.outpath, "fcontribs", "transfac_w")
         out_dir = os.path.join(self.outpath, "fcontribs", "weblogos")
         args = Namespace(in_dir=in_dir, file_ext=".transfac", train_data=self.test_data, out_dir=out_dir)

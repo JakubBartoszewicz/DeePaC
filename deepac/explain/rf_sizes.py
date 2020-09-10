@@ -7,21 +7,21 @@ def get_rf_size(mdl, idx, conv_ids, insert_pooling=True):
     strides = []
     dilations = []
     for i in range(len(conv_ids)):
-        if i <= idx:
-            config = mdl.get_layer(index=conv_ids[i]).get_config()
-            kernel_sizes.append(config["kernel_size"][0])
-            strides.append(config["strides"][0])
-            dilations.append(config["dilation_rate"][0])
-            if insert_pooling:
-                kernel_sizes.append(2)
-        else:
+        config = mdl.get_layer(index=conv_ids[i]).get_config()
+        kernel_sizes.append(config["kernel_size"][0])
+        strides.append(config["strides"][0])
+        dilations.append(config["dilation_rate"][0])
+        if i == idx:
             break
+        elif insert_pooling:
+            kernel_sizes.append(2)
+            strides.append(2)
+            dilations.append(1)
     return get_rf_size_from_ksd(kernel_sizes, strides, dilations)
 
 
 def get_rf_size_from_ksd(kernel_sizes, strides, dilations):
     """Calculate receptive field size (motif length) from lists of kernel sizes, strides and dilations"""
-    s = np.asarray(strides[:len(kernel_sizes)-2])
-    k = np.multiply(np.asarray(dilations), np.asarray(kernel_sizes)-1) + 1
-    rf = int(np.sum((k-1)*np.prod(s)) + 1)
-    return rf
+    kernel_span = np.multiply(np.asarray(dilations), np.asarray(kernel_sizes) - 1) + 1
+    rf = np.sum([(kernel_span[k] - 1) * np.prod(strides[:k - 1]) for k in range(len(kernel_span))]) + 1
+    return int(rf)
