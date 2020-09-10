@@ -10,7 +10,7 @@ from Bio import SeqIO
 from multiprocessing import cpu_count
 from functools import partial
 from deepac.utils import set_mem_growth
-from deepac.explain.filter_contribs import get_rf_size
+from deepac.explain.rf_sizes import get_rf_size
 
 
 def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, motif_length, test_data_set_name,

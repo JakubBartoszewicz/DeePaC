@@ -12,16 +12,7 @@ from deepac.utils import set_mem_growth
 from Bio import SeqIO
 
 from shap.explainers.deep import DeepExplainer
-
-
-def get_rf_size(mdl, idx, conv_ids, pool=2, cstride=1, dilation=1):
-    """Calculate receptive field size (motif length)"""
-    if idx == 0:
-        rf = mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0]
-    else:
-        rf = get_rf_size(mdl, idx-1, conv_ids) + \
-             (mdl.get_layer(index=conv_ids[idx]).get_weights()[0].shape[0] * pool - 1) * cstride
-    return rf
+from deepac.explain.rf_sizes import get_rf_size
 
 
 def get_filter_contribs(args, allow_eager=False):
