@@ -513,18 +513,14 @@ class RCNet:
         return self._add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
     def _add_skip(self, source, residual):
-        input_shape = K.int_shape(source)
-        residual_shape = K.int_shape(residual)
-        stride = int(round(input_shape[0] / residual_shape[0]))
+        stride = int(round(source.shape[0] / residual.shape[0]))
 
-        shortcut = source
+        if (source.shape[0] != residual.shape[0]) or (source.shape[1] != residual.shape[1]):
+            source = Conv1D(filters=residual.shape[1], kernel_size=1, strides=stride, padding="same",
+                            kernel_initializer=self.config.initializer,
+                            kernel_regularizer=self.config.regularizer)(source)
 
-        if (input_shape[0] != residual_shape[0]) or (input_shape[1] != residual_shape[1]):
-            shortcut = Conv1D(filters=residual_shape[1], kernel_size=1, strides=stride, padding="same",
-                              kernel_initializer=self.config.initializer,
-                              kernel_regularizer=self.config.regularizer)(input)
-
-        return add([shortcut, residual])
+        return add([source, residual])
 
     def _build_simple_model(self):
         """Build the standard network"""
