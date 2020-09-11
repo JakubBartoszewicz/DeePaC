@@ -229,7 +229,8 @@ class MainRunner:
             scale = args.scale
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
-                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes)
+                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
+                        additivity_check=(not args.no_check))
         tester.run_tests()
 
     def parse(self):
@@ -335,6 +336,8 @@ class MainRunner:
                                  default=1, type=int)
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
+        parser_test.add_argument("--no-check", dest="no_check", action="store_true",
+                                       help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')

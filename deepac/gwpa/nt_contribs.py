@@ -78,7 +78,7 @@ def nt_map(args, allow_eager=False):
     set_mem_growth()
     model = load_model(args.model)
     explainer = DeepExplainer(model, ref_samples)
-
+    check_additivity = not args.no_check
     # for each fragmented genome do
     for fragments_file in os.listdir(args.dir_fragmented_genomes):
 
@@ -97,7 +97,7 @@ def nt_map(args, allow_eager=False):
             i = 0
             scores_nt_chunks = []
             while i < num_fragments:
-                contribs_chunk = explainer.shap_values(records[i:i+chunk_size, :])[0]
+                contribs_chunk = explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
                 scores_nt_chunk = np.sum(contribs_chunk, axis=-1)
                 scores_nt_chunks.append(scores_nt_chunk)
                 i = i + chunk_size

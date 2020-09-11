@@ -434,10 +434,13 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate):
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=None):
+        if stride is None:
+            stride = 1
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='same',
                              kernel_initializer=self.config.initializer,
-                             kernel_regularizer=self.config.regularizer)
+                             kernel_regularizer=self.config.regularizer,
+                             strides=stride)
         x_fwd = shared_conv(inputs_fwd)
         x_rc = shared_conv(inputs_rc)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
@@ -445,7 +448,7 @@ class RCNet:
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
-    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate):
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=None):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
@@ -513,14 +516,40 @@ class RCNet:
         return self._add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
     def _add_skip(self, source, residual):
-        stride = int(round(source.shape[0] / residual.shape[0]))
+        stride = int(round(source.shape[1] / residual.shape[1]))
 
-        if (source.shape[0] != residual.shape[0]) or (source.shape[1] != residual.shape[1]):
-            source = Conv1D(filters=residual.shape[1], kernel_size=1, strides=stride, padding="same",
+        if (source.shape[1] != residual.shape[1]) or (source.shape[-1] != residual.shape[-1]):
+            source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding="same",
                             kernel_initializer=self.config.initializer,
                             kernel_regularizer=self.config.regularizer)(source)
 
         return add([source, residual])
+
+    def _add_siam_skip(self, source_fwd, source_rc, residual_fwd, residual_rc):
+        stride_fwd = int(round(source_fwd.shape[1] / residual_fwd.shape[1]))
+        stride_rc = int(round(source_rc.shape[1] / residual_rc.shape[1]))
+        assert stride_fwd == stride_rc, "Fwd and rc shapes differ."
+
+        fwd_equal = (source_fwd.shape[1] == residual_fwd.shape[1]) and (source_fwd.shape[-1] == residual_fwd.shape[-1])
+        rc_equal = (source_rc.shape[1] == residual_rc.shape[1]) and (source_rc.shape[-1] == residual_rc.shape[-1])
+
+        if not (fwd_equal and rc_equal):
+            source_fwd, source_rc = self._add_siam_conv1d(source_fwd, source_rc,
+                                                          units=residual_fwd.shape[-1],
+                                                          kernel_size=1, stride=stride_fwd)
+
+        return add([source_fwd, residual_fwd]), add([source_rc, residual_rc])
+
+    def _add_rc_skip(self, source, residual):
+        revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
+                                   name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
+        revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
+                                   name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
+        source_rc = revcomp_src_in(source)
+        residual_rc = revcomp_res_in(residual)
+        x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
+        out = concatenate([x_fwd, x_rc], axis=-1)
+        return out
 
     def _build_simple_model(self):
         """Build the standard network"""
@@ -567,6 +596,10 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
+        if self.config.skip_size > 0:
+            start = x
+        else:
+            start = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
@@ -592,6 +625,13 @@ class RCNet:
                 x = BatchNormalization()(x)
             # Add activation
             x = Activation(self.config.conv_activation)(x)
+
+            # Skip connections
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end = x
+                    x = self._add_skip(start, end)
+                    start = x
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -698,6 +738,10 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
+        if self.config.skip_size > 0:
+            start = x
+        else:
+            start = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
@@ -721,6 +765,13 @@ class RCNet:
                 self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
             self._current_conv = self._current_conv + 1
+
+            # Skip connections
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end = x
+                    x = self._add_rc_skip(start, end)
+                    start = x
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -803,17 +854,14 @@ class RCNet:
             x_fwd = inputs_fwd
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
                             name="reverse_complement_input_{n}".format(n=self._current_recurrent+1))
-        inputs_rc = revcomp_in(x_fwd)
+        x_rc = revcomp_in(x_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(x_fwd)
-            x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(inputs_rc)
-        else:
-            x_fwd = inputs_fwd
-            x_rc = inputs_rc
+            x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(x_rc)
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -848,6 +896,12 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
+        if self.config.skip_size > 0:
+            start_fwd = x_fwd
+            start_rc = x_rc
+        else:
+            start_fwd = None
+            start_rc = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
@@ -878,6 +932,15 @@ class RCNet:
             x_fwd = Activation(self.config.conv_activation)(x_fwd)
             x_rc = Activation(self.config.conv_activation)(x_rc)
             self._current_conv = self._current_conv + 1
+
+            # Skip connections
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end_fwd = x_fwd
+                    end_rc = x_rc
+                    x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
+                    start_fwd = x_fwd
+                    start_rc = x_rc
 
         # Pooling layer
         if self.config.n_conv > 0:

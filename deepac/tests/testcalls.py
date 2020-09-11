@@ -22,7 +22,7 @@ class Tester:
     """
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
-                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None):
+                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -34,6 +34,7 @@ class Tester:
         self.keep = keep
         self.scale = scale
         self.tpu_resolver = tpu_resolver
+        self.additivity_check = additivity_check
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
         # all are true by default, unless input_modes is specified
@@ -76,7 +77,7 @@ class Tester:
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
 
         if self.do_all or self.gwpa:
-            gwpatester = GWPATester(self.n_cpus)
+            gwpatester = GWPATester(self.n_cpus, self.additivity_check)
             print("X-TEST: gff2genome...")
             gwpatester.test_gff2genome()
             print("X-TEST: Fragmenting genomes...")
@@ -91,7 +92,7 @@ class Tester:
             gwpatester.test_fenrichment()
 
         if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus)
+            explaintester = ExplainTester(self.n_cpus, self.additivity_check)
             print("X-TEST: Maxact (DeepBind)...")
             explaintester.test_maxact()
             # SHAP

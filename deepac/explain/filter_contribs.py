@@ -24,6 +24,7 @@ def get_filter_contribs(args, allow_eager=False):
     set_mem_growth()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
+    check_additivity = not args.no_check
     if args.w_norm and not args.do_lstm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -139,7 +140,7 @@ def get_filter_contribs(args, allow_eager=False):
         inter_diff_rc = intermediate_rc - intermediate_ref_rc
 
         scores_filter = explainer.shap_values([intermediate_fwd,
-                                               intermediate_rc], check_additivity=False)
+                                               intermediate_rc], check_additivity=check_additivity)
         scores_fwd, scores_rc = scores_filter[0]
 
         # shape: [num_reads, len_reads, n_filters]
@@ -183,14 +184,16 @@ def get_filter_contribs(args, allow_eager=False):
                                             node=0, ref_samples=ref_samples,
                                             contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                             input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                            check_additivity=check_additivity)
                                for i in filter_range]
 
             partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
                                            node=1, ref_samples=ref_samples,
                                            contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                            input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                           check_additivity=check_additivity)
                               for i in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
@@ -347,7 +350,7 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
 
 
 def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contribution_data, samples_chunk,
-                 input_reads, intermediate_diff, pad_left, pad_right, lstm=False):
+                 input_reads, intermediate_diff, pad_left, pad_right, lstm=False, check_additivity=False):
     num_reads = len(input_reads)
     if filter_id is None:
         return [], []
@@ -385,7 +388,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
             diff = intermediate_diff[seq_id, filter_id]
         else:
             diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
-        scores_nt = explainer_nt.shap_values(sample, check_additivity=False)
+        scores_nt = explainer_nt.shap_values(sample, check_additivity=check_additivity)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
         partials = partials.reshape(partials.shape[1], partials.shape[2])
