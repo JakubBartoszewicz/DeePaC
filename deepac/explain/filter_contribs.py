@@ -50,7 +50,7 @@ def get_filter_contribs(args, allow_eager=False):
     else:
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
-        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids) #TODO: pooling
+        motif_length = get_rf_size(model, conv_layer_idx)
         n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
@@ -417,8 +417,7 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
             scores_pt_all.append(None)
             continue
 
-        # it's the first layer, so the rest can be igored
-        motif_length = get_rf_size(model, 0, [conv_layer_idx])
+        motif_length = get_rf_size(model, conv_layer_idx)
         motif_start = contribution_data[filter_id][seq_id][1][0]
         if node == 0:
             sample = samples_chunk[seq_id, ::, ::]
