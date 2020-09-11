@@ -50,7 +50,7 @@ def get_filter_contribs(args, allow_eager=False):
     else:
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
-        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids)
+        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids) #TODO: pooling
         n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
@@ -417,7 +417,8 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
             scores_pt_all.append(None)
             continue
 
-        motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+        # it's the first layer, so the rest can be igored
+        motif_length = get_rf_size(model, 0, [conv_layer_idx])
         motif_start = contribution_data[filter_id][seq_id][1][0]
         if node == 0:
             sample = samples_chunk[seq_id, ::, ::]
@@ -431,6 +432,10 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
         # Assuming: first layer only, all-zero reference, no nonlinearity, one-hot encoded nucleotides
         # Then: contributions to filter output are equal to the weights
         scores_nt = model.get_layer(index=conv_layer_idx).get_weights()[0][:, :, filter_id]
+        dilation = model.get_layer(index=conv_layer_idx).get_config()["dilation_rate"][0]
+        if dilation > 1:
+            scores_nt = np.insert(scores_nt, np.repeat(np.arange(1, scores_nt.shape[0]), dilation-1),
+                                  np.zeros(4), axis=0)
         scores_nt = np.multiply(scores_nt, sample)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
