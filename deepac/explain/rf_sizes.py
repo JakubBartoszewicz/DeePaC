@@ -27,7 +27,10 @@ def get_rf_size(mdl, idx):
     for i, layer in enumerate(mdl.layers):
         config = layer.get_config()
         try:
-            kernel_sizes.append(config["kernel_size"][0])
+            if config["kernel_size"][0] > 1:
+                kernel_sizes.append(config["kernel_size"][0])
+            else:
+                continue
         except KeyError:
             try:
                 kernel_sizes.append(config["pool_size"][0])

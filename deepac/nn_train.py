@@ -58,7 +58,7 @@ class RCConfig:
             except KeyError:
                 print("Unknown distribution strategy. Using MirroredStrategy.")
                 self.strategy = "MirroredStrategy"
-            self.__n_gpus = 0
+            self._n_gpus = 0
             self.tpu_strategy = None
 
             # for using tf.device instead of strategy
@@ -111,6 +111,10 @@ class RCConfig:
             # Define the network architecture
             self.rc_mode = config['Architecture']['RC_Mode']
             self.n_conv = config['Architecture'].getint('N_Conv')
+            try:
+                self.skip_size = config['Architecture'].getint('Skip_Size')
+            except KeyError:
+                self.skip_size = 0
             self.n_recurrent = config['Architecture'].getint('N_Recurrent')
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
@@ -214,16 +218,16 @@ class RCConfig:
     def set_tf_session(self):
         """Set TF session."""
         # If no GPUs, use CPUs
-        if self.__n_gpus == 0:
+        if self._n_gpus == 0:
             self.model_build_device = '/cpu:0'
         set_mem_growth()
 
     def set_n_gpus(self):
-        self.__n_gpus = len(tf.config.get_visible_devices('GPU'))
-        self.batch_size = self.base_batch_size * self.__n_gpus if self.__n_gpus > 0 else self.base_batch_size
+        self._n_gpus = len(tf.config.get_visible_devices('GPU'))
+        self.batch_size = self.base_batch_size * self._n_gpus if self._n_gpus > 0 else self.base_batch_size
 
     def get_n_gpus(self):
-        return self.__n_gpus
+        return self._n_gpus
 
     def set_tpu_resolver(self, tpu_resolver):
         if tpu_resolver is not None:
@@ -249,8 +253,8 @@ class RCNet:
         self.history = None
         self.verbose_load = verbose_load
 
-        self.__t_sequence = None
-        self.__v_sequence = None
+        self._t_sequence = None
+        self._v_sequence = None
         self.training_sequence = None
         self.x_train = None
         self.y_train = None
@@ -268,7 +272,7 @@ class RCNet:
             except OSError as e:
                 if e.errno != errno.EEXIST:
                     raise
-            self.__set_callbacks()
+            self._set_callbacks()
             
         # Set strategy
         if self.config.tpu_strategy is not None:
@@ -290,11 +294,11 @@ class RCNet:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
                 if self.config.rc_mode == "full":
-                    self.__build_rc_model()
+                    self._build_rc_model()
                 elif self.config.rc_mode == "siam":
-                    self.__build_siam_model()
+                    self._build_siam_model()
                 elif self.config.rc_mode == "none":
-                    self.__build_simple_model()
+                    self._build_simple_model()
                 else:
                     raise ValueError('Unrecognized RC mode')
             if self.config.epoch_start > 0:
@@ -340,22 +344,22 @@ class RCNet:
             # Prepare the generators for loading data batch by batch
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
-            self.__t_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size,
+            self._t_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size,
                                              self.config.use_subreads, self.config.min_subread_length,
                                              self.config.max_subread_length, self.config.dist_subread,
                                              verbose_id="TRAIN" if self.verbose_load else None)
 
-            self.training_sequence = self.__t_sequence
+            self.training_sequence = self._t_sequence
             self.length_train = len(self.x_train)
 
             # Prepare the generators for loading data batch by batch
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
-            self.__v_sequence = ReadSequence(self.x_val, self.y_val, self.config.batch_size,
+            self._v_sequence = ReadSequence(self.x_val, self.y_val, self.config.batch_size,
                                              self.config.use_subreads, self.config.min_subread_length,
                                              self.config.max_subread_length, self.config.dist_subread,
                                              verbose_id="VAL" if self.verbose_load else None)
-            self.validation_data = self.__v_sequence
+            self.validation_data = self._v_sequence
 
             self.length_val = len(self.x_val)
         else:
@@ -374,7 +378,7 @@ class RCNet:
             self.validation_data = (self.x_val, self.y_val)
             self.length_val = self.x_val.shape[0]
 
-    def __add_lstm(self, inputs, return_sequences):
+    def _add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
@@ -393,7 +397,7 @@ class RCNet:
                                    recurrent_activation='sigmoid'))(inputs)
         return x
 
-    def __add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
+    def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
             shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
@@ -418,58 +422,59 @@ class RCNet:
         else:
             rev_axes = 1
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=shared_lstm.output_shape[1:],
-                             name="reverse_lstm_output_{n}".format(n=self.__current_recurrent+1))
+                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent+1))
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
-    def __add_rc_lstm(self, inputs, return_sequences, units):
+    def _add_rc_lstm(self, inputs, return_sequences, units):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_lstm_input_{n}".format(n=self.__current_recurrent+1))
+                            name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent+1))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self.__add_siam_lstm(inputs, inputs_rc, return_sequences, units)
+        x_fwd, x_rc = self._add_siam_lstm(inputs, inputs_rc, return_sequences, units)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def __add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate):
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate):
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='same',
+                             kernel_initializer=self.config.initializer,
                              kernel_regularizer=self.config.regularizer)
         x_fwd = shared_conv(inputs_fwd)
         x_rc = shared_conv(inputs_rc)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
-                             name="reverse_complement_conv1d_output_{n}".format(n=self.__current_conv+1))
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv+1))
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
-    def __add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate):
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_conv1d_input_{n}".format(n=self.__current_conv+1))
+                            name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self.__add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate)
+        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def __add_siam_batchnorm(self, inputs_fwd, inputs_rc):
+    def _add_siam_batchnorm(self, inputs_fwd, inputs_rc):
         input_shape = inputs_rc.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
         rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
-                       name="reverse_complement_batchnorm_input_{n}".format(n=self.__current_bn+1))
+                       name="reverse_complement_batchnorm_input_{n}".format(n=self._current_bn+1))
         inputs_rc = rc_in(inputs_rc)
         out = concatenate([inputs_fwd, inputs_rc], axis=1)
         out = BatchNormalization()(out)
         split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
-                         name="split_batchnorm_fwd_output_{n}".format(n=self.__current_bn+1))
+                         name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn+1))
         rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
-                        name="split_batchnorm_rc_output_{n}".format(n=self.__current_bn+1))
+                        name="split_batchnorm_rc_output_{n}".format(n=self._current_bn+1))
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
         return x_fwd, x_rc
 
-    def __add_rc_batchnorm(self, inputs):
+    def _add_rc_batchnorm(self, inputs):
         input_shape = inputs.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
@@ -477,17 +482,18 @@ class RCNet:
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="split_batchnorm_fwd_input_{n}".format(n=self.__current_bn+1))
+                        name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn+1))
         rc_in = Lambda(lambda x: x[:, :, split_shape:], output_shape=new_shape,
-                       name="split_batchnorm_rc_input_{n}".format(n=self.__current_bn+1))
+                       name="split_batchnorm_rc_input_{n}".format(n=self._current_bn+1))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
-        x_fwd, x_rc = self.__add_siam_batchnorm(inputs_fwd, inputs_rc)
+        x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def __add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
-        shared_dense = Dense(units, kernel_regularizer=self.config.regularizer)
+    def _add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
+        shared_dense = Dense(units, kernel_initializer=self.config.initializer,
+                             kernel_regularizer=self.config.regularizer)
         rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc.shape[1:],
                        name="reverse_merging_dense_input_{n}".format(n=1))
         inputs_rc = rc_in(inputs_rc)
@@ -496,7 +502,7 @@ class RCNet:
         out = merge_function([x_fwd, x_rc])
         return out
 
-    def __add_rc_merge_dense(self, inputs, units, merge_function=add):
+    def _add_rc_merge_dense(self, inputs, units, merge_function=add):
         split_shape = inputs.shape[-1] // 2
         fwd_in = Lambda(lambda x: x[:, :split_shape], output_shape=[split_shape],
                         name="split_merging_dense_input_fwd_{n}".format(n=1))
@@ -504,13 +510,27 @@ class RCNet:
                        name="split_merging_dense_input_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
-        return self.__add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
+        return self._add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
-    def __build_simple_model(self):
+    def _add_skip(self, source, residual):
+        input_shape = K.int_shape(source)
+        residual_shape = K.int_shape(residual)
+        stride = int(round(input_shape[0] / residual_shape[0]))
+
+        shortcut = source
+
+        if (input_shape[0] != residual_shape[0]) or (input_shape[1] != residual_shape[1]):
+            shortcut = Conv1D(filters=residual_shape[1], kernel_size=1, strides=stride, padding="same",
+                              kernel_initializer=self.config.initializer,
+                              kernel_regularizer=self.config.regularizer)(input)
+
+        return add([shortcut, residual])
+
+    def _build_simple_model(self):
         """Build the standard network"""
         print("Building model...")
         # Number of added recurrent layers
-        self.__current_recurrent = 0
+        self._current_recurrent = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -530,6 +550,7 @@ class RCNet:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0], padding='same',
+                       kernel_initializer=self.config.initializer,
                        kernel_regularizer=self.config.regularizer)(x)
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -539,14 +560,14 @@ class RCNet:
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_lstm(x, return_sequences)
+            x = self._add_lstm(x, return_sequences)
             if self.config.recurrent_bn and return_sequences:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
             x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             # First recurrent layer already added
-            self.__current_recurrent = 1
+            self._current_recurrent = 1
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
@@ -567,7 +588,8 @@ class RCNet:
             # Add layer
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i], padding='same',
-                       kernel_initializer=self.config.initializer, kernel_regularizer=self.config.regularizer)(x)
+                       kernel_initializer=self.config.initializer,
+                       kernel_regularizer=self.config.regularizer)(x)
             # Add batch norm
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -602,12 +624,12 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
 
         # Recurrent layers
-        for i in range(self.__current_recurrent, self.config.n_recurrent):
+        for i in range(self._current_recurrent, self.config.n_recurrent):
             if i == self.config.n_recurrent - 1:
                 # In the last layer, return output only for the last unit
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_lstm(inputs, return_sequences)
+            x = self._add_lstm(inputs, return_sequences)
             if self.config.recurrent_bn and return_sequences:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -616,7 +638,9 @@ class RCNet:
 
         # Dense layers
         for i in range(0, self.config.n_dense):
-            x = Dense(self.config.dense_units[i], kernel_regularizer=self.config.regularizer)(x)
+            x = Dense(self.config.dense_units[i],
+                      kernel_initializer=self.config.initializer,
+                      kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -630,13 +654,13 @@ class RCNet:
         # Initialize the model
         self.model = Model(inputs, x)
 
-    def __build_rc_model(self):
+    def _build_rc_model(self):
         """Build the RC network"""
         print("Building RC-model...")
         # Number of added recurrent layers
-        self.__current_recurrent = 0
-        self.__current_conv = 0
-        self.__current_bn = 0
+        self._current_recurrent = 0
+        self._current_conv = 0
+        self._current_bn = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -654,27 +678,27 @@ class RCNet:
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
-            x = self.__add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
-                                     dilation_rate=self.config.conv_dilation[0])
+            x = self._add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
+                                    dilation_rate=self.config.conv_dilation[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x = self.__add_rc_batchnorm(x)
-                self.__current_bn = self.__current_bn + 1
+                x = self._add_rc_batchnorm(x)
+                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self.__current_conv = self.__current_conv + 1
+            self._current_conv = self._current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_rc_lstm(x, return_sequences, self.config.recurrent_units[0])
+            x = self._add_rc_lstm(x, return_sequences, self.config.recurrent_units[0])
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
-                x = self.__add_rc_batchnorm(x)
-                self.__current_bn = self.__current_bn + 1
+                x = self._add_rc_batchnorm(x)
+                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
             # First recurrent layer already added
-            self.__current_recurrent = self.__current_recurrent + 1
+            self._current_recurrent = self._current_recurrent + 1
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
@@ -693,14 +717,14 @@ class RCNet:
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
-            x = self.__add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
-                                     dilation_rate=self.config.conv_dilation[i])
+            x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
+                                    dilation_rate=self.config.conv_dilation[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x = self.__add_rc_batchnorm(x)
-                self.__current_bn = self.__current_bn + 1
+                x = self._add_rc_batchnorm(x)
+                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self.__current_conv = self.__current_conv + 1
+            self._current_conv = self._current_conv + 1
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -729,27 +753,29 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
 
         # Recurrent layers
-        for i in range(self.__current_recurrent, self.config.n_recurrent):
+        for i in range(self._current_recurrent, self.config.n_recurrent):
             if i == self.config.n_recurrent - 1:
                 # In the last layer, return output only for the last unit
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x = self.__add_rc_lstm(x, return_sequences, self.config.recurrent_units[i])
+            x = self._add_rc_lstm(x, return_sequences, self.config.recurrent_units[i])
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
-                x = self.__add_rc_batchnorm(x)
-                self.__current_bn = self.__current_bn + 1
+                x = self._add_rc_batchnorm(x)
+                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x)
-            self.__current_recurrent = self.__current_recurrent + 1
+            self._current_recurrent = self._current_recurrent + 1
 
         # Dense layers
         for i in range(0, self.config.n_dense):
             if i == 0:
-                x = self.__add_rc_merge_dense(x, self.config.dense_units[i])
+                x = self._add_rc_merge_dense(x, self.config.dense_units[i])
             else:
-                x = Dense(self.config.dense_units[i],  kernel_regularizer=self.config.regularizer)(x)
+                x = Dense(self.config.dense_units[i],
+                          kernel_initializer=self.config.initializer,
+                          kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
@@ -758,7 +784,7 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = self.__add_rc_merge_dense(x, 1)
+            x = self._add_rc_merge_dense(x, 1)
         else:
             x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
@@ -766,13 +792,13 @@ class RCNet:
         # Initialize the model
         self.model = Model(inputs, x)
 
-    def __build_siam_model(self):
+    def _build_siam_model(self):
         """Build the RC network"""
         print("Building siamese RC-model...")
         # Number of added recurrent layers
-        self.__current_recurrent = 0
-        self.__current_conv = 0
-        self.__current_bn = 0
+        self._current_recurrent = 0
+        self._current_conv = 0
+        self._current_bn = 0
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -780,7 +806,7 @@ class RCNet:
         else:
             x_fwd = inputs_fwd
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
-                            name="reverse_complement_input_{n}".format(n=self.__current_recurrent+1))
+                            name="reverse_complement_input_{n}".format(n=self._current_recurrent+1))
         inputs_rc = revcomp_in(x_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
@@ -796,33 +822,33 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Reverse-complement convolutional layer
-            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
-                                                 kernel_size=self.config.conv_filter_size[0],
-                                                 dilation_rate=self.config.conv_dilation[0])
+            x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
+                                                kernel_size=self.config.conv_filter_size[0],
+                                                dilation_rate=self.config.conv_dilation[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
-                self.__current_bn = self.__current_bn + 1
+                x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                self._current_bn = self._current_bn + 1
             # Add activation
             x_fwd = Activation(self.config.conv_activation)(x_fwd)
             x_rc = Activation(self.config.conv_activation)(x_rc)
-            self.__current_conv = self.__current_conv + 1
+            self._current_conv = self._current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
             # RevComp input
-            x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[0])
+            x_fwd, x_rc = self._add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[0])
             # Add batch norm
             if self.config.recurrent_bn and return_sequences:
                 # reverse-complemented batch normalization layer
-                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
-                self.__current_bn = self.__current_bn + 1
+                x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
                 x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc)
             # First recurrent layer already added
-            self.__current_recurrent = 1
+            self._current_recurrent = 1
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
@@ -845,17 +871,17 @@ class RCNet:
                 x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc)
             # Add layer
             # Reverse-complement convolutional layer
-            x_fwd, x_rc = self.__add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
-                                                 kernel_size=self.config.conv_filter_size[i],
-                                                 dilation_rate=self.config.conv_dilation[i])
+            x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
+                                                kernel_size=self.config.conv_filter_size[i],
+                                                dilation_rate=self.config.conv_dilation[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
-                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
-                self.__current_bn = self.__current_bn + 1
+                x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                self._current_bn = self._current_bn + 1
             # Add activation
             x_fwd = Activation(self.config.conv_activation)(x_fwd)
             x_rc = Activation(self.config.conv_activation)(x_rc)
-            self.__current_conv = self.__current_conv + 1
+            self._current_conv = self._current_conv + 1
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -887,17 +913,17 @@ class RCNet:
                 x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc)
 
         # Recurrent layers
-        for i in range(self.__current_recurrent, self.config.n_recurrent):
+        for i in range(self._current_recurrent, self.config.n_recurrent):
             if i == self.config.n_recurrent - 1:
                 # In the last layer, return output only for the last unit
                 return_sequences = False
             # Add a bidirectional recurrent layer. CuDNNLSTM requires a GPU and tensorflow with cuDNN
-            x_fwd, x_rc = self.__add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[i])
+            x_fwd, x_rc = self._add_siam_lstm(x_fwd, x_rc, return_sequences, self.config.recurrent_units[i])
             # Add batch norm
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
-                x_fwd, x_rc = self.__add_siam_batchnorm(x_fwd, x_rc)
-                self.__current_bn = self.__current_bn + 1
+                x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd)
@@ -906,17 +932,19 @@ class RCNet:
         # Output layer for binary classification
         if self.config.n_dense == 0:
             # Output layer for binary classification
-            x = self.__add_siam_merge_dense(x_fwd, x_rc, 1)
+            x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
         else:
             # Dense layers
-            x = self.__add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
+            x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
             if self.config.dense_bn:
                 # Batch normalization layer
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             for i in range(1, self.config.n_dense):
-                x = Dense(self.config.dense_units[i], kernel_regularizer=self.config.regularizer)(x)
+                x = Dense(self.config.dense_units[i],
+                          kernel_initializer=self.config.initializer,
+                          kernel_regularizer=self.config.regularizer)(x)
                 if self.config.dense_bn:
                     # Batch normalization layer
                     x = BatchNormalization()(x)
@@ -948,7 +976,7 @@ class RCNet:
         else:
             print('Skipping compilation of a pre-trained model...')
 
-    def __set_callbacks(self):
+    def _set_callbacks(self):
         """Set callbacks to use during training"""
         self.callbacks = []
 
