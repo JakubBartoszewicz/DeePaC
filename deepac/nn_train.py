@@ -345,9 +345,9 @@ class RCNet:
             self.x_train = np.load(self.config.x_train_path, mmap_mode='r')
             self.y_train = np.load(self.config.y_train_path, mmap_mode='r')
             self._t_sequence = ReadSequence(self.x_train, self.y_train, self.config.batch_size,
-                                             self.config.use_subreads, self.config.min_subread_length,
-                                             self.config.max_subread_length, self.config.dist_subread,
-                                             verbose_id="TRAIN" if self.verbose_load else None)
+                                            self.config.use_subreads, self.config.min_subread_length,
+                                            self.config.max_subread_length, self.config.dist_subread,
+                                            verbose_id="TRAIN" if self.verbose_load else None)
 
             self.training_sequence = self._t_sequence
             self.length_train = len(self.x_train)
@@ -356,9 +356,9 @@ class RCNet:
             self.x_val = np.load(self.config.x_val_path, mmap_mode='r')
             self.y_val = np.load(self.config.y_val_path, mmap_mode='r')
             self._v_sequence = ReadSequence(self.x_val, self.y_val, self.config.batch_size,
-                                             self.config.use_subreads, self.config.min_subread_length,
-                                             self.config.max_subread_length, self.config.dist_subread,
-                                             verbose_id="VAL" if self.verbose_load else None)
+                                            self.config.use_subreads, self.config.min_subread_length,
+                                            self.config.max_subread_length, self.config.dist_subread,
+                                            verbose_id="VAL" if self.verbose_load else None)
             self.validation_data = self._v_sequence
 
             self.length_val = len(self.x_val)
@@ -454,7 +454,7 @@ class RCNet:
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate)
+        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
@@ -544,9 +544,9 @@ class RCNet:
 
     def _add_rc_skip(self, source, residual):
         revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
-                                   name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
+                                name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
         revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
-                                   name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
+                                name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
         source_rc = revcomp_src_in(source)
         residual_rc = revcomp_res_in(residual)
         x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
@@ -621,19 +621,18 @@ class RCNet:
             x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i], padding='same',
                        kernel_initializer=self.config.initializer,
                        kernel_regularizer=self.config.regularizer)(x)
+            # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end = x
+                    x = self._add_skip(start, end)
+                    start = x
             # Add batch norm
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add activation
             x = Activation(self.config.conv_activation)(x)
-
-            # Skip connections
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_skip(start, end)
-                    start = x
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -761,19 +760,18 @@ class RCNet:
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                                     dilation_rate=self.config.conv_dilation[i])
+            # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end = x
+                    x = self._add_rc_skip(start, end)
+                    start = x
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
                 self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
             self._current_conv = self._current_conv + 1
-
-            # Skip connections
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_rc_skip(start, end)
-                    start = x
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -926,6 +924,14 @@ class RCNet:
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
                                                 dilation_rate=self.config.conv_dilation[i])
+            # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
+            if self.config.skip_size > 0:
+                if i % self.config.skip_size == 0:
+                    end_fwd = x_fwd
+                    end_rc = x_rc
+                    x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
+                    start_fwd = x_fwd
+                    start_rc = x_rc
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
@@ -934,15 +940,6 @@ class RCNet:
             x_fwd = Activation(self.config.conv_activation)(x_fwd)
             x_rc = Activation(self.config.conv_activation)(x_rc)
             self._current_conv = self._current_conv + 1
-
-            # Skip connections
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end_fwd = x_fwd
-                    end_rc = x_rc
-                    x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
-                    start_fwd = x_fwd
-                    start_rc = x_rc
 
         # Pooling layer
         if self.config.n_conv > 0:
