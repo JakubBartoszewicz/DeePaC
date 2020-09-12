@@ -548,15 +548,19 @@ class RCNet:
         return add([source_fwd, residual_fwd]), add([source_rc, residual_rc])
 
     def _add_rc_skip(self, source, residual):
-        revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
-                                name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
-        revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
-                                name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
-        source_rc = revcomp_src_in(source)
-        residual_rc = revcomp_res_in(residual)
-        x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
-        out = concatenate([x_fwd, x_rc], axis=-1)
-        return out
+        equal = (source.shape[1] == residual.shape[1]) and (source.shape[-1] == residual.shape[-1])
+        if equal:
+            return self._add_skip(source, residual)
+        else:
+            revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
+                                    name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
+            revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
+                                    name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
+            source_rc = revcomp_src_in(source)
+            residual_rc = revcomp_res_in(residual)
+            x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
+            out = concatenate([x_fwd, x_rc], axis=-1)
+            return out
 
     def _build_simple_model(self):
         """Build the standard network"""
