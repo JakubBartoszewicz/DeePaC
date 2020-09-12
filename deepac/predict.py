@@ -12,7 +12,7 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
 
 
-def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32'):
+def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False):
     """Predict pathogenic potentials from a fasta file."""
 
     alphabet = "ACGT"
@@ -31,6 +31,8 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32'):
         with Pool(processes=token_cores) as p:
             x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
                                               read_length=read_length), read_fasta(input_handle)))
+    if rc:
+        x_data = x_data[::, ::-1, ::-1]
     # Predict
     print("Predicting...")
     y_pred = np.ndarray.flatten(model.predict(x_data))
@@ -39,9 +41,11 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32'):
     np.save(file=output, arr=y_pred)
 
 
-def predict_npy(model, input_npy, output):
+def predict_npy(model, input_npy, output, rc=False):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     x_data = np.load(input_npy)
+    if rc:
+        x_data = x_data[::, ::-1, ::-1]
     # Predict
     print("Predicting...")
     start = time.time()

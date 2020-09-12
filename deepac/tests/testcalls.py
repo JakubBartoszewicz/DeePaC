@@ -4,7 +4,7 @@ from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
 from deepac.convert import convert_cudnn
 from deepac import preproc
-from deepac.tests import datagen
+from deepac.tests import datagen, rctest
 from deepac.builtin_loading import BuiltinLoader
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
@@ -67,6 +67,8 @@ class Tester:
         self.test_train(quick)
         print("TEST: Predicting...")
         self.test_pred(quick)
+        print("TEST: RC-check...")
+        self.test_rc()
         print("TEST: Evaluating...")
         self.test_eval()
         print("TEST: Converting...")
@@ -358,6 +360,12 @@ class Tester:
                         os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-sensitive.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "val-pred-sensitive.npy"))), "Prediction failed."
+
+    def test_rc(self):
+        """Test predicting."""
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
+        rctest.compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"))
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data_predictions.png"))), "RC-check failed."
 
     def test_eval(self):
         """Test evaluating."""
