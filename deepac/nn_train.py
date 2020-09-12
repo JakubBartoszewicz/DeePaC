@@ -874,8 +874,9 @@ class RCNet:
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
                 self._current_bn = self._current_bn + 1
             # Add activation
-            x_fwd = Activation(self.config.conv_activation)(x_fwd)
-            x_rc = Activation(self.config.conv_activation)(x_rc)
+            act = Activation(self.config.conv_activation)
+            x_fwd = act(x_fwd)
+            x_rc = act(x_rc)
             self._current_conv = self._current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -906,11 +907,13 @@ class RCNet:
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
-                x_fwd = MaxPooling1D()(x_fwd)
-                x_rc = MaxPooling1D()(x_rc)
+                pool = MaxPooling1D()
+                x_fwd = pool(x_fwd)
+                x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'average':
-                x_fwd = AveragePooling1D()(x_fwd)
-                x_rc = AveragePooling1D()(x_rc)
+                pool = AveragePooling1D()
+                x_fwd = pool(x_fwd)
+                x_rc = pool(x_rc)
             elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
@@ -937,8 +940,9 @@ class RCNet:
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
                 self._current_bn = self._current_bn + 1
             # Add activation
-            x_fwd = Activation(self.config.conv_activation)(x_fwd)
-            x_rc = Activation(self.config.conv_activation)(x_rc)
+            act = Activation(self.config.conv_activation)
+            x_fwd = act(x_fwd)
+            x_rc = act(x_rc)
             self._current_conv = self._current_conv + 1
 
         # Pooling layer
@@ -946,22 +950,30 @@ class RCNet:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
-                    x_fwd = GlobalMaxPooling1D()(x_fwd)
-                    x_rc = GlobalMaxPooling1D()(x_rc)
+                    pool = GlobalMaxPooling1D()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
                 else:
                     # for recurrent layers, use normal pooling
-                    x_fwd = MaxPooling1D()(x_fwd)
-                    x_rc = MaxPooling1D()(x_rc)
+                    pool = MaxPooling1D()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
-                    x_fwd = GlobalAveragePooling1D()(x_fwd)
-                    x_rc = GlobalAveragePooling1D()(x_rc)
+                    pool = GlobalAveragePooling1D()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
                 else:
                     # for recurrent layers, use normal pooling
-                    x_fwd = AveragePooling1D()(x_fwd)
-                    x_rc = AveragePooling1D()(x_rc)
-            elif self.config.conv_pooling != 'none':
+                    pool = AveragePooling1D()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
+            elif self.config.conv_pooling == 'none':
+                pool = Flatten()
+                x_fwd = pool(x_fwd)
+                x_rc = pool(x_rc)
+            else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
                 raise ValueError('Unknown pooling method')

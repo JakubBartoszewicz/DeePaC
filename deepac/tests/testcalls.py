@@ -67,8 +67,6 @@ class Tester:
         self.test_train(quick)
         print("TEST: Predicting...")
         self.test_pred(quick)
-        print("TEST: RC-check...")
-        self.test_rc()
         print("TEST: Evaluating...")
         self.test_eval()
         print("TEST: Converting...")
@@ -77,6 +75,8 @@ class Tester:
         self.test_filter()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
+        print("TEST: RC-check...")
+        self.test_rc()
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus, self.additivity_check)
@@ -363,7 +363,7 @@ class Tester:
 
     def test_rc(self):
         """Test predicting."""
-        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e004.h5"))
         rctest.compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data_predictions.png"))), "RC-check failed."
 
