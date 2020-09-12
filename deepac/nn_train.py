@@ -122,6 +122,10 @@ class RCConfig:
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
             self.conv_activation = config['Architecture']['Conv_Activation']
+            try:
+                self.padding = config['Architecture']['Conv_Padding']
+            except KeyError:
+                self.padding = "same"
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
@@ -438,7 +442,8 @@ class RCNet:
                          typename="conv1d"):
         if stride is None:
             stride = 1
-        shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate, padding='same',
+        shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                             padding=self.config.padding,
                              kernel_initializer=self.config.initializer,
                              kernel_regularizer=self.config.regularizer,
                              strides=stride)
@@ -521,7 +526,7 @@ class RCNet:
         stride = int(round(source.shape[1] / residual.shape[1]))
 
         if (source.shape[1] != residual.shape[1]) or (source.shape[-1] != residual.shape[-1]):
-            source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding="same",
+            source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding=self.config.padding,
                             kernel_initializer=self.config.initializer,
                             kernel_regularizer=self.config.regularizer)(source)
 
@@ -576,7 +581,8 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0], padding='same',
+            x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
+                       padding=self.config.padding,
                        kernel_initializer=self.config.initializer,
                        kernel_regularizer=self.config.regularizer)(x)
             if self.config.conv_bn:
@@ -618,7 +624,8 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i], padding='same',
+            x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
+                       padding=self.config.padding,
                        kernel_initializer=self.config.initializer,
                        kernel_regularizer=self.config.regularizer)(x)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
