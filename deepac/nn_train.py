@@ -121,6 +121,7 @@ class RCConfig:
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
+            self.conv_stride = [int(s) for s in config['Architecture']['Conv_Stride'].split(',')]
             self.conv_activation = config['Architecture']['Conv_Activation']
             try:
                 self.padding = config['Architecture']['Conv_Padding']
@@ -587,7 +588,8 @@ class RCNet:
             x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
                        padding=self.config.padding,
                        kernel_initializer=self.config.initializer,
-                       kernel_regularizer=self.config.regularizer)(x)
+                       kernel_regularizer=self.config.regularizer,
+                       strides=self.config.conv_stride[0])(x)
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -630,7 +632,8 @@ class RCNet:
             x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                        padding=self.config.padding,
                        kernel_initializer=self.config.initializer,
-                       kernel_regularizer=self.config.regularizer)(x)
+                       kernel_regularizer=self.config.regularizer,
+                       strides=self.config.conv_stride[i])(x)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -726,7 +729,8 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             x = self._add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
-                                    dilation_rate=self.config.conv_dilation[0])
+                                    dilation_rate=self.config.conv_dilation[0],
+                                    stride=self.config.conv_stride[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
@@ -769,7 +773,8 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
-                                    dilation_rate=self.config.conv_dilation[i])
+                                    dilation_rate=self.config.conv_dilation[i],
+                                    stride=self.config.conv_stride[i])
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -878,7 +883,8 @@ class RCNet:
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
                                                 kernel_size=self.config.conv_filter_size[0],
-                                                dilation_rate=self.config.conv_dilation[0])
+                                                dilation_rate=self.config.conv_dilation[0],
+                                                stride=self.config.conv_stride[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
@@ -936,7 +942,8 @@ class RCNet:
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
-                                                dilation_rate=self.config.conv_dilation[i])
+                                                dilation_rate=self.config.conv_dilation[i],
+                                                stride=self.config.conv_stride[i])
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
