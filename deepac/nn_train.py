@@ -438,10 +438,8 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=None,
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1,
                          typename="conv1d"):
-        if stride is None:
-            stride = 1
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                              padding=self.config.padding,
                              kernel_initializer=self.config.initializer,
@@ -455,7 +453,7 @@ class RCNet:
         x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
-    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=None):
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
