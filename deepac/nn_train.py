@@ -421,13 +421,6 @@ class RCNet:
 
         x_fwd = shared_lstm(inputs_fwd)
         x_rc = shared_lstm(inputs_rc)
-        if return_sequences:
-            rev_axes = (1, 2)
-        else:
-            rev_axes = 1
-        revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=shared_lstm.output_shape[1:],
-                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent+1))
-        x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def _add_rc_lstm(self, inputs, return_sequences, units):
@@ -435,11 +428,17 @@ class RCNet:
                             name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_lstm(inputs, inputs_rc, return_sequences, units)
+        if return_sequences:
+            rev_axes = (1, 2)
+        else:
+            rev_axes = 1
+        revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=x_rc.shape[1:],
+                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent + 1))
+        x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1,
-                         typename="conv1d"):
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1):
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                              padding=self.config.padding,
                              kernel_initializer=self.config.initializer,
@@ -447,10 +446,6 @@ class RCNet:
                              strides=stride)
         x_fwd = shared_conv(inputs_fwd)
         x_rc = shared_conv(inputs_rc)
-        revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
-                             name="reverse_complement_{tname}_output_{n}".format(tname=typename,
-                                                                                 n=self._current_conv+1))
-        x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1):
@@ -458,6 +453,9 @@ class RCNet:
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride)
+        revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv + 1))
+        x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
@@ -502,9 +500,6 @@ class RCNet:
     def _add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
         shared_dense = Dense(units, kernel_initializer=self.config.initializer,
                              kernel_regularizer=self.config.regularizer)
-        rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc.shape[1:],
-                       name="reverse_merging_dense_input_{n}".format(n=1))
-        inputs_rc = rc_in(inputs_rc)
         x_fwd = shared_dense(inputs_fwd)
         x_rc = shared_dense(inputs_rc)
         out = merge_function([x_fwd, x_rc])
@@ -518,6 +513,9 @@ class RCNet:
                        name="split_merging_dense_input_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
+        rc_rev = Lambda(lambda x: K.reverse(x, axes=1), output_shape=x_rc.shape[1:],
+                        name="reverse_merging_dense_input_{n}".format(n=1))
+        x_rc = rc_rev(x_rc)
         return self._add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
     def _add_skip(self, source, residual):
@@ -541,7 +539,7 @@ class RCNet:
         if not (fwd_equal and rc_equal):
             source_fwd, source_rc = self._add_siam_conv1d(source_fwd, source_rc,
                                                           units=residual_fwd.shape[-1],
-                                                          kernel_size=1, stride=stride_fwd, typename="skip")
+                                                          kernel_size=1, stride=stride_fwd)
 
         return add([source_fwd, residual_fwd]), add([source_rc, residual_rc])
 
@@ -557,6 +555,9 @@ class RCNet:
             source_rc = revcomp_src_in(source)
             residual_rc = revcomp_res_in(residual)
             x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
+            revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv + 1))
+            x_rc = revcomp_out(x_rc)
             out = concatenate([x_fwd, x_rc], axis=-1)
             return out
 
