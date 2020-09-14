@@ -21,11 +21,13 @@ from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
+from deepac.tests.rctest import compare_rc
 from deepac import __version__
 from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
+from tensorflow.keras.models import load_model
 
 
 def main():
@@ -87,6 +89,13 @@ def run_templates(args):
     training_templates_path = os.path.join(modulepath, "builtin", "config")
     shutil.copytree(training_templates_path, os.path.join(os.getcwd(), "deepac_training_configs"))
     shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
+
+
+def run_rccheck(args):
+    if args.tpu is None:
+        config_gpus(args.gpus)
+    model = load_model(args.model)
+    compare_rc(model, args.input)
 
 
 def global_setup(args):
@@ -339,6 +348,13 @@ class MainRunner:
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",
                                        help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
+
+        parser_rccheck = subparsers.add_parser('rc-check', help='Check RC-constraint compliance.')
+        parser_rccheck.add_argument('model', help='Saved model.')
+        parser_rccheck.add_argument('input', help="Input file path [.npy].")
+        parser_rccheck.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                    help="GPU devices to use. Default: all")
+        parser_rccheck.set_defaults(func=run_rccheck)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
         parser_explain = add_explain_parser(parser_explain)

@@ -45,6 +45,7 @@ def compare_rc(model, input_npy, kind="scatter", alpha=0.5):
     print("Max difference: {}".format(np.max(diff)))
     print("Mean difference: {}".format(np.mean(diff)))
     print("Median difference: {}".format(np.median(diff)))
+    print("Std. dev.: {}".format(np.std(diff)))
 
     g = (sns.jointplot(x=fwd, y=rc, kind=kind, color='k', joint_kws=joint_opt, marginal_kws=marg_opt)) \
         .set_axis_labels("forward", "reverse-complement")
