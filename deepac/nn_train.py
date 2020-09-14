@@ -547,20 +547,55 @@ class RCNet:
     def _add_rc_skip(self, source, residual):
         equal = (source.shape[1] == residual.shape[1]) and (source.shape[-1] == residual.shape[-1])
         if equal:
-            return self._add_skip(source, residual)
+            return add([source, residual])
         else:
-            revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
-                                    name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
-            revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
-                                    name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
-            source_rc = revcomp_src_in(source)
-            residual_rc = revcomp_res_in(residual)
-            x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
+            split_shape_src = source.shape[-1] // 2
+            new_shape_src = [source.shape[1], split_shape_src]
+            split_shape_res = residual.shape[-1] // 2
+            new_shape_res = [residual.shape[1], split_shape_res]
+            fwd_src_in = Lambda(lambda x: x[:, :, :split_shape_src],
+                                output_shape=new_shape_src,
+                                name="forward_skip_src_in_{n}".format(n=self._current_conv + 1))
+            rc_src_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_src:], axes=(1, 2)),
+                               output_shape=new_shape_src,
+                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv + 1))
+            fwd_res_in = Lambda(lambda x: x[:, :, :split_shape_res],
+                                output_shape=new_shape_res,
+                                name="forward_skip_res_in_{n}".format(n=self._current_conv + 1))
+            rc_res_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_res:], axes=(1, 2)),
+                               output_shape=new_shape_res,
+                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv + 1))
+            source_fwd = fwd_src_in(source)
+            residual_fwd = fwd_res_in(residual)
+            source_rc = rc_src_in(source)
+            residual_rc = rc_res_in(residual)
+            x_fwd, x_rc = self._add_siam_skip(source_fwd, source_rc, residual_fwd, residual_rc)
             revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
                                  name="reverse_complement_skip_output_{n}".format(n=self._current_conv + 1))
             x_rc = revcomp_out(x_rc)
             out = concatenate([x_fwd, x_rc], axis=-1)
             return out
+
+    def _add_rc_pooling(self, inputs, pooling_layer):
+        input_shape = inputs.shape
+        if len(input_shape) != 3:
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
+                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+        split_shape = inputs.shape[-1] // 2
+        new_shape = [input_shape[1], split_shape]
+        fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
+                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool+1))
+        rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
+                       name="split_pooling_rc_input_{n}".format(n=self._current_pool+1))
+        inputs_fwd = fwd_in(inputs)
+        inputs_rc = rc_in(inputs)
+        x_fwd = pooling_layer(inputs_fwd)
+        x_rc = pooling_layer(inputs_rc)
+        rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
+                        name="split_pooling_rc_output_{n}".format(n=self._current_pool+1))
+        x_rc = rc_out(x_rc)
+        out = concatenate([x_fwd, x_rc], axis=-1)
+        return out
 
     def _build_simple_model(self):
         """Build the standard network"""
@@ -664,7 +699,10 @@ class RCNet:
                     # for recurrent layers, use normal pooling
                     x = AveragePooling1D()(x)
             elif self.config.conv_pooling == 'none':
-                x = Flatten()(x)
+                if self.config.n_recurrent == 0:
+                    x = Flatten()(x)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
@@ -711,6 +749,7 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_bn = 0
+        self._current_pool = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -761,9 +800,11 @@ class RCNet:
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
-                x = MaxPooling1D()(x)
+                x = self._add_rc_pooling(x, MaxPooling1D())
+                self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'average':
-                x = AveragePooling1D()(x)
+                x = self._add_rc_pooling(x, AveragePooling1D())
+                self._current_pool = self._current_pool + 1
             elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
@@ -796,16 +837,21 @@ class RCNet:
                     x = GlobalMaxPooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = MaxPooling1D()(x)
+                    x = self._add_rc_pooling(x, MaxPooling1D())
+                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = AveragePooling1D()(x)
+                    x = self._add_rc_pooling(x, AveragePooling1D())
+                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'none':
-                x = Flatten()(x)
+                if self.config.n_recurrent == 0:
+                    x = Flatten()(x)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
@@ -987,9 +1033,12 @@ class RCNet:
                     x_fwd = pool(x_fwd)
                     x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'none':
-                pool = Flatten()
-                x_fwd = pool(x_fwd)
-                x_rc = pool(x_rc)
+                if self.config.n_recurrent == 0:
+                    pool = Flatten()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)

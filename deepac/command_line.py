@@ -239,7 +239,7 @@ class MainRunner:
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
                         tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
-                        additivity_check=(not args.no_check))
+                        additivity_check=(not args.no_check), large=args.large)
         tester.run_tests()
 
     def parse(self):
@@ -343,6 +343,8 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
                                  default=1, type=int)
+        parser_test.add_argument('-L', '--large', help="Test a larger, more complex custom model.",
+                                 default=False, action="store_true")
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",

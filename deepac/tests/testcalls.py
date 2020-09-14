@@ -22,7 +22,8 @@ class Tester:
     """
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
-                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False):
+                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False,
+                 large=False):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -35,6 +36,8 @@ class Tester:
         self.scale = scale
         self.tpu_resolver = tpu_resolver
         self.additivity_check = additivity_check
+        self.do_large = large
+        self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
         # all are true by default, unless input_modes is specified
@@ -158,7 +161,7 @@ class Tester:
     def test_train(self, quick=False, epoch_start=0, epoch_end=2):
         """Test training."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
 
         if self.input_modes_dict["memory"]:
             print("TEST: Training (custom - .npy in memory)...")
@@ -382,7 +385,7 @@ class Tester:
     def test_convert(self):
         """Test converting."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
         config['Devices']['DistStrategy'] = "OneDeviceStrategy"
         config['Devices']['BuildDevice'] = "CPU:0"
         convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"), False)
