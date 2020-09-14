@@ -465,17 +465,14 @@ class RCNet:
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
-        rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
-                       name="reverse_complement_batchnorm_input_{n}".format(n=self._current_bn+1))
-        inputs_rc = rc_in(inputs_rc)
         out = concatenate([inputs_fwd, inputs_rc], axis=1)
         out = BatchNormalization()(out)
         split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
                          name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn+1))
-        rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
-                        name="split_batchnorm_rc_output_{n}".format(n=self._current_bn+1))
+        rc_out = Lambda(lambda x: x[:, split_shape:, :], output_shape=new_shape,
+                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn+1))
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
@@ -490,11 +487,14 @@ class RCNet:
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
                         name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn+1))
-        rc_in = Lambda(lambda x: x[:, :, split_shape:], output_shape=new_shape,
+        rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
                        name="split_batchnorm_rc_input_{n}".format(n=self._current_bn+1))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
+        rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
+                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn+1))
+        x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
