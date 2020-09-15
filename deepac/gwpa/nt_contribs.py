@@ -7,7 +7,7 @@ import tensorflow as tf
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
-from shap.explainers.deep import DeepExplainer
+from shap import DeepExplainer
 from deepac.utils import set_mem_growth
 from deepac.explain.filter_contribs import get_reference_seqs
 
@@ -21,7 +21,7 @@ def nt_map(args, allow_eager=False):
     ref_samples = get_reference_seqs(args, args.read_length)
     if tf.executing_eagerly() and not allow_eager:
         print("Using SHAP. Disabling eager execution...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
     model = load_model(args.model)
     explainer = DeepExplainer(model, ref_samples)
