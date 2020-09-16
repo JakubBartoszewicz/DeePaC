@@ -108,7 +108,7 @@ class GWPATester:
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250,
-                         chunk_size=500, no_check=(not self.additivity_check))
+                         chunk_size=500, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
@@ -118,7 +118,7 @@ class GWPATester:
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          train_data=os.path.join("deepac-tests", "sample_train_data.npy"),
                          out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250,
-                         chunk_size=100, no_check=(not self.additivity_check))
+                         chunk_size=100, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph_gc",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \

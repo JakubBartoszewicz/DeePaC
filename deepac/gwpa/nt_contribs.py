@@ -7,7 +7,7 @@ import tensorflow as tf
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
-from shap import DeepExplainer
+from shap import DeepExplainer, GradientExplainer
 from deepac.utils import set_mem_growth
 from deepac.explain.filter_contribs import get_reference_seqs
 
@@ -24,7 +24,10 @@ def nt_map(args, allow_eager=False):
         tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
     model = load_model(args.model)
-    explainer = DeepExplainer(model, ref_samples)
+    if args.gradient:
+        explainer = GradientExplainer(model, ref_samples)
+    else:
+        explainer = DeepExplainer(model, ref_samples)
     check_additivity = not args.no_check
     # for each fragmented genome do
     for fragments_file in os.listdir(args.dir_fragmented_genomes):
@@ -44,7 +47,11 @@ def nt_map(args, allow_eager=False):
             i = 0
             scores_nt_chunks = []
             while i < num_fragments:
-                contribs_chunk = explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
+                if args.gradient:
+                    contribs_chunk = explainer.shap_values(records[i:i + chunk_size, :])[0]
+                else:
+                    contribs_chunk = \
+                        explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
                 scores_nt_chunk = np.sum(contribs_chunk, axis=-1)
                 scores_nt_chunks.append(scores_nt_chunk)
                 i = i + chunk_size
