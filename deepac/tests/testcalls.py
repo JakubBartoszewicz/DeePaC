@@ -387,7 +387,7 @@ class Tester:
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
         config['Devices']['DistStrategy'] = "OneDeviceStrategy"
-        config['Devices']['BuildDevice'] = "CPU:0"
+        config['Devices']['Device_build'] = "CPU:0"
         convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"), False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted.h5"))), "Conversion failed."
