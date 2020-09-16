@@ -91,13 +91,6 @@ def run_templates(args):
     shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
 
 
-def run_rccheck(args):
-    if args.tpu is None:
-        config_gpus(args.gpus)
-    model = load_model(args.model)
-    compare_rc(model, args.input)
-
-
 def global_setup(args):
     tpu_resolver = None
     if args.tpu:
@@ -192,7 +185,9 @@ class MainRunner:
             else:
                 model = tf.keras.models.load_model(args.custom)
 
-        if args.array:
+        if args.rc_check:
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha)
+        elif args.array:
             predict_npy(model, args.input, args.output)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus)
@@ -264,6 +259,12 @@ class MainRunner:
                                     type=int)
         parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                     help="GPU devices to use (comma-separated). Default: all")
+        parser_predict.add_argument('-R', '--rc-check', dest="rc_check", action='store_true',
+                                    help='Check RC-constraint compliance (requires .npy input).')
+        parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
+                                    help='Plot kind for the RC-constraint compliance check.')
+        parser_predict.add_argument('--alpha', default=1.0, type=float,
+                                    help='Alpha value for the RC-constraint compliance check plot.')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -337,7 +338,8 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-a', '--all', help="Test all functions.",
                                  default=False, action="store_true")
-        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
+        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. on low-memory machines"
+                                                       " or when no GPU available).",
                                  default=False, action="store_true")
         parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
                                  default=False, action="store_true")
@@ -350,13 +352,6 @@ class MainRunner:
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",
                                        help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
-
-        parser_rccheck = subparsers.add_parser('rc-check', help='Check RC-constraint compliance.')
-        parser_rccheck.add_argument('model', help='Saved model.')
-        parser_rccheck.add_argument('input', help="Input file path [.npy].")
-        parser_rccheck.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
-                                    help="GPU devices to use. Default: all")
-        parser_rccheck.set_defaults(func=run_rccheck)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
         parser_explain = add_explain_parser(parser_explain)
