@@ -63,9 +63,9 @@ class RCConfig:
 
             # for using tf.device instead of strategy
             try:
-                self.simple_build = config['Devices'].getboolean('SimpleBuild')
+                self.simple_build = config['Devices'].getboolean('Simple_build') if tf.executing_eagerly() else True
             except KeyError:
-                self.simple_build = False
+                self.simple_build = False if tf.executing_eagerly() else True
             self.base_batch_size = config['Training'].getint('BatchSize')
             self.batch_size = self.base_batch_size
 
@@ -385,7 +385,9 @@ class RCNet:
 
     def _add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
+        if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
+                                           and re.match("cpu", self.config.model_build_device),
+                                           re.IGNORECASE is None):
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
                                                                   kernel_initializer=self.config.initializer,
                                                                   recurrent_initializer=orthogonal(
@@ -404,7 +406,9 @@ class RCNet:
 
     def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
+        if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
+                                           and re.match("cpu", self.config.model_build_device),
+                                           re.IGNORECASE is None):
             shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
                                                                             kernel_initializer=self.config.initializer,
                                                                             recurrent_initializer=orthogonal(
@@ -530,8 +534,9 @@ class RCNet:
         return add([source, residual])
 
     def _add_siam_skip(self, source_fwd, source_rc, residual_fwd, residual_rc):
-        stride_fwd = int(round(source_fwd.shape[1] / residual_fwd.shape[1]))
-        stride_rc = int(round(source_rc.shape[1] / residual_rc.shape[1]))
+        # Cast Dimension to int for TF 1 compatibility
+        stride_fwd = int(round(int(source_fwd.shape[1]) / int(residual_fwd.shape[1])))
+        stride_rc = int(round(int(source_rc.shape[1]) / int(residual_rc.shape[1])))
         assert stride_fwd == stride_rc, "Fwd and rc shapes differ."
 
         fwd_equal = (source_fwd.shape[1] == residual_fwd.shape[1]) and (source_fwd.shape[-1] == residual_fwd.shape[-1])

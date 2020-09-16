@@ -104,7 +104,7 @@ def global_setup(args):
         tpu_resolver = config_tpus(args.tpu)
     if args.no_eager:
         print("Disabling eager mode...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     if args.debug_device:
         tf.debugging.set_log_device_placement(True)
     if args.force_cpu:
