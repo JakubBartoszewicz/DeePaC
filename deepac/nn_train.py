@@ -386,8 +386,7 @@ class RCNet:
     def _add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
-                                           and re.match("cpu", self.config.model_build_device),
-                                           re.IGNORECASE is None):
+                                           and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
                                                                   kernel_initializer=self.config.initializer,
                                                                   recurrent_initializer=orthogonal(
@@ -407,8 +406,7 @@ class RCNet:
     def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
-                                           and re.match("cpu", self.config.model_build_device),
-                                           re.IGNORECASE is None):
+                                           and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
             shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
                                                                             kernel_initializer=self.config.initializer,
                                                                             recurrent_initializer=orthogonal(
