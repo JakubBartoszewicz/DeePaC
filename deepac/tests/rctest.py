@@ -13,9 +13,9 @@ def pred_fwd_rc(model, input_npy, output_fwd, output_rc):
     predict_npy(model, input_npy, output_rc, rc=True)
 
 
-def compare_rc(model, input_npy, kind="scatter", alpha=0.5):
+def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5):
     sns.set_context("paper", font_scale=2.5)
-    out = "{}_predictions.png".format(os.path.splitext(input_npy)[0])
+    out = "{}.png".format(os.path.splitext(output)[0])
     if kind != "kde":
         marg_opt = dict(bins=100, binrange=(0.0, 1.0))
     else:
@@ -25,8 +25,8 @@ def compare_rc(model, input_npy, kind="scatter", alpha=0.5):
         joint_opt = dict(alpha=alpha)
     else:
         joint_opt = {}
-    pred_fwd = "{}_predictions.npy".format(os.path.splitext(input_npy)[0])
-    pred_rc = "{}_rc_predictions.npy".format(os.path.splitext(input_npy)[0])
+    pred_fwd = output
+    pred_rc = "{}_rc.npy".format(os.path.splitext(output)[0])
 
     conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
     if len(conv_layer_ids) > 0:
@@ -45,6 +45,11 @@ def compare_rc(model, input_npy, kind="scatter", alpha=0.5):
     print("Max difference: {}".format(np.max(diff)))
     print("Mean difference: {}".format(np.mean(diff)))
     print("Median difference: {}".format(np.median(diff)))
+    print("Std. dev.: {}".format(np.std(diff)))
+    if np.allclose(fwd, rc):
+        print("RC-constraint HOLDS.")
+    else:
+        print("RC-constraint VIOLATED.")
 
     g = (sns.jointplot(x=fwd, y=rc, kind=kind, color='k', joint_kws=joint_opt, marginal_kws=marg_opt)) \
         .set_axis_labels("forward", "reverse-complement")

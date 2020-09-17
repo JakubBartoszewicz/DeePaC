@@ -27,7 +27,7 @@ from tensorflow.keras.utils import plot_model
 from tensorflow.keras import regularizers
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
@@ -63,9 +63,9 @@ class RCConfig:
 
             # for using tf.device instead of strategy
             try:
-                self.simple_build = config['Devices'].getboolean('SimpleBuild')
+                self.simple_build = config['Devices'].getboolean('Simple_build') if tf.executing_eagerly() else True
             except KeyError:
-                self.simple_build = False
+                self.simple_build = False if tf.executing_eagerly() else True
             self.base_batch_size = config['Training'].getint('BatchSize')
             self.batch_size = self.base_batch_size
 
@@ -100,12 +100,24 @@ class RCConfig:
             self.seed = config['Architecture'].getint('Seed')
             # Set the initializer (choose between He and Glorot uniform)
             self.init_mode = config['Architecture']['WeightInit']
-            if self.init_mode == 'he_uniform':
-                self.initializer = he_uniform(self.seed)
-            elif self.init_mode == 'glorot_uniform':
-                self.initializer = glorot_uniform(self.seed)
+            self._initializer_dict = {
+                "he_uniform": tf.keras.initializers.he_uniform(self.seed),
+                "glorot_uniform": tf.keras.initializers.glorot_uniform(self.seed)
+            }
+            self.initializers = {}
+            if self.init_mode == 'custom':
+                self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit_Conv']]
+                self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit_Merge']]
+                self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit_LSTM']]
+                self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit_Dense']]
+                self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit_Out']]
             else:
-                raise ValueError('Unknown initializer')
+
+                self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit']]
             self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
             # Define the network architecture
@@ -121,6 +133,7 @@ class RCConfig:
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
+            self.conv_stride = [int(s) for s in config['Architecture']['Conv_Stride'].split(',')]
             self.conv_activation = config['Architecture']['Conv_Activation']
             try:
                 self.padding = config['Architecture']['Conv_Padding']
@@ -384,16 +397,17 @@ class RCNet:
 
     def _add_lstm(self, inputs, return_sequences):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
+        if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
+                                           and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
-                                                                  kernel_initializer=self.config.initializer,
+                                                                  kernel_initializer=self.config.initializers["lstm"],
                                                                   recurrent_initializer=orthogonal(
                                                                       gain=self.config.ortho_gain,
                                                                       seed=self.config.seed),
                                                                   kernel_regularizer=self.config.regularizer,
                                                                   return_sequences=return_sequences))(inputs)
         else:
-            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializers["lstm"],
                                    recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                     seed=self.config.seed),
                                    kernel_regularizer=self.config.regularizer,
@@ -403,16 +417,18 @@ class RCNet:
 
     def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
-        if not tf.executing_eagerly() and self.config.get_n_gpus() > 0:
-            shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
-                                                                            kernel_initializer=self.config.initializer,
-                                                                            recurrent_initializer=orthogonal(
-                                                                                gain=self.config.ortho_gain,
-                                                                                seed=self.config.seed),
-                                                                            kernel_regularizer=self.config.regularizer,
-                                                                            return_sequences=return_sequences))
+        if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
+                                           and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
+            shared_lstm = Bidirectional(
+                tf.compat.v1.keras.layers.CuDNNLSTM(units,
+                                                    kernel_initializer=self.config.initializers["lstm"],
+                                                    recurrent_initializer=orthogonal(
+                                                        gain=self.config.ortho_gain,
+                                                        seed=self.config.seed),
+                                                    kernel_regularizer=self.config.regularizer,
+                                                    return_sequences=return_sequences))
         else:
-            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
+            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializers["lstm"],
                                              recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                               seed=self.config.seed),
                                              kernel_regularizer=self.config.regularizer,
@@ -421,13 +437,6 @@ class RCNet:
 
         x_fwd = shared_lstm(inputs_fwd)
         x_rc = shared_lstm(inputs_rc)
-        if return_sequences:
-            rev_axes = (1, 2)
-        else:
-            rev_axes = 1
-        revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=shared_lstm.output_shape[1:],
-                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent+1))
-        x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def _add_rc_lstm(self, inputs, return_sequences, units):
@@ -435,22 +444,24 @@ class RCNet:
                             name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_lstm(inputs, inputs_rc, return_sequences, units)
+        if return_sequences:
+            rev_axes = (1, 2)
+        else:
+            rev_axes = 1
+        revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=x_rc.shape[1:],
+                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent + 1))
+        x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1,
-                         typename="conv1d"):
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1):
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                              padding=self.config.padding,
-                             kernel_initializer=self.config.initializer,
+                             kernel_initializer=self.config.initializers["conv"],
                              kernel_regularizer=self.config.regularizer,
                              strides=stride)
         x_fwd = shared_conv(inputs_fwd)
         x_rc = shared_conv(inputs_rc)
-        revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=shared_conv.output_shape[1:],
-                             name="reverse_complement_{tname}_output_{n}".format(tname=typename,
-                                                                                 n=self._current_conv+1))
-        x_rc = revcomp_out(x_rc)
         return x_fwd, x_rc
 
     def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1):
@@ -458,6 +469,9 @@ class RCNet:
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride)
+        revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv + 1))
+        x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
@@ -466,17 +480,14 @@ class RCNet:
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
                              "Expected dimension: 3, but got: " + str(len(input_shape)))
-        rc_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=input_shape[1:],
-                       name="reverse_complement_batchnorm_input_{n}".format(n=self._current_bn+1))
-        inputs_rc = rc_in(inputs_rc)
         out = concatenate([inputs_fwd, inputs_rc], axis=1)
         out = BatchNormalization()(out)
         split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
                          name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn+1))
-        rc_out = Lambda(lambda x: K.reverse(x[:, split_shape:, :], axes=(1, 2)), output_shape=new_shape,
-                        name="split_batchnorm_rc_output_{n}".format(n=self._current_bn+1))
+        rc_out = Lambda(lambda x: x[:, split_shape:, :], output_shape=new_shape,
+                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn+1))
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
@@ -491,20 +502,20 @@ class RCNet:
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
                         name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn+1))
-        rc_in = Lambda(lambda x: x[:, :, split_shape:], output_shape=new_shape,
+        rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
                        name="split_batchnorm_rc_input_{n}".format(n=self._current_bn+1))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
+        rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
+                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn+1))
+        x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
     def _add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
-        shared_dense = Dense(units, kernel_initializer=self.config.initializer,
+        shared_dense = Dense(units, kernel_initializer=self.config.initializers["merge"],
                              kernel_regularizer=self.config.regularizer)
-        rc_in = Lambda(lambda x: K.reverse(x, axes=1), output_shape=inputs_rc.shape[1:],
-                       name="reverse_merging_dense_input_{n}".format(n=1))
-        inputs_rc = rc_in(inputs_rc)
         x_fwd = shared_dense(inputs_fwd)
         x_rc = shared_dense(inputs_rc)
         out = merge_function([x_fwd, x_rc])
@@ -518,6 +529,9 @@ class RCNet:
                        name="split_merging_dense_input_rc_{n}".format(n=1))
         x_fwd = fwd_in(inputs)
         x_rc = rc_in(inputs)
+        rc_rev = Lambda(lambda x: K.reverse(x, axes=1), output_shape=x_rc.shape[1:],
+                        name="reverse_merging_dense_input_{n}".format(n=1))
+        x_rc = rc_rev(x_rc)
         return self._add_siam_merge_dense(x_fwd, x_rc, units, merge_function)
 
     def _add_skip(self, source, residual):
@@ -531,8 +545,9 @@ class RCNet:
         return add([source, residual])
 
     def _add_siam_skip(self, source_fwd, source_rc, residual_fwd, residual_rc):
-        stride_fwd = int(round(source_fwd.shape[1] / residual_fwd.shape[1]))
-        stride_rc = int(round(source_rc.shape[1] / residual_rc.shape[1]))
+        # Cast Dimension to int for TF 1 compatibility
+        stride_fwd = int(round(int(source_fwd.shape[1]) / int(residual_fwd.shape[1])))
+        stride_rc = int(round(int(source_rc.shape[1]) / int(residual_rc.shape[1])))
         assert stride_fwd == stride_rc, "Fwd and rc shapes differ."
 
         fwd_equal = (source_fwd.shape[1] == residual_fwd.shape[1]) and (source_fwd.shape[-1] == residual_fwd.shape[-1])
@@ -541,24 +556,62 @@ class RCNet:
         if not (fwd_equal and rc_equal):
             source_fwd, source_rc = self._add_siam_conv1d(source_fwd, source_rc,
                                                           units=residual_fwd.shape[-1],
-                                                          kernel_size=1, stride=stride_fwd, typename="skip")
+                                                          kernel_size=1, stride=stride_fwd)
 
         return add([source_fwd, residual_fwd]), add([source_rc, residual_rc])
 
     def _add_rc_skip(self, source, residual):
         equal = (source.shape[1] == residual.shape[1]) and (source.shape[-1] == residual.shape[-1])
         if equal:
-            return self._add_skip(source, residual)
+            return add([source, residual])
         else:
-            revcomp_src_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=source.shape[1:],
-                                    name="reverse_complement_skip_src_{n}".format(n=self._current_conv + 1))
-            revcomp_res_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=residual.shape[1:],
-                                    name="reverse_complement_skip_res_{n}".format(n=self._current_conv + 1))
-            source_rc = revcomp_src_in(source)
-            residual_rc = revcomp_res_in(residual)
-            x_fwd, x_rc = self._add_siam_skip(source, source_rc, residual, residual_rc)
+            split_shape_src = source.shape[-1] // 2
+            new_shape_src = [source.shape[1], split_shape_src]
+            split_shape_res = residual.shape[-1] // 2
+            new_shape_res = [residual.shape[1], split_shape_res]
+            fwd_src_in = Lambda(lambda x: x[:, :, :split_shape_src],
+                                output_shape=new_shape_src,
+                                name="forward_skip_src_in_{n}".format(n=self._current_conv + 1))
+            rc_src_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_src:], axes=(1, 2)),
+                               output_shape=new_shape_src,
+                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv + 1))
+            fwd_res_in = Lambda(lambda x: x[:, :, :split_shape_res],
+                                output_shape=new_shape_res,
+                                name="forward_skip_res_in_{n}".format(n=self._current_conv + 1))
+            rc_res_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_res:], axes=(1, 2)),
+                               output_shape=new_shape_res,
+                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv + 1))
+            source_fwd = fwd_src_in(source)
+            residual_fwd = fwd_res_in(residual)
+            source_rc = rc_src_in(source)
+            residual_rc = rc_res_in(residual)
+            x_fwd, x_rc = self._add_siam_skip(source_fwd, source_rc, residual_fwd, residual_rc)
+            revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv + 1))
+            x_rc = revcomp_out(x_rc)
             out = concatenate([x_fwd, x_rc], axis=-1)
             return out
+
+    def _add_rc_pooling(self, inputs, pooling_layer):
+        input_shape = inputs.shape
+        if len(input_shape) != 3:
+            raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
+                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+        split_shape = inputs.shape[-1] // 2
+        new_shape = [input_shape[1], split_shape]
+        fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
+                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool+1))
+        rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
+                       name="split_pooling_rc_input_{n}".format(n=self._current_pool+1))
+        inputs_fwd = fwd_in(inputs)
+        inputs_rc = rc_in(inputs)
+        x_fwd = pooling_layer(inputs_fwd)
+        x_rc = pooling_layer(inputs_rc)
+        rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
+                        name="split_pooling_rc_output_{n}".format(n=self._current_pool+1))
+        x_rc = rc_out(x_rc)
+        out = concatenate([x_fwd, x_rc], axis=-1)
+        return out
 
     def _build_simple_model(self):
         """Build the standard network"""
@@ -585,8 +638,9 @@ class RCNet:
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
                        padding=self.config.padding,
-                       kernel_initializer=self.config.initializer,
-                       kernel_regularizer=self.config.regularizer)(x)
+                       kernel_initializer=self.config.initializers["conv"],
+                       kernel_regularizer=self.config.regularizer,
+                       strides=self.config.conv_stride[0])(x)
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -628,8 +682,9 @@ class RCNet:
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                        padding=self.config.padding,
-                       kernel_initializer=self.config.initializer,
-                       kernel_regularizer=self.config.regularizer)(x)
+                       kernel_initializer=self.config.initializers["conv"],
+                       kernel_regularizer=self.config.regularizer,
+                       strides=self.config.conv_stride[i])(x)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -660,7 +715,10 @@ class RCNet:
                     # for recurrent layers, use normal pooling
                     x = AveragePooling1D()(x)
             elif self.config.conv_pooling == 'none':
-                x = Flatten()(x)
+                if self.config.n_recurrent == 0:
+                    x = Flatten()(x)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
@@ -685,7 +743,7 @@ class RCNet:
         # Dense layers
         for i in range(0, self.config.n_dense):
             x = Dense(self.config.dense_units[i],
-                      kernel_initializer=self.config.initializer,
+                      kernel_initializer=self.config.initializers["dense"],
                       kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 # Standard batch normalization layer
@@ -694,7 +752,9 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
-        x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+        x = Dense(1,
+                  kernel_initializer=self.config.initializers["out"],
+                  kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -707,6 +767,7 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_bn = 0
+        self._current_pool = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -725,7 +786,8 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             x = self._add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
-                                    dilation_rate=self.config.conv_dilation[0])
+                                    dilation_rate=self.config.conv_dilation[0],
+                                    stride=self.config.conv_stride[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
@@ -756,9 +818,11 @@ class RCNet:
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
-                x = MaxPooling1D()(x)
+                x = self._add_rc_pooling(x, MaxPooling1D())
+                self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'average':
-                x = AveragePooling1D()(x)
+                x = self._add_rc_pooling(x, AveragePooling1D())
+                self._current_pool = self._current_pool + 1
             elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
@@ -768,7 +832,8 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x)
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
-                                    dilation_rate=self.config.conv_dilation[i])
+                                    dilation_rate=self.config.conv_dilation[i],
+                                    stride=self.config.conv_stride[i])
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -790,16 +855,21 @@ class RCNet:
                     x = GlobalMaxPooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = MaxPooling1D()(x)
+                    x = self._add_rc_pooling(x, MaxPooling1D())
+                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
-                    x = AveragePooling1D()(x)
+                    x = self._add_rc_pooling(x, AveragePooling1D())
+                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'none':
-                x = Flatten()(x)
+                if self.config.n_recurrent == 0:
+                    x = Flatten()(x)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
@@ -830,7 +900,7 @@ class RCNet:
                 x = self._add_rc_merge_dense(x, self.config.dense_units[i])
             else:
                 x = Dense(self.config.dense_units[i],
-                          kernel_initializer=self.config.initializer,
+                          kernel_initializer=self.config.initializers["dense"],
                           kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 x = BatchNormalization()(x)
@@ -842,7 +912,9 @@ class RCNet:
         if self.config.n_dense == 0:
             x = self._add_rc_merge_dense(x, 1)
         else:
-            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -877,7 +949,8 @@ class RCNet:
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
                                                 kernel_size=self.config.conv_filter_size[0],
-                                                dilation_rate=self.config.conv_dilation[0])
+                                                dilation_rate=self.config.conv_dilation[0],
+                                                stride=self.config.conv_stride[0])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
@@ -935,7 +1008,8 @@ class RCNet:
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
-                                                dilation_rate=self.config.conv_dilation[i])
+                                                dilation_rate=self.config.conv_dilation[i],
+                                                stride=self.config.conv_stride[i])
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -979,9 +1053,12 @@ class RCNet:
                     x_fwd = pool(x_fwd)
                     x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'none':
-                pool = Flatten()
-                x_fwd = pool(x_fwd)
-                x_rc = pool(x_rc)
+                if self.config.n_recurrent == 0:
+                    pool = Flatten()
+                    x_fwd = pool(x_fwd)
+                    x_rc = pool(x_rc)
+                else:
+                    raise ValueError('No pooling ("none") is not compatible with following LSTM layers.')
             else:
                 # Skip pooling if needed or throw a ValueError if the pooling method is unrecognized
                 # (should be thrown above)
@@ -1022,7 +1099,7 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             for i in range(1, self.config.n_dense):
                 x = Dense(self.config.dense_units[i],
-                          kernel_initializer=self.config.initializer,
+                          kernel_initializer=self.config.initializers["dense"],
                           kernel_regularizer=self.config.regularizer)(x)
                 if self.config.dense_bn:
                     # Batch normalization layer
@@ -1030,7 +1107,9 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             # Output layer for binary classification
-            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model

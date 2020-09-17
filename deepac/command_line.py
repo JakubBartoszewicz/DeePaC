@@ -21,11 +21,13 @@ from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
+from deepac.tests.rctest import compare_rc
 from deepac import __version__
 from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
+from tensorflow.keras.models import load_model
 
 
 def main():
@@ -95,7 +97,7 @@ def global_setup(args):
         tpu_resolver = config_tpus(args.tpu)
     if args.no_eager:
         print("Disabling eager mode...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     if args.debug_device:
         tf.debugging.set_log_device_placement(True)
     if args.force_cpu:
@@ -183,7 +185,9 @@ class MainRunner:
             else:
                 model = tf.keras.models.load_model(args.custom)
 
-        if args.array:
+        if args.rc_check:
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha)
+        elif args.array:
             predict_npy(model, args.input, args.output)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus)
@@ -230,7 +234,7 @@ class MainRunner:
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
                         tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
-                        additivity_check=(not args.no_check))
+                        additivity_check=(not args.no_check), large=args.large)
         tester.run_tests()
 
     def parse(self):
@@ -255,6 +259,12 @@ class MainRunner:
                                     type=int)
         parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                     help="GPU devices to use (comma-separated). Default: all")
+        parser_predict.add_argument('-R', '--rc-check', dest="rc_check", action='store_true',
+                                    help='Check RC-constraint compliance (requires .npy input).')
+        parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
+                                    help='Plot kind for the RC-constraint compliance check.')
+        parser_predict.add_argument('--alpha', default=1.0, type=float,
+                                    help='Alpha value for the RC-constraint compliance check plot.')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -328,12 +338,15 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-a', '--all', help="Test all functions.",
                                  default=False, action="store_true")
-        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
+        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. on low-memory machines"
+                                                       " or when no GPU available).",
                                  default=False, action="store_true")
         parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
                                  default=False, action="store_true")
         parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
                                  default=1, type=int)
+        parser_test.add_argument('-L', '--large', help="Test a larger, more complex custom model.",
+                                 default=False, action="store_true")
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",

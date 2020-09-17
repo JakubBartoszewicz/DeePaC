@@ -1,68 +1,15 @@
 import re
 import os
 import numpy as np
-import csv
 from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import load_model
 import tensorflow as tf
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
-from shap.explainers.deep import DeepExplainer
+from shap import DeepExplainer, GradientExplainer
 from deepac.utils import set_mem_growth
-
-
-def get_reference_seqs(args, len_reads):
-    """Load or create reference sequences for DeepLIFT."""
-    # generate reference sequence with N's
-    if args.ref_mode == "N":
-
-        print("Generating reference sequence with all N's...")
-        num_ref_seqs = 1
-        ref_samples = np.zeros((num_ref_seqs, len_reads, 4))
-
-    # create reference sequences with same GC content as the training data set
-    elif args.ref_mode == "GC":
-
-        print("Generating reference sequences with same GC-content as training data set...")
-        train_samples = np.load(args.train_data, mmap_mode='r')
-        num_ref_seqs = 5
-        ref_seqs = [0]*num_ref_seqs
-        # calculate frequency of each nucleotide (A,C,G,T,N) in the training data set
-        probs = np.mean(np.mean(train_samples, axis=1), axis=0).tolist()
-        probs.append(1-sum(probs))
-        # generate reference seqs
-        for i in range(num_ref_seqs):
-            ref_seqs[i] = np.random.choice([0, 1, 2, 3, 4], p=probs, size=len_reads, replace=True)
-        ref_samples = to_categorical(ref_seqs, num_classes=5)
-        # remove channel of N-nucleotide
-        ref_samples = ref_samples[:, :, 0:4]
-        nc_dict = {0: 'A', 1: 'C', 2: 'G', 3: 'T', 4: 'N'}
-        train_data_set_name = os.path.splitext(os.path.basename(args.train_data))[0]
-        # save reference sequences
-        with open(args.out_dir + '/' + train_data_set_name + '_references.fasta', 'w') as csv_file:
-            file_writer = csv.writer(csv_file)
-            for seq_id in range(num_ref_seqs):
-                file_writer.writerow([">"+train_data_set_name+"_ref_"+str(seq_id)])
-                file_writer.writerow(["".join([nc_dict[base] for base in ref_seqs[seq_id]])])
-        del train_samples
-
-    # load own reference sequences (args.ref_mode == "own_ref_file")
-    else:
-
-        print("Loading reference sequences...")
-        tokenizer = Tokenizer(char_level=True)
-        tokenizer.fit_on_texts('ACGT')
-        ref_reads = list(SeqIO.parse(args.ref_seqs, "fasta"))
-        ref_samples = np.array([np.array([tokenizer.texts_to_matrix(read)]) for read in ref_reads])
-        # remove unused character
-        if not np.count_nonzero(ref_samples[:, :, :, 0]):
-            ref_samples = ref_samples[:, :, :, 1:5]
-        ref_samples = ref_samples.squeeze(1)
-        # num_ref_seqs = ref_samples.shape[0]
-
-    return ref_samples
+from deepac.explain.filter_contribs import get_reference_seqs
 
 
 def nt_map(args, allow_eager=False):
@@ -74,10 +21,13 @@ def nt_map(args, allow_eager=False):
     ref_samples = get_reference_seqs(args, args.read_length)
     if tf.executing_eagerly() and not allow_eager:
         print("Using SHAP. Disabling eager execution...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
     model = load_model(args.model)
-    explainer = DeepExplainer(model, ref_samples)
+    if args.gradient:
+        explainer = GradientExplainer(model, ref_samples)
+    else:
+        explainer = DeepExplainer(model, ref_samples)
     check_additivity = not args.no_check
     # for each fragmented genome do
     for fragments_file in os.listdir(args.dir_fragmented_genomes):
@@ -91,13 +41,17 @@ def nt_map(args, allow_eager=False):
             tokenizer.fit_on_texts('ACGT')
             fragments = list(SeqIO.parse(args.dir_fragmented_genomes + "/" + fragments_file, "fasta"))
             num_fragments = len(fragments)
-            records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int8")[:, 1:] for record in fragments])
+            records = np.array([tokenizer.texts_to_matrix(record.seq).astype("int32")[:, 1:] for record in fragments])
 
             chunk_size = args.chunk_size
             i = 0
             scores_nt_chunks = []
             while i < num_fragments:
-                contribs_chunk = explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
+                if args.gradient:
+                    contribs_chunk = explainer.shap_values(records[i:i + chunk_size, :])[0]
+                else:
+                    contribs_chunk = \
+                        explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
                 scores_nt_chunk = np.sum(contribs_chunk, axis=-1)
                 scores_nt_chunks.append(scores_nt_chunk)
                 i = i + chunk_size

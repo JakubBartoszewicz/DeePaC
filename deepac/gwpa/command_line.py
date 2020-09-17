@@ -63,8 +63,10 @@ def add_gwpa_parser(gparser):
                                    help="Fragment length")
     parser_ntcontribs.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                    help="Sequence chunk size. Decrease for lower memory usage.")
+    parser_ntcontribs.add_argument("-G", "--gradient", dest="gradient", action="store_true",
+                                   help="Use Integrated Gradients instead of DeepLIFT.")
     parser_ntcontribs.add_argument("--no-check", dest="no_check", action="store_true",
-                                  help="Disable additivity check.")
+                                   help="Disable additivity check.")
     parser_ntcontribs.set_defaults(func=run_ntcontribs)
 
     parser_factiv = gwpa_subparsers.add_parser('factiv', help='Get filter activations.')

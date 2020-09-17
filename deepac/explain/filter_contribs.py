@@ -11,7 +11,7 @@ from deepac.utils import set_mem_growth
 
 from Bio import SeqIO
 
-from shap.explainers.deep import DeepExplainer
+from shap import DeepExplainer
 from deepac.explain.rf_sizes import get_rf_size
 
 
@@ -20,7 +20,7 @@ def get_filter_contribs(args, allow_eager=False):
     and extract all motifs for which a filter neuron got a non-zero contribution score."""
     if tf.executing_eagerly() and not allow_eager:
         print("Using SHAP. Disabling eager execution...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
