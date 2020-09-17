@@ -101,8 +101,8 @@ class RCConfig:
             # Set the initializer (choose between He and Glorot uniform)
             self.init_mode = config['Architecture']['WeightInit']
             self._initializer_dict = {
-                "he_uniform": tf.keras.initializers.he_uniform(self.seed),
-                "glorot_uniform": tf.keras.initializers.glorot_uniform(self.seed)
+                "he_uniform": tf.keras.initializers.he_uniform(self.seed),  # scale=2, mode=fan_in
+                "glorot_uniform": tf.keras.initializers.glorot_uniform(self.seed),  # scale=1, mode=fan_avg
             }
             self.initializers = {}
             if self.init_mode == 'custom':

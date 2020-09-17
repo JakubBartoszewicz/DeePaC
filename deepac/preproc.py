@@ -18,7 +18,7 @@ import os
 import math
 
 
-def tokenize(seq, tokenizer, datatype='int32', read_length=250):
+def tokenize(seq, tokenizer, datatype='int8', read_length=250):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
