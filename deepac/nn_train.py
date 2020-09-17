@@ -27,7 +27,7 @@ from tensorflow.keras.utils import plot_model
 from tensorflow.keras import regularizers
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.initializers import glorot_uniform, he_uniform, orthogonal
+from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
@@ -100,12 +100,24 @@ class RCConfig:
             self.seed = config['Architecture'].getint('Seed')
             # Set the initializer (choose between He and Glorot uniform)
             self.init_mode = config['Architecture']['WeightInit']
-            if self.init_mode == 'he_uniform':
-                self.initializer = he_uniform(self.seed)
-            elif self.init_mode == 'glorot_uniform':
-                self.initializer = glorot_uniform(self.seed)
+            self._initializer_dict = {
+                "he_uniform": tf.keras.initializers.he_uniform(self.seed),
+                "glorot_uniform": tf.keras.initializers.glorot_uniform(self.seed)
+            }
+            self.initializers = {}
+            if self.init_mode == 'custom':
+                self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit_Conv']]
+                self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit_Merge']]
+                self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit_LSTM']]
+                self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit_Dense']]
+                self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit_Out']]
             else:
-                raise ValueError('Unknown initializer')
+
+                self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit']]
+                self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit']]
             self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
             # Define the network architecture
@@ -388,14 +400,14 @@ class RCNet:
         if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
                                            and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
             x = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(self.config.recurrent_units[0],
-                                                                  kernel_initializer=self.config.initializer,
+                                                                  kernel_initializer=self.config.initializers["lstm"],
                                                                   recurrent_initializer=orthogonal(
                                                                       gain=self.config.ortho_gain,
                                                                       seed=self.config.seed),
                                                                   kernel_regularizer=self.config.regularizer,
                                                                   return_sequences=return_sequences))(inputs)
         else:
-            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializer,
+            x = Bidirectional(LSTM(self.config.recurrent_units[0], kernel_initializer=self.config.initializers["lstm"],
                                    recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                     seed=self.config.seed),
                                    kernel_regularizer=self.config.regularizer,
@@ -407,15 +419,16 @@ class RCNet:
         # LSTM with sigmoid activation corresponds to the CuDNNLSTM
         if not tf.executing_eagerly() and (self.config.get_n_gpus() > 0
                                            and re.match("cpu", self.config.model_build_device, re.IGNORECASE) is None):
-            shared_lstm = Bidirectional(tf.compat.v1.keras.layers.CuDNNLSTM(units,
-                                                                            kernel_initializer=self.config.initializer,
-                                                                            recurrent_initializer=orthogonal(
-                                                                                gain=self.config.ortho_gain,
-                                                                                seed=self.config.seed),
-                                                                            kernel_regularizer=self.config.regularizer,
-                                                                            return_sequences=return_sequences))
+            shared_lstm = Bidirectional(
+                tf.compat.v1.keras.layers.CuDNNLSTM(units,
+                                                    kernel_initializer=self.config.initializers["lstm"],
+                                                    recurrent_initializer=orthogonal(
+                                                        gain=self.config.ortho_gain,
+                                                        seed=self.config.seed),
+                                                    kernel_regularizer=self.config.regularizer,
+                                                    return_sequences=return_sequences))
         else:
-            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializer,
+            shared_lstm = Bidirectional(LSTM(units, kernel_initializer=self.config.initializers["lstm"],
                                              recurrent_initializer=orthogonal(gain=self.config.ortho_gain,
                                                                               seed=self.config.seed),
                                              kernel_regularizer=self.config.regularizer,
@@ -444,7 +457,7 @@ class RCNet:
     def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1):
         shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                              padding=self.config.padding,
-                             kernel_initializer=self.config.initializer,
+                             kernel_initializer=self.config.initializers["conv"],
                              kernel_regularizer=self.config.regularizer,
                              strides=stride)
         x_fwd = shared_conv(inputs_fwd)
@@ -501,7 +514,7 @@ class RCNet:
         return out
 
     def _add_siam_merge_dense(self, inputs_fwd, inputs_rc, units, merge_function=add):
-        shared_dense = Dense(units, kernel_initializer=self.config.initializer,
+        shared_dense = Dense(units, kernel_initializer=self.config.initializers["merge"],
                              kernel_regularizer=self.config.regularizer)
         x_fwd = shared_dense(inputs_fwd)
         x_rc = shared_dense(inputs_rc)
@@ -625,7 +638,7 @@ class RCNet:
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
                        padding=self.config.padding,
-                       kernel_initializer=self.config.initializer,
+                       kernel_initializer=self.config.initializers["conv"],
                        kernel_regularizer=self.config.regularizer,
                        strides=self.config.conv_stride[0])(x)
             if self.config.conv_bn:
@@ -669,7 +682,7 @@ class RCNet:
             # Standard convolutional layer
             x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                        padding=self.config.padding,
-                       kernel_initializer=self.config.initializer,
+                       kernel_initializer=self.config.initializers["conv"],
                        kernel_regularizer=self.config.regularizer,
                        strides=self.config.conv_stride[i])(x)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
@@ -730,7 +743,7 @@ class RCNet:
         # Dense layers
         for i in range(0, self.config.n_dense):
             x = Dense(self.config.dense_units[i],
-                      kernel_initializer=self.config.initializer,
+                      kernel_initializer=self.config.initializers["dense"],
                       kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 # Standard batch normalization layer
@@ -739,7 +752,9 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
 
         # Output layer for binary classification
-        x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+        x = Dense(1,
+                  kernel_initializer=self.config.initializers["out"],
+                  kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -885,7 +900,7 @@ class RCNet:
                 x = self._add_rc_merge_dense(x, self.config.dense_units[i])
             else:
                 x = Dense(self.config.dense_units[i],
-                          kernel_initializer=self.config.initializer,
+                          kernel_initializer=self.config.initializers["dense"],
                           kernel_regularizer=self.config.regularizer)(x)
             if self.config.dense_bn:
                 x = BatchNormalization()(x)
@@ -897,7 +912,9 @@ class RCNet:
         if self.config.n_dense == 0:
             x = self._add_rc_merge_dense(x, 1)
         else:
-            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
@@ -1082,7 +1099,7 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             for i in range(1, self.config.n_dense):
                 x = Dense(self.config.dense_units[i],
-                          kernel_initializer=self.config.initializer,
+                          kernel_initializer=self.config.initializers["dense"],
                           kernel_regularizer=self.config.regularizer)(x)
                 if self.config.dense_bn:
                     # Batch normalization layer
@@ -1090,7 +1107,9 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x)
             # Output layer for binary classification
-            x = Dense(1, kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
         x = Activation('sigmoid')(x)
 
         # Initialize the model
