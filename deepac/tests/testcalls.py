@@ -390,11 +390,15 @@ class Tester:
     def test_filter(self):
         """Test filtering."""
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
-        predict_fasta(model, os.path.join("deepac-tests", "sample-val-pos.fasta"),
+        predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
-                                   "deepac-test-e002-predictions-sample_val-pos.npy"))
-        filter_fasta(os.path.join("deepac-tests", "sample-val-pos.fasta"),
+                                   "deepac-test-e002-predictions-sample_test.npy"))
+        filter_fasta(os.path.join("deepac-tests", "sample-test.fasta"),
                      os.path.join("deepac-tests", "deepac-test-logs",
-                                  "deepac-test-e002-predictions-sample_val-pos.npy"),
-                     os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))), "Filtering failed."
+                                  "deepac-test-e002-predictions-sample_test.npy"),
+                     os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
+                     print_potentials=True,
+                     output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
+                     confidence_thresh=0.65,
+                     output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"))
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"))), "Filtering failed."

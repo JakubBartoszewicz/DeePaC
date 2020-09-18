@@ -9,7 +9,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras import backend
 import numpy as np
 import csv
-from deepac.eval.eval import get_performance
+from deepac.eval.eval import get_performance, get_eval_header
 
 
 class EvalEnsConfig:
@@ -38,12 +38,14 @@ class EvalEnsConfig:
         self.name_prefix = self.ensname
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
+        self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
 
         # Set the first and last epoch to evaluate
         self.epoch = [int(e) for e in config['Epochs']['Epoch'].split(',')]
 
         self.do_plots = config['Options'].getboolean('Do_plots')
         self.do_pred = config['Options'].getboolean('Do_Pred')
+        self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
 
 
 def evaluate_ensemble(config):
@@ -61,16 +63,16 @@ def evaluate_ensemble(config):
         x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
     
     # Write CSV header
-    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
+    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
-                              "recall", "spec", "mcc", "f1"))
+        file_writer.writerow(get_eval_header())
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
 
     y_pred_1 = predict(evalconfig, x_test, do_pred=evalconfig.do_pred)
-    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
+    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path,
+                    ignore_unmatched=evalconfig.ignore_unmatched)
 
     if evalconfig.pairedset_path is not None:
         print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
@@ -80,10 +82,12 @@ def evaluate_ensemble(config):
 
         print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
         y_pred_2 = predict(evalconfig, x_test, paired=True, do_pred=evalconfig.do_pred)
-        get_performance(evalconfig, y_test, y_pred_2,  dataset_name=evalconfig.pairedset_path)
+        get_performance(evalconfig, y_test, y_pred_2,  dataset_name=evalconfig.pairedset_path,
+                        ignore_unmatched=evalconfig.ignore_unmatched)
 
         y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
-        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
+        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
+                        ignore_unmatched=evalconfig.ignore_unmatched)
 
 
 def predict(evalconfig, x_test, paired=False, do_pred=True):

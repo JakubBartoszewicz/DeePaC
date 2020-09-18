@@ -36,6 +36,7 @@ class EvalConfig:
         self.name_prefix = config['Data']['RunName']
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
+        self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
 
         # Set the first and last epoch to evaluate
         self.epoch_start = config['Epochs'].getint('EpochStart')
@@ -44,6 +45,12 @@ class EvalConfig:
         self.do_plots = config['Options'].getboolean('Do_plots')
         self.do_rc = config['Options'].getboolean('Do_RC')
         self.do_pred = config['Options'].getboolean('Do_Pred')
+        self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
+
+
+def get_eval_header():
+    return ("epoch", "set", "tp", "tn", "fp", "fn", "missing", "log_loss", "acc", "auroc",
+            "aupr", "precision", "recall", "spec", "mcc", "f1", "pred_rate")
 
 
 def evaluate_reads(config):
@@ -65,8 +72,7 @@ def evaluate_reads(config):
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
-                              "recall", "spec", "mcc", "f1"))
+        file_writer.writerow(get_eval_header())
 
     # Evaluate for each saved model in epoch range
     for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end + 1):
@@ -81,7 +87,8 @@ def evaluate_reads(config):
                 filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
                                                                       s=evalconfig.dataset_path)
             y_pred_1 = np.load(filename)
-        get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path, n_epoch=n_epoch)
+        get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path, n_epoch=n_epoch,
+                        ignore_unmatched=evalconfig.ignore_unmatched)
 
         if evalconfig.pairedset_path is not None:
             print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
@@ -102,11 +109,12 @@ def evaluate_reads(config):
                     filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
                                                                           s=evalconfig.pairedset_path)
                 y_pred_2 = np.load(filename)
-            get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path, n_epoch=n_epoch)
+            get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path, n_epoch=n_epoch,
+                            ignore_unmatched=evalconfig.ignore_unmatched)
 
             y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
             get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
-                            n_epoch=n_epoch)
+                            n_epoch=n_epoch, ignore_unmatched=evalconfig.ignore_unmatched)
 
 
 def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
@@ -127,63 +135,71 @@ def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
     return y_pred
 
 
-def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
+def try_metric(function, *args, **kwargs):
+    try:
+        return function(*args, **kwargs)
+    except Exception as err:
+        print(err)
+        return np.nan
+
+
+def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ignore_unmatched=False):
     """Get performance measures from predictions using the supplied configuration."""
-    # Assign classes using the chosen threshold
-    y_pred_class = (y_pred > evalconfig.thresh).astype('int8')
+    y_test_main = y_test
+    y_test_matched = y_test
+    missing = 0
+    prediction_rate = 1
+    if np.isclose(evalconfig.confidence_thresh, evalconfig.thresh):
+        # Assign classes using the chosen threshold
+        y_pred_class = (y_pred > evalconfig.thresh).astype('int8')
+        y_pred_class_matched = y_pred_class
+    else:
+        interval = np.abs(evalconfig.confidence_thresh - evalconfig.thresh)
+        y_pred_class_pos = y_pred > (evalconfig.thresh + interval)
+        y_pred_class_neg = y_pred < (evalconfig.thresh - interval)
+        y_pred_class_undef = np.logical_not(np.any([y_pred_class_pos, y_pred_class_neg], axis=0))
+        missing = np.sum(y_pred_class_undef.astype('int8'))
+        prediction_rate = (y_test.shape[0] - missing) / y_test.shape[0]
+        y_pred_class = np.empty(y_pred.shape)
+        y_pred_class[:] = np.nan
+        y_pred_class[y_pred_class_pos] = np.int8(1)
+        y_pred_class[y_pred_class_neg] = np.int8(0)
+        y_pred_class_matched = y_pred_class[np.any([y_pred_class_pos, y_pred_class_neg], axis=0)]
+        y_test_matched = y_test[np.any([y_pred_class_pos, y_pred_class_neg], axis=0)]
+        if ignore_unmatched:
+            y_pred_class = y_pred_class_matched
+            y_test_main = y_test_matched
+        else:
+            y_pred_class[np.all([y_pred_class_undef, y_test], axis=0)] = np.int8(0)
+            y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = np.int8(1)
     # Calculate performance measures
+    log_loss = try_metric(mtr.log_loss, y_test, y_pred, eps=1e-07)
+    auroc = try_metric(mtr.roc_auc_score, y_test, y_pred)
+    aupr = try_metric(mtr.average_precision_score, y_test, y_pred)
+    acc = try_metric(mtr.accuracy_score, y_test_main, y_pred_class)
+    mcc = try_metric(mtr.matthews_corrcoef, y_test_main, y_pred_class)
+    f1 = try_metric(mtr.f1_score, y_test_main, y_pred_class)
+    precision = try_metric(mtr.precision_score, y_test_main, y_pred_class)
+    recall = try_metric(mtr.recall_score, y_test_main, y_pred_class)
     try:
-        log_loss = mtr.log_loss(y_test, y_pred, eps=1e-07)
+        tn, fp, fn, tp = mtr.confusion_matrix(y_test_matched, y_pred_class_matched).ravel()
     except Exception as err:
         print(err)
-        log_loss = np.nan
+        tn, fp, fn, tp = np.nan, np.nan, np.nan, np.nan
     try:
-        acc = mtr.accuracy_score(y_test, y_pred_class)
+        if ignore_unmatched:
+            specificity = tn / (tn + fp)
+        else:
+            specificity = tn / (tn + fp + missing)
     except Exception as err:
         print(err)
-        acc = np.nan
-    try:
-        auroc = mtr.roc_auc_score(y_test, y_pred)
-    except Exception as err:
-        print(err)
-        auroc = np.nan
-    try:
-        mcc = mtr.matthews_corrcoef(y_test, y_pred_class)
-    except Exception as err:
-        print(err)
-        mcc = np.nan
-    try:
-        f1 = mtr.f1_score(y_test, y_pred_class)
-    except Exception as err:
-        print(err)
-        f1 = np.nan
-    try:
-        precision = mtr.precision_score(y_test, y_pred_class)
-    except Exception as err:
-        print(err)
-        precision = np.nan
-    try:
-        recall = mtr.recall_score(y_test, y_pred_class)
-    except Exception as err:
-        print(err)
-        recall = np.nan
-    try:
-        tn, fp, fn, tp = mtr.confusion_matrix(y_test, y_pred_class).ravel()
-        specificity = tn / (tn + fp)
-    except Exception as err:
-        print(err)
-        recall = np.nan
-    try:
-        aupr = mtr.average_precision_score(y_test, y_pred)
-    except Exception as err:
-        print(err)
-        aupr = np.nan
+        specificity = np.nan
 
     # Save the results
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow((n_epoch, dataset_name, tp, tn, fp, fn, log_loss, acc, auroc, aupr, precision, recall,
-                              specificity, mcc, f1))
+        file_writer.writerow((n_epoch, dataset_name, tp, tn, fp, fn, missing, log_loss, acc, auroc, aupr, precision,
+                              recall, specificity, mcc, f1, prediction_rate))
     if evalconfig.do_plots:
         if not np.isnan(auroc):
             fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)

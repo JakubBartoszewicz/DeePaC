@@ -55,10 +55,12 @@ def predict_npy(model, input_npy, output, rc=False):
     np.save(file=output, arr=y_pred)
 
 
-def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3):
+def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,
+                 output_neg=None, confidence_thresh=0.5, output_undef=None):
     """Filter reads in a fasta file by pathogenic potential."""
     filter_paired_fasta(input_fasta, predictions, output, input_fasta_2=None, predictions_2=None,
-                        output_neg=None, threshold=threshold, print_potentials=print_potentials, precision=precision)
+                        output_neg=output_neg, threshold=threshold, print_potentials=print_potentials,
+                        precision=precision, confidence_thresh=confidence_thresh, output_undef=output_undef)
 
 
 def ensemble(predictions_list, outpath_npy):
@@ -71,7 +73,8 @@ def ensemble(predictions_list, outpath_npy):
 
 
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
-                        output_neg=None, threshold=0.5, print_potentials=False, precision=3):
+                        output_neg=None, threshold=0.5, print_potentials=False, precision=3,
+                        confidence_thresh=0.5, output_undef=None):
     """Filter reads in paired fasta files by pathogenic potential."""
     with open(input_fasta_1) as in_handle:
         fasta_data_1 = [(title, seq) for (title, seq) in SimpleFastaParser(in_handle)]
@@ -83,19 +86,30 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
         y_pred = (y_pred_1 + y_pred_2)/2
     else:
         y_pred = y_pred_1
-    y_pred_pos = (y_pred > threshold).astype('int8')
-    y_pred_neg = (y_pred <= threshold).astype('int8')
 
-    fasta_pos_1 = list(itertools.compress(fasta_data_1, y_pred_pos))
-    fasta_neg_1 = list(itertools.compress(fasta_data_1, y_pred_neg))
+    if np.isclose(confidence_thresh, threshold):
+        y_pred_class_pos = y_pred > threshold
+        y_pred_class_neg = y_pred <= threshold
+        y_pred_class_undef = []
+    else:
+        interval = np.abs(confidence_thresh - threshold)
+        y_pred_class_pos = y_pred > (threshold + interval)
+        y_pred_class_neg = y_pred < (threshold - interval)
+        y_pred_class_undef = np.logical_not(np.any([y_pred_class_pos, y_pred_class_neg], axis=0))
+
+    fasta_pos_1 = list(itertools.compress(fasta_data_1, y_pred_class_pos))
+    fasta_neg_1 = list(itertools.compress(fasta_data_1, y_pred_class_neg))
+    fasta_undef_1 = list(itertools.compress(fasta_data_1, y_pred_class_undef))
     if input_fasta_2 is not None:
-        fasta_pos_2 = list(itertools.compress(fasta_data_2, y_pred_pos))
-        fasta_neg_2 = list(itertools.compress(fasta_data_2, y_pred_neg))
+        fasta_pos_2 = list(itertools.compress(fasta_data_2, y_pred_class_pos))
+        fasta_neg_2 = list(itertools.compress(fasta_data_2, y_pred_class_neg))
+        fasta_undef_2 = list(itertools.compress(fasta_data_2, y_pred_class_undef))
     else:
         fasta_pos_2 = []
         fasta_neg_2 = []
+        fasta_undef_2 = []
     if print_potentials and precision > 0:
-        y_pred_pos = [y for y in y_pred if y > threshold]
+        y_pred_pos = y_pred[y_pred_class_pos]
         with open(output_pos, "w") as out_handle:
             for ((title, seq), y) in zip(fasta_pos_1, y_pred_pos):
                 out_handle.write(
@@ -106,7 +120,7 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
                         ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
                                                                                       precision=precision), seq))
         if output_neg is not None:
-            y_pred_neg = [y for y in y_pred if y <= threshold]
+            y_pred_neg = y_pred[y_pred_class_neg]
             with open(output_neg, "w") as out_handle:
                 for ((title, seq), y) in zip(fasta_neg_1, y_pred_neg):
                     out_handle.write(
@@ -116,6 +130,20 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
                         out_handle.write(
                             ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
                                                                                           precision=precision), seq))
+                y_pred_undef = y_pred[y_pred_class_undef]
+                if not np.isclose(confidence_thresh, threshold):
+                    with open(output_undef, "w") as out_handle:
+                        for ((title, seq), y) in zip(fasta_undef_1, y_pred_undef):
+                            out_handle.write(
+                                ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
+                                                                                              precision=precision),
+                                                   seq))
+                        if input_fasta_2 is not None:
+                            for ((title, seq), y) in zip(fasta_undef_2, y_pred_undef):
+                                out_handle.write(
+                                    ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
+                                                                                                  precision=precision),
+                                                       seq))
     else:
         with open(output_pos, "w") as out_handle:
             for (title, seq) in fasta_pos_1:
@@ -130,3 +158,11 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
                 if input_fasta_2 is not None:
                     for (title, seq) in fasta_neg_2:
                         out_handle.write(">{}\n{}\n".format(title, seq))
+            if not np.isclose(confidence_thresh, threshold):
+                with open(output_undef, "w") as out_handle:
+                    for (title, seq) in fasta_undef_1:
+                        out_handle.write(">{}\n{}\n".format(title, seq))
+                    if input_fasta_2 is not None:
+                        for (title, seq) in fasta_undef_2:
+                            out_handle.write(">{}\n{}\n".format(title, seq))
+
