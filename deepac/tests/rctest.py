@@ -31,7 +31,7 @@ def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5):
     conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
     if len(conv_layer_ids) > 0:
         conv_layer_idx = conv_layer_ids[-1]
-        motif_length = get_rf_size(model, conv_layer_idx)
+        motif_length = get_rf_size(model, conv_layer_idx, verbose=True)
         print("Receptive field size: {}".format(motif_length))
 
     pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc)

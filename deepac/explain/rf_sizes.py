@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_rf_size(mdl, idx, verbose=True):
+def get_rf_size(mdl, idx, verbose=False):
     """Calculate receptive field size (motif length)"""
     kernel_sizes = []
     strides = []
