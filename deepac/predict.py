@@ -43,7 +43,7 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', r
 
 def predict_npy(model, input_npy, output, rc=False):
     """Predict pathogenic potentials from a preprocessed numpy array."""
-    x_data = np.load(input_npy)
+    x_data = np.load(input_npy, mmap_mode='r')
     if rc:
         x_data = x_data[::, ::-1, ::-1]
     # Predict

@@ -79,7 +79,7 @@ def run_convert(args):
     """Rebuild the network using a modified configuration."""
     config = configparser.ConfigParser()
     config.read(args.config)
-    convert_cudnn(config, args.model, args.from_weights)
+    convert_cudnn(config, args.model, args.from_weights, args.init)
 
 
 def run_templates(args):
@@ -315,8 +315,10 @@ class MainRunner:
         parser_convert = subparsers.add_parser('convert', help='Convert and compile a model to an equivalent.')
         parser_convert.add_argument('config', help='Training config file.')
         parser_convert.add_argument('model', help='Saved model.')
-        parser_convert.add_argument('-w', '--weights', dest='from_weights', help="Use prepared weights instead of the "
-                                                                                 "model file.", action="store_true")
+        parser_convert.add_argument('-w', '--weights', dest='from_weights', action="store_true",
+                                    help="Use prepared weights instead of the model file.")
+        parser_convert.add_argument('-i', '--init', dest='init', action="store_true",
+                                    help="Initialize a random model from config.")
         parser_convert.set_defaults(func=run_convert)
 
         # create the parser for the "getmodels" command

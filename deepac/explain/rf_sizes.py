@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_rf_size(mdl, idx):
+def get_rf_size(mdl, idx, verbose=True):
     """Calculate receptive field size (motif length)"""
     kernel_sizes = []
     strides = []
@@ -10,11 +10,15 @@ def get_rf_size(mdl, idx):
         config = layer.get_config()
         try:
             if config["kernel_size"][0] > 1:
+                if verbose:
+                    print("kernel size: {}".format(config["kernel_size"][0]))
                 kernel_sizes.append(config["kernel_size"][0])
             else:
                 continue
         except KeyError:
             try:
+                if verbose:
+                    print("pooling size: {}".format(config["pool_size"][0]))
                 kernel_sizes.append(config["pool_size"][0])
             except KeyError:
                 continue

@@ -14,32 +14,35 @@ from tensorflow.keras.models import load_model
 from deepac.nn_train import RCConfig, RCNet
 
 
-def convert_cudnn(config, saved_model, no_prep):
+def convert_cudnn(config, saved_model, no_prep, no_weights=False):
     """Rebuild the network using a modified configuration."""
-
-    path = saved_model
-    if re.search("\.h5$", path) is not None:
-        path = re.sub("\.h5$", "", path)
-
-    if no_prep:
-        weights_path = saved_model
-    else:
-        weights_path = path + "_weights.h5"
-        # Prepare weights
-        model = load_model(saved_model)
-        model.save_weights(weights_path)
 
     # Load model architecture, device info and weights
     paprconfig = RCConfig(config)
 
     paprnet = RCNet(paprconfig, training_mode=False)
 
-    paprnet.model.load_weights(weights_path)
+    path = saved_model
+
+    if not no_weights:
+        if re.search("\.h5$", path) is not None:
+            path = re.sub("\.h5$", "", path)
+        save_path = path + "_converted.h5"
+        if no_prep:
+            weights_path = saved_model
+        else:
+            weights_path = path + "_weights.h5"
+            # Prepare weights
+            model = load_model(saved_model)
+            model.save_weights(weights_path)
+        paprnet.model.load_weights(weights_path)
+    else:
+        save_path = path
+
     paprnet.model.compile(loss='binary_crossentropy',
                           optimizer=paprnet.config.optimizer,
                           metrics=['accuracy'])
 
     # Save output
-    save_path = path + "_converted.h5"
     paprnet.model.save(save_path)
     print(paprnet.model.summary())
