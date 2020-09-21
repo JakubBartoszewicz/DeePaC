@@ -41,7 +41,7 @@ class ExplainTester:
         args = Namespace(model=self.model, w_norm=True, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs"), ref_mode="N",
                          inter_neuron=None, chunk_size=500, all_occurrences=False,
-                         do_lstm=False, inter_layer=1, easy_partial=True, partial=False,
+                         do_lstm=False, inter_layer=1, easy_partial=True, partial=False, train_data=None,
                          no_check=(not self.additivity_check))
         get_filter_contribs(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "fasta",

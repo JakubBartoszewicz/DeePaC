@@ -13,6 +13,7 @@ from Bio import SeqIO
 
 from shap import DeepExplainer
 from deepac.explain.rf_sizes import get_rf_size
+from tqdm import tqdm
 
 
 def get_filter_contribs(args, allow_eager=False):
@@ -113,6 +114,8 @@ def get_filter_contribs(args, allow_eager=False):
 
         intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
         intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+        intermediate_ref_fwd = intermediate_ref_fwd.mean(axis=0, keepdims=True)
+        intermediate_ref_rc = intermediate_ref_rc.mean(axis=0, keepdims=True)
 
     explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                   model.get_layer(index=conv_layer_idx).get_output_at(1)],
@@ -356,16 +359,10 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
         return [], []
     read_ids = []
     scores_pt_all = []
-    print(filter_id)
+    print("Processing filter: {}".format(filter_id))
     if contribution_data[filter_id] is None or not (len(contribution_data[filter_id]) > 0):
         return [], []
-    for seq_id in range(num_reads):
-        if num_reads >= 10 and (seq_id % (num_reads // 10)) == 0:
-            print("|", end="", flush=True)
-        if num_reads >= 100 and (seq_id % (num_reads // 100.0)) == 0:
-            print(".", end="", flush=True)
-        if seq_id == (num_reads-1):
-            print("|", flush=True)
+    for seq_id in tqdm(range(num_reads)):
         read_id = re.search("seq_[0-9]+", input_reads[seq_id].id).group()
         read_id = int(read_id.replace("seq_", ""))
         read_ids.append(read_id)
@@ -376,10 +373,9 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
 
         out = model.get_layer(index=conv_layer_idx).get_output_at(node)
         if lstm:
-            out = out[:, filter_id]
+            out = out[:, filter_id:filter_id+1]
         else:
-            out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
-
+            out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id:filter_id+1]
         explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
@@ -388,7 +384,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
             diff = intermediate_diff[seq_id, filter_id]
         else:
             diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
-        scores_nt = explainer_nt.shap_values(sample, check_additivity=check_additivity)
+        scores_nt = explainer_nt.shap_values(sample, check_additivity=check_additivity)[0]
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
         partials = partials.reshape(partials.shape[1], partials.shape[2])
