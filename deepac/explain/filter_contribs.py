@@ -241,7 +241,7 @@ def get_max_strand(filter_id, dat_fwd, dat_rc):
         # if any contributions at all
         if len(record_fwd[0][seq_id][1]) > 0 and len(record_rc[0][seq_id][1]) > 0:
             # if abs score on fwd higher than on rc
-            if np.abs(record_fwd[0][seq_id][2]) >= np.abs(record_fwd[0][seq_id][2]):
+            if np.abs(record_fwd[0][seq_id][2]) >= np.abs(record_rc[0][seq_id][2]):
                 contrib_dat_fwd.append(record_fwd[0][seq_id])
                 motif_dat_fwd.append(record_fwd[1][seq_id])
                 contrib_dat_rc.append([])
