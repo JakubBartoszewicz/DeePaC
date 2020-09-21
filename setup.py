@@ -40,7 +40,8 @@ setup(name='deepac',
           'weblogo>=3.7',
           'pybedtools>=0.8.1',
           'statsmodels>=0.11.0',
-          'seaborn>=0.11'
+          'seaborn>=0.11',
+          'tqdm>=4.49'
       ],
       entry_points={
           'console_scripts': ['deepac=deepac.command_line:main'],
