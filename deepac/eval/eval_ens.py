@@ -10,6 +10,7 @@ from tensorflow.keras import backend
 import numpy as np
 import csv
 from deepac.eval.eval import get_performance, get_eval_header
+from deepac.predict import predict_array
 
 
 class EvalEnsConfig:
@@ -99,13 +100,13 @@ def predict(evalconfig, x_test, paired=False, do_pred=True):
         
     y_preds = []
     for i in range(0, len(evalconfig.run_prefixes)):
+        filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.run_prefixes[i], ne=evalconfig.epoch[i],
+                                                              s=dataset_path)
         if do_pred:
             model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.run_prefixes[i], ne=evalconfig.epoch[i]))
             # Predict class probabilities
-            y_preds.append(np.ndarray.flatten(model.predict(x_test)))
+            y_preds.append(predict_array(model, x_test, filename))
         else:
-            filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.run_prefixes[i], ne=evalconfig.epoch[i],
-                                                                  s=dataset_path)
             y_preds.append(np.load(filename))
     y_pred = np.mean(y_preds, axis=0)
     # Backup predicted probabilities for future analyses

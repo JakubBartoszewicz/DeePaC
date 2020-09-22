@@ -2,6 +2,7 @@ import tensorflow as tf
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
+from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac import preproc
 from deepac.tests import datagen
@@ -374,6 +375,16 @@ class Tester:
                                             "deepac-test_2_sample_val_auc.png"))), "Evaluation failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
+
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
+        evaluate_ensemble(config)
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01-metrics.csv"))), "Evaluation failed."
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01_sample_val_auc.png"))), "Evaluation failed."
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01_sample_val_aupr.png"))), "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""

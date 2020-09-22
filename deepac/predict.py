@@ -31,19 +31,21 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', r
         with Pool(processes=token_cores) as p:
             x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
                                               read_length=read_length), read_fasta(input_handle)))
-    if rc:
-        x_data = x_data[::, ::-1, ::-1]
     # Predict
-    print("Predicting...")
-    y_pred = np.ndarray.flatten(model.predict(x_data))
+    y_pred = predict_array(model, x_data, output, rc)
     end = time.time()
-    print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
-    np.save(file=output, arr=y_pred)
+    print("Preprocessing & predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
+    return y_pred
 
 
 def predict_npy(model, input_npy, output, rc=False):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     x_data = np.load(input_npy, mmap_mode='r')
+    return predict_array(model, x_data, output, rc)
+
+
+def predict_array(model, x_data, output, rc=False):
+    """Predict pathogenic potentials from a preprocessed numpy array."""
     if rc:
         x_data = x_data[::, ::-1, ::-1]
     # Predict
@@ -53,6 +55,7 @@ def predict_npy(model, input_npy, output, rc=False):
     end = time.time()
     print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
+    return y_pred
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,

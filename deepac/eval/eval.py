@@ -11,6 +11,7 @@ import sklearn.metrics as mtr
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+from deepac.predict import predict_array
 
 
 class EvalConfig:
@@ -66,8 +67,6 @@ def evaluate_reads(config):
     y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
     if evalconfig.do_pred:
         x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.dataset_path))
-        if evalconfig.do_rc:
-            x_test = x_test[::, ::-1, ::-1]
 
     # Write CSV header
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
@@ -78,7 +77,7 @@ def evaluate_reads(config):
     for n_epoch in range(evalconfig.epoch_start, evalconfig.epoch_end + 1):
         print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
         if evalconfig.do_pred:
-            y_pred_1 = predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=evalconfig.do_rc)
+            y_pred_1 = predict(evalconfig, x_test, n_epoch, paired=False, rc=evalconfig.do_rc)
         else:
             if evalconfig.do_rc:
                 filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
@@ -95,12 +94,10 @@ def evaluate_reads(config):
             y_test = np.load("{}/{}_labels.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
             if evalconfig.do_pred:
                 x_test = np.load("{}/{}_data.npy".format(evalconfig.dir_path, evalconfig.pairedset_path))
-                if evalconfig.do_rc:
-                    x_test = x_test[::, ::-1, ::-1]
 
             print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
             if evalconfig.do_pred:
-                y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True, save_as_rc=evalconfig.do_rc)
+                y_pred_2 = predict(evalconfig, x_test, n_epoch, paired=True, rc=evalconfig.do_rc)
             else:
                 if evalconfig.do_rc:
                     filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch,
@@ -117,21 +114,20 @@ def evaluate_reads(config):
                             n_epoch=n_epoch, ignore_unmatched=evalconfig.ignore_unmatched)
 
 
-def predict(evalconfig, x_test, n_epoch, paired=False, save_as_rc=False):
+def predict(evalconfig, x_test, n_epoch, paired=False, rc=False):
     """Predict the pathogenic potentials of Illumina reads using the supplied configuration."""
     if paired:
         dataset_path = evalconfig.pairedset_path
     else:
         dataset_path = evalconfig.dataset_path
     model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch), )
-    # Predict class probabilities
-    y_pred = np.ndarray.flatten(model.predict(x_test))
     # Backup predicted probabilities for future analyses
-    if save_as_rc:
+    if rc:
         filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
     else:
         filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
-    np.save(file=filename, arr=y_pred)
+    # Predict class probabilities
+    y_pred = predict_array(model, x_test, output=filename, rc=rc)
     return y_pred
 
 
@@ -211,7 +207,10 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
             plt.ylim([0, 1])
             plt.ylabel('True Positive Rate')
             plt.xlabel('False Positive Rate')
-            plt.savefig("{p}_{ne}_{s}_auc.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            if np.isnan(n_epoch):
+                plt.savefig("{p}_{s}_auc.png".format(p=evalconfig.name_prefix, s=dataset_name))
+            else:
+                plt.savefig("{p}_{ne}_{s}_auc.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
             plt.clf()
 
         if not np.isnan(aupr):
@@ -223,5 +222,8 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
             plt.ylim([0, 1])
             plt.ylabel('Precision')
             plt.xlabel('Recall')
-            plt.savefig("{p}_{ne}_{s}_aupr.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
+            if np.isnan(n_epoch):
+                plt.savefig("{p}_{s}_aupr.png".format(p=evalconfig.name_prefix, s=dataset_name))
+            else:
+                plt.savefig("{p}_{ne}_{s}_aupr.png".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_name))
             plt.clf()
