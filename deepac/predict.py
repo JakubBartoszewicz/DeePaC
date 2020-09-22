@@ -10,9 +10,11 @@ import tensorflow as tf
 import numpy as np
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
+from tqdm import tqdm
+import os
 
 
-def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False):
+def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False, replicates=1):
     """Predict pathogenic potentials from a fasta file."""
 
     alphabet = "ACGT"
@@ -32,30 +34,43 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', r
             x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
                                               read_length=read_length), read_fasta(input_handle)))
     # Predict
-    y_pred = predict_array(model, x_data, output, rc)
+    y_pred, y_std = predict_array(model, x_data, output, rc, replicates)
     end = time.time()
     print("Preprocessing & predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
-    return y_pred
+    return y_pred, y_std
 
 
-def predict_npy(model, input_npy, output, rc=False):
+def predict_npy(model, input_npy, output, rc=False, replicates=1):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     x_data = np.load(input_npy, mmap_mode='r')
-    return predict_array(model, x_data, output, rc)
+    return predict_array(model, x_data, output, rc, replicates)
 
 
-def predict_array(model, x_data, output, rc=False):
+def predict_array(model, x_data, output, rc=False, replicates=1):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     if rc:
         x_data = x_data[::, ::-1, ::-1]
     # Predict
     print("Predicting...")
     start = time.time()
-    y_pred = np.ndarray.flatten(model.predict(x_data))
+    if replicates > 1:
+        y_preds = []
+        for i in tqdm(range(replicates)):
+            y_preds.append(np.ndarray.flatten(model.predict(x_data)))
+        y_preds = np.asarray(y_preds)
+        y_pred = y_preds.mean(axis=0)
+        y_std = y_preds.std(axis=0)
+    else:
+        y_pred = np.ndarray.flatten(model.predict(x_data))
+        y_std = None
+
     end = time.time()
     print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
     np.save(file=output, arr=y_pred)
-    return y_pred
+    if replicates > 1:
+        out_std = "{}-std.npy".format(os.path.splitext(output)[0])
+        np.save(file=out_std, arr=y_std)
+    return y_pred, y_std
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,
