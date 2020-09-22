@@ -341,7 +341,8 @@ class Tester:
         print("TEST: Predicting (custom)...")
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
         compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                   os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
+                   os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
+                   replicates=5)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
 

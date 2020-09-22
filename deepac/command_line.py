@@ -186,11 +186,11 @@ class MainRunner:
                 model = tf.keras.models.load_model(args.custom)
 
         if args.rc_check:
-            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha)
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates)
         elif args.array:
-            predict_npy(model, args.input, args.output)
+            predict_npy(model, args.input, args.output, replicates=args.replicates)
         else:
-            predict_fasta(model, args.input, args.output, args.n_cpus)
+            predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -265,6 +265,8 @@ class MainRunner:
                                     help='Plot kind for the RC-constraint compliance check.')
         parser_predict.add_argument('--alpha', default=1.0, type=float,
                                     help='Alpha value for the RC-constraint compliance check plot.')
+        parser_predict.add_argument('--replicates', default=1, type=int,
+                                    help='Number of replicates for MC uncertainty estimation.')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -275,9 +277,9 @@ class MainRunner:
         parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
         parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                    default=False, action="store_true")
+        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
-        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
