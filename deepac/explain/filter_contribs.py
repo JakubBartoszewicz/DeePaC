@@ -152,17 +152,17 @@ def get_filter_contribs(args, allow_eager=False):
         # for each filter do:
         if args.do_lstm:
             dat_fwd = [get_lstm_data(i, scores_filter_avg=scores_fwd,
-                                     input_reads=reads_chunk, motif_len=motif_length) for i in range(n_filters)]
+                                     input_reads=reads_chunk, motif_len=motif_length) for i in filter_range]
             dat_rc = [get_lstm_data(i, scores_filter_avg=scores_rc,
                                     input_reads=reads_chunk, motif_len=motif_length,
-                                    rc=True) for i in range(n_filters)]
+                                    rc=True) for i in filter_range]
         else:
             dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
                                        input_reads=reads_chunk, motif_len=motif_length,
-                                       max_only=max_only) for i in range(n_filters)]
+                                       max_only=max_only) for i in filter_range]
             dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
                                       input_reads=reads_chunk, motif_len=motif_length, rc=True,
-                                      max_only=max_only) for i in range(n_filters)]
+                                      max_only=max_only) for i in filter_range]
 
         if max_only:
             dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
@@ -292,6 +292,8 @@ def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=Fal
                 motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
                                for non_zero_neuron in non_zero_neurons])
             else:
+                # Assume all reads are the same length
+                non_zero_neurons = scores_filter_avg.shape[1] - 1 - non_zero_neurons
                 ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
                       for non_zero_neuron in non_zero_neurons]
                 motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
