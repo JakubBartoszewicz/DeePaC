@@ -76,10 +76,10 @@ class Tester:
         self.test_eval()
         print("TEST: Converting...")
         self.test_convert()
-        print("TEST: Filtering...")
-        self.test_filter()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
+        print("TEST: Filtering...")
+        self.test_filter()
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus, self.additivity_check)
@@ -342,7 +342,7 @@ class Tester:
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
         compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                    os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
-                   replicates=5)
+                   replicates=1)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
 
@@ -398,13 +398,21 @@ class Tester:
                                             "deepac-test-e002_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_weights.h5"))), "Conversion failed."
+        config['Architecture']['MC_Dropout'] = 'True'
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"), False)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002_converted_converted.h5"))), "Conversion failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002_converted_weights.h5"))), "Conversion failed."
 
     def test_filter(self):
         """Test filtering."""
-        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs",
+                                                        "deepac-test-e002_converted_converted.h5"))
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
-                                   "deepac-test-e002-predictions-sample_test.npy"))
+                                   "deepac-test-e002-predictions-sample_test.npy"),
+                      replicates=5)
         filter_fasta(os.path.join("deepac-tests", "sample-test.fasta"),
                      os.path.join("deepac-tests", "deepac-test-logs",
                                   "deepac-test-e002-predictions-sample_test.npy"),
@@ -412,5 +420,7 @@ class Tester:
                      print_potentials=True,
                      output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
                      confidence_thresh=0.65,
-                     output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"))
+                     output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
+                     pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
+                                                   "deepac-test-e002-predictions-sample_test-std.npy"))
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"))), "Filtering failed."

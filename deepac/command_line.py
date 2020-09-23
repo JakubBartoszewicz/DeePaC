@@ -51,7 +51,8 @@ def run_filter(args):
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
+    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision,
+                 pred_uncertainty=args.std)
 
 
 def run_preproc(args):
@@ -278,6 +279,8 @@ class MainRunner:
         parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                    default=False, action="store_true")
         parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
+        parser_filter.add_argument('-s', '--std', dest="std",
+                                   help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
         parser_filter.set_defaults(func=run_filter)

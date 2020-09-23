@@ -74,11 +74,12 @@ def predict_array(model, x_data, output, rc=False, replicates=1):
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,
-                 output_neg=None, confidence_thresh=0.5, output_undef=None):
+                 output_neg=None, confidence_thresh=0.5, output_undef=None, bayes_thresh=None, pred_uncertainty=None):
     """Filter reads in a fasta file by pathogenic potential."""
     filter_paired_fasta(input_fasta, predictions, output, input_fasta_2=None, predictions_2=None,
                         output_neg=output_neg, threshold=threshold, print_potentials=print_potentials,
-                        precision=precision, confidence_thresh=confidence_thresh, output_undef=output_undef)
+                        precision=precision, confidence_thresh=confidence_thresh, output_undef=output_undef,
+                        bayes_thresh=bayes_thresh, pred_uncertainty=pred_uncertainty)
 
 
 def ensemble(predictions_list, outpath_npy):
@@ -92,7 +93,7 @@ def ensemble(predictions_list, outpath_npy):
 
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
                         output_neg=None, threshold=0.5, print_potentials=False, precision=3,
-                        confidence_thresh=0.5, output_undef=None):
+                        confidence_thresh=0.5, output_undef=None, bayes_thresh=None, pred_uncertainty=None):
     """Filter reads in paired fasta files by pathogenic potential."""
     with open(input_fasta_1) as in_handle:
         fasta_data_1 = [(title, seq) for (title, seq) in SimpleFastaParser(in_handle)]
@@ -129,39 +130,98 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
     if print_potentials and precision > 0:
         y_pred_pos = y_pred[y_pred_class_pos]
         with open(output_pos, "w") as out_handle:
-            for ((title, seq), y) in zip(fasta_pos_1, y_pred_pos):
-                out_handle.write(
-                    ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y, precision=precision), seq))
-            if input_fasta_2 is not None:
-                for ((title, seq), y) in zip(fasta_pos_2, y_pred_pos):
+            if pred_uncertainty is not None:
+                pred_uncertainty = np.load(pred_uncertainty)
+                for ((title, seq), y, ci) in zip(fasta_pos_1, y_pred_pos, pred_uncertainty[y_pred_class_pos]):
                     out_handle.write(
-                        ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
-                                                                                      precision=precision), seq))
-        if output_neg is not None:
-            y_pred_neg = y_pred[y_pred_class_neg]
-            with open(output_neg, "w") as out_handle:
-                for ((title, seq), y) in zip(fasta_neg_1, y_pred_neg):
-                    out_handle.write(
-                        ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y, precision=precision), seq))
+                        ">{}\n{}\n".format(title +
+                                           " | pp={val:.{precision}f} "
+                                           "+/- {ci:.{precision}f}".format(val=y,
+                                                                           precision=precision,
+                                                                           ci=ci),
+                                           seq))
                 if input_fasta_2 is not None:
-                    for ((title, seq), y) in zip(fasta_neg_2, y_pred_neg):
+                    for ((title, seq), y, ci) in zip(fasta_pos_2, y_pred_pos, pred_uncertainty[y_pred_class_pos]):
+                        out_handle.write(
+                            ">{}\n{}\n".format(title +
+                                               " | pp={val:.{precision}f} "
+                                               "+/- {ci:.{precision}f}".format(val=y,
+                                                                               precision=precision,
+                                                                               ci=ci),
+                                               seq))
+            else:
+                for ((title, seq), y) in zip(fasta_pos_1, y_pred_pos):
+                    out_handle.write(
+                        ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y, precision=precision),
+                                           seq))
+                if input_fasta_2 is not None:
+                    for ((title, seq), y) in zip(fasta_pos_2, y_pred_pos):
                         out_handle.write(
                             ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
                                                                                           precision=precision), seq))
-                y_pred_undef = y_pred[y_pred_class_undef]
-                if not np.isclose(confidence_thresh, threshold):
-                    with open(output_undef, "w") as out_handle:
-                        for ((title, seq), y) in zip(fasta_undef_1, y_pred_undef):
+        if output_neg is not None:
+            y_pred_neg = y_pred[y_pred_class_neg]
+            with open(output_neg, "w") as out_handle:
+                if pred_uncertainty is not None:
+                    for ((title, seq), y, ci) in zip(fasta_neg_1, y_pred_neg, pred_uncertainty[y_pred_class_neg]):
+                        out_handle.write(
+                            ">{}\n{}\n".format(title + " | pp={val:.{precision}f} "
+                                                       "+/- {ci:.{precision}f}".format(val=y,
+                                                                                       precision=precision,
+                                                                                       ci=ci),
+                                               seq))
+                    if input_fasta_2 is not None:
+                        for ((title, seq), y, ci) in zip(fasta_neg_2, y_pred_neg, pred_uncertainty[y_pred_class_neg]):
+                            out_handle.write(
+                                ">{}\n{}\n".format(title + " | pp={val:.{precision}f} "
+                                                           "+/- {ci:.{precision}f}".format(val=y,
+                                                                                           precision=precision,
+                                                                                           ci=ci),
+                                                   seq))
+                else:
+                    for ((title, seq), y) in zip(fasta_neg_1, y_pred_neg):
+                        out_handle.write(
+                            ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y, precision=precision),
+                                               seq))
+                    if input_fasta_2 is not None:
+                        for ((title, seq), y) in zip(fasta_neg_2, y_pred_neg):
                             out_handle.write(
                                 ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
                                                                                               precision=precision),
                                                    seq))
-                        if input_fasta_2 is not None:
-                            for ((title, seq), y) in zip(fasta_undef_2, y_pred_undef):
+                y_pred_undef = y_pred[y_pred_class_undef]
+                if not np.isclose(confidence_thresh, threshold):
+                    with open(output_undef, "w") as out_handle:
+                        if pred_uncertainty is not None:
+                            for ((title, seq), y, ci) in zip(fasta_undef_1, y_pred_undef,
+                                                             pred_uncertainty[y_pred_class_undef]):
                                 out_handle.write(
-                                    ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
-                                                                                                  precision=precision),
+                                    ">{}\n{}\n".format(title + " | pp={val:.{precision}f} "
+                                                               "+/- {ci:.{precision}f}".format(val=y,
+                                                                                               precision=precision,
+                                                                                               ci=ci),
                                                        seq))
+                            if input_fasta_2 is not None:
+                                for ((title, seq), y, ci) in zip(fasta_undef_2, y_pred_undef,
+                                                                 pred_uncertainty[y_pred_class_undef]):
+                                    out_handle.write(
+                                        ">{}\n{}\n".format(title + " | pp={val:.{precision}f} "
+                                                                   "+/- {ci:.{precision}f}".format(val=y,
+                                                                                                   precision=precision,
+                                                                                                   ci=ci),
+                                                           seq))
+                        else:
+                            for ((title, seq), y) in zip(fasta_undef_1, y_pred_undef):
+                                out_handle.write(
+                                    ">{}\n{}\n".format(
+                                        title + " | pp={val:.{precision}f}".format(val=y, precision=precision),
+                                        seq))
+                            if input_fasta_2 is not None:
+                                for ((title, seq), y) in zip(fasta_undef_2, y_pred_undef):
+                                    out_handle.write(
+                                        ">{}\n{}\n".format(title + " | pp={val:.{precision}f}".format(val=y,
+                                                                                                      precision=precision),
+                                                           seq))
     else:
         with open(output_pos, "w") as out_handle:
             for (title, seq) in fasta_pos_1:
