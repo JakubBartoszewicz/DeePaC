@@ -7,13 +7,14 @@ from deepac.explain.rf_sizes import get_rf_size
 import matplotlib.pyplot as plt
 
 
-def pred_fwd_rc(model, input_npy, output_fwd, output_rc):
+def pred_fwd_rc(model, input_npy, output_fwd, output_rc, replicates=1):
     """Predict pathogenic potentials from a preprocessed numpy array and its reverse-complement."""
-    predict_npy(model, input_npy, output_fwd, rc=False)
-    predict_npy(model, input_npy, output_rc, rc=True)
+    y_fwd, _ = predict_npy(model, input_npy, output_fwd, rc=False, replicates=replicates)
+    y_rc, _ = predict_npy(model, input_npy, output_rc, rc=True, replicates=replicates)
+    return y_fwd, y_rc
 
 
-def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5):
+def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1):
     sns.set_context("paper", font_scale=2.5)
     out = "{}.png".format(os.path.splitext(output)[0])
     if kind != "kde":
@@ -34,10 +35,7 @@ def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5):
         motif_length = get_rf_size(model, conv_layer_idx, verbose=True)
         print("Receptive field size: {}".format(motif_length))
 
-    pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc)
-
-    fwd = np.load(pred_fwd)
-    rc = np.load(pred_rc)
+    fwd, rc = pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc, replicates=replicates)
 
     print(scipy.stats.ks_2samp(fwd, rc))
     print(scipy.stats.spearmanr(fwd, rc))
