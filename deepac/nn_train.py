@@ -97,7 +97,10 @@ class RCConfig:
 
             # Architecture Config #
             # Set the seed
-            self.seed = config['Architecture'].getint('Seed')
+            if config['Architecture']['Seed'] == "none" or config['Architecture']['Seed'] == "None":
+                self.seed = None
+            else:
+                self.seed = config['Architecture'].getint('Seed')
             # Set the initializer (choose between He and Glorot uniform)
             self.init_mode = config['Architecture']['WeightInit']
             self._initializer_dict = {
