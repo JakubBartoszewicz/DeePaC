@@ -2,9 +2,11 @@ import tensorflow as tf
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
+from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac import preproc
 from deepac.tests import datagen
+from deepac.tests.rctest import compare_rc
 from deepac.builtin_loading import BuiltinLoader
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
@@ -22,7 +24,8 @@ class Tester:
     """
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
-                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None):
+                 do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False,
+                 large=False):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -34,6 +37,9 @@ class Tester:
         self.keep = keep
         self.scale = scale
         self.tpu_resolver = tpu_resolver
+        self.additivity_check = additivity_check
+        self.do_large = large
+        self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
         # all are true by default, unless input_modes is specified
@@ -70,13 +76,13 @@ class Tester:
         self.test_eval()
         print("TEST: Converting...")
         self.test_convert()
-        print("TEST: Filtering...")
-        self.test_filter()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
+        print("TEST: Filtering...")
+        self.test_filter()
 
         if self.do_all or self.gwpa:
-            gwpatester = GWPATester(self.n_cpus)
+            gwpatester = GWPATester(self.n_cpus, self.additivity_check)
             print("X-TEST: gff2genome...")
             gwpatester.test_gff2genome()
             print("X-TEST: Fragmenting genomes...")
@@ -91,7 +97,7 @@ class Tester:
             gwpatester.test_fenrichment()
 
         if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus)
+            explaintester = ExplainTester(self.n_cpus, self.additivity_check)
             print("X-TEST: Maxact (DeepBind)...")
             explaintester.test_maxact()
             # SHAP
@@ -155,7 +161,7 @@ class Tester:
     def test_train(self, quick=False, epoch_start=0, epoch_end=2):
         """Test training."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
 
         if self.input_modes_dict["memory"]:
             print("TEST: Training (custom - .npy in memory)...")
@@ -334,8 +340,9 @@ class Tester:
         """Test predicting."""
         print("TEST: Predicting (custom)...")
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
-        predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                    os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"))
+        compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
+                   os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
+                   replicates=1)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
 
@@ -344,8 +351,8 @@ class Tester:
             paprconfig = self.bloader.get_rapid_training_config()
             runname = paprconfig.runname
             model = self.bloader.load_rapid_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
-            predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                        os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-rapid.npy"))
+            compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
+                       os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-rapid.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "val-pred-rapid.npy"))), "Prediction failed."
 
@@ -353,8 +360,8 @@ class Tester:
             paprconfig = self.bloader.get_sensitive_training_config()
             runname = paprconfig.runname
             model = self.bloader.load_sensitive_model(log_path="deepac-tests", tpu_resolver=self.tpu_resolver)
-            predict_npy(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                        os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-sensitive.npy"))
+            compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
+                       os.path.join("deepac-tests", "{}-logs".format(runname), "val-pred-sensitive.npy"))
             assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                 "val-pred-sensitive.npy"))), "Prediction failed."
 
@@ -370,26 +377,50 @@ class Tester:
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
 
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
+        evaluate_ensemble(config)
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01-metrics.csv"))), "Evaluation failed."
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01_sample_val_auc.png"))), "Evaluation failed."
+        assert (os.path.isfile(os.path.join("deepac-tests",
+                                            "ens01_sample_val_aupr.png"))), "Evaluation failed."
+
     def test_convert(self):
         """Test converting."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "nn-test.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
         config['Devices']['DistStrategy'] = "OneDeviceStrategy"
-        config['Devices']['BuildDevice'] = "CPU:0"
+        config['Devices']['Device_build'] = "CPU:0"
         convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"), False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_weights.h5"))), "Conversion failed."
+        config['Architecture']['MC_Dropout'] = 'True'
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"), False)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002_converted_converted.h5"))), "Conversion failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002_converted_weights.h5"))), "Conversion failed."
 
     def test_filter(self):
         """Test filtering."""
-        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
-        predict_fasta(model, os.path.join("deepac-tests", "sample-val-pos.fasta"),
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs",
+                                                        "deepac-test-e002_converted_converted.h5"))
+        predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
-                                   "deepac-test-e002-predictions-sample_val-pos.npy"))
-        filter_fasta(os.path.join("deepac-tests", "sample-val-pos.fasta"),
+                                   "deepac-test-e002-predictions-sample_test.npy"),
+                      replicates=5)
+        filter_fasta(os.path.join("deepac-tests", "sample-test.fasta"),
                      os.path.join("deepac-tests", "deepac-test-logs",
-                                  "deepac-test-e002-predictions-sample_val-pos.npy"),
-                     os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-pos-filtered.fasta"))), "Filtering failed."
+                                  "deepac-test-e002-predictions-sample_test.npy"),
+                     os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
+                     print_potentials=True,
+                     output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
+                     confidence_thresh=0.65,
+                     output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
+                     pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
+                                                   "deepac-test-e002-predictions-sample_test-std.npy"))
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"))), "Filtering failed."

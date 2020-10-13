@@ -7,7 +7,7 @@ def readme():
 
 
 setup(name='deepac',
-      version='0.12.2',
+      version='0.13.0',
       description='Predicting pathogenic potentials of novel DNA with reverse-complement neural networks.',
       long_description=readme(),
       long_description_content_type='text/markdown',
@@ -39,7 +39,9 @@ setup(name='deepac',
           'shap>=0.35',
           'weblogo>=3.7',
           'pybedtools>=0.8.1',
-          'statsmodels>=0.11.0'
+          'statsmodels>=0.11.0',
+          'seaborn>=0.11',
+          'tqdm>=4.49'
       ],
       entry_points={
           'console_scripts': ['deepac=deepac.command_line:main'],

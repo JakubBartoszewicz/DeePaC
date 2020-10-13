@@ -21,11 +21,13 @@ from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
+from deepac.tests.rctest import compare_rc
 from deepac import __version__
 from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
+from tensorflow.keras.models import load_model
 
 
 def main():
@@ -49,7 +51,8 @@ def run_filter(args):
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
+    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision,
+                 pred_uncertainty=args.std)
 
 
 def run_preproc(args):
@@ -77,7 +80,7 @@ def run_convert(args):
     """Rebuild the network using a modified configuration."""
     config = configparser.ConfigParser()
     config.read(args.config)
-    convert_cudnn(config, args.model, args.from_weights)
+    convert_cudnn(config, args.model, args.from_weights, args.init)
 
 
 def run_templates(args):
@@ -95,7 +98,7 @@ def global_setup(args):
         tpu_resolver = config_tpus(args.tpu)
     if args.no_eager:
         print("Disabling eager mode...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     if args.debug_device:
         tf.debugging.set_log_device_placement(True)
     if args.force_cpu:
@@ -183,10 +186,12 @@ class MainRunner:
             else:
                 model = tf.keras.models.load_model(args.custom)
 
-        if args.array:
-            predict_npy(model, args.input, args.output)
+        if args.rc_check:
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates)
+        elif args.array:
+            predict_npy(model, args.input, args.output, replicates=args.replicates)
         else:
-            predict_fasta(model, args.input, args.output, args.n_cpus)
+            predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -229,7 +234,8 @@ class MainRunner:
             scale = args.scale
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
-                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes)
+                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
+                        additivity_check=(not args.no_check), large=args.large)
         tester.run_tests()
 
     def parse(self):
@@ -254,6 +260,14 @@ class MainRunner:
                                     type=int)
         parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
                                     help="GPU devices to use (comma-separated). Default: all")
+        parser_predict.add_argument('-R', '--rc-check', dest="rc_check", action='store_true',
+                                    help='Check RC-constraint compliance (requires .npy input).')
+        parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
+                                    help='Plot kind for the RC-constraint compliance check.')
+        parser_predict.add_argument('--alpha', default=1.0, type=float,
+                                    help='Alpha value for the RC-constraint compliance check plot.')
+        parser_predict.add_argument('--replicates', default=1, type=int,
+                                    help='Number of replicates for MC uncertainty estimation.')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -264,9 +278,11 @@ class MainRunner:
         parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
         parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                    default=False, action="store_true")
+        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
+        parser_filter.add_argument('-s', '--std', dest="std",
+                                   help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
-        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
@@ -304,8 +320,10 @@ class MainRunner:
         parser_convert = subparsers.add_parser('convert', help='Convert and compile a model to an equivalent.')
         parser_convert.add_argument('config', help='Training config file.')
         parser_convert.add_argument('model', help='Saved model.')
-        parser_convert.add_argument('-w', '--weights', dest='from_weights', help="Use prepared weights instead of the "
-                                                                                 "model file.", action="store_true")
+        parser_convert.add_argument('-w', '--weights', dest='from_weights', action="store_true",
+                                    help="Use prepared weights instead of the model file.")
+        parser_convert.add_argument('-i', '--init', dest='init', action="store_true",
+                                    help="Initialize a random model from config.")
         parser_convert.set_defaults(func=run_convert)
 
         # create the parser for the "getmodels" command
@@ -327,14 +345,19 @@ class MainRunner:
                                  default=False, action="store_true")
         parser_test.add_argument('-a', '--all', help="Test all functions.",
                                  default=False, action="store_true")
-        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
+        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. on low-memory machines"
+                                                       " or when no GPU available).",
                                  default=False, action="store_true")
         parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
                                  default=False, action="store_true")
         parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
                                  default=1, type=int)
+        parser_test.add_argument('-L', '--large', help="Test a larger, more complex custom model.",
+                                 default=False, action="store_true")
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
+        parser_test.add_argument("--no-check", dest="no_check", action="store_true",
+                                       help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')

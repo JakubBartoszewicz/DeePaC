@@ -61,6 +61,8 @@ def add_explain_parser(xparser):
                                        "per read (Default: max only)")
     parser_fcontribs.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
                                   help="Interpret elements of the LSTM output")
+    parser_fcontribs.add_argument("--no-check", dest="no_check", action="store_true",
+                                  help="Disable additivity check.")
     partial_group = parser_fcontribs.add_mutually_exclusive_group(required=False)
     partial_group.add_argument("-p", "--partial", dest="partial", action="store_true",
                                help="Calculate partial nucleotide contributions per filter.")

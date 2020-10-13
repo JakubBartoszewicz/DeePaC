@@ -11,8 +11,9 @@ from deepac.utils import set_mem_growth
 
 from Bio import SeqIO
 
-from shap.explainers.deep import DeepExplainer
+from shap import DeepExplainer
 from deepac.explain.rf_sizes import get_rf_size
+from tqdm import tqdm
 
 
 def get_filter_contribs(args, allow_eager=False):
@@ -20,10 +21,11 @@ def get_filter_contribs(args, allow_eager=False):
     and extract all motifs for which a filter neuron got a non-zero contribution score."""
     if tf.executing_eagerly() and not allow_eager:
         print("Using SHAP. Disabling eager execution...")
-        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
     model = load_model(args.model)
     max_only = args.partial or args.easy_partial or not args.all_occurrences
+    check_additivity = not args.no_check
     if args.w_norm and not args.do_lstm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -50,7 +52,7 @@ def get_filter_contribs(args, allow_eager=False):
     else:
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
-        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids)
+        motif_length = get_rf_size(model, conv_layer_idx)
         n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
@@ -112,6 +114,8 @@ def get_filter_contribs(args, allow_eager=False):
 
         intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
         intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+        intermediate_ref_fwd = intermediate_ref_fwd.mean(axis=0, keepdims=True)
+        intermediate_ref_rc = intermediate_ref_rc.mean(axis=0, keepdims=True)
 
     explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
                                   model.get_layer(index=conv_layer_idx).get_output_at(1)],
@@ -139,7 +143,7 @@ def get_filter_contribs(args, allow_eager=False):
         inter_diff_rc = intermediate_rc - intermediate_ref_rc
 
         scores_filter = explainer.shap_values([intermediate_fwd,
-                                               intermediate_rc], check_additivity=False)
+                                               intermediate_rc], check_additivity=check_additivity)
         scores_fwd, scores_rc = scores_filter[0]
 
         # shape: [num_reads, len_reads, n_filters]
@@ -148,17 +152,17 @@ def get_filter_contribs(args, allow_eager=False):
         # for each filter do:
         if args.do_lstm:
             dat_fwd = [get_lstm_data(i, scores_filter_avg=scores_fwd,
-                                     input_reads=reads_chunk, motif_len=motif_length) for i in range(n_filters)]
+                                     input_reads=reads_chunk, motif_len=motif_length) for i in filter_range]
             dat_rc = [get_lstm_data(i, scores_filter_avg=scores_rc,
                                     input_reads=reads_chunk, motif_len=motif_length,
-                                    rc=True) for i in range(n_filters)]
+                                    rc=True) for i in filter_range]
         else:
             dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
                                        input_reads=reads_chunk, motif_len=motif_length,
-                                       max_only=max_only) for i in range(n_filters)]
+                                       max_only=max_only) for i in filter_range]
             dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
                                       input_reads=reads_chunk, motif_len=motif_length, rc=True,
-                                      max_only=max_only) for i in range(n_filters)]
+                                      max_only=max_only) for i in filter_range]
 
         if max_only:
             dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
@@ -183,14 +187,16 @@ def get_filter_contribs(args, allow_eager=False):
                                             node=0, ref_samples=ref_samples,
                                             contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
                                             input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                            check_additivity=check_additivity)
                                for i in filter_range]
 
             partials_nt_rc = [get_partials(i, model=model, conv_layer_idx=conv_layer_idx,
                                            node=1, ref_samples=ref_samples,
                                            contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
                                            input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm)
+                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                           check_additivity=check_additivity)
                               for i in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
@@ -235,7 +241,7 @@ def get_max_strand(filter_id, dat_fwd, dat_rc):
         # if any contributions at all
         if len(record_fwd[0][seq_id][1]) > 0 and len(record_rc[0][seq_id][1]) > 0:
             # if abs score on fwd higher than on rc
-            if np.abs(record_fwd[0][seq_id][2]) >= np.abs(record_fwd[0][seq_id][2]):
+            if np.abs(record_fwd[0][seq_id][2]) >= np.abs(record_rc[0][seq_id][2]):
                 contrib_dat_fwd.append(record_fwd[0][seq_id])
                 motif_dat_fwd.append(record_fwd[1][seq_id])
                 contrib_dat_rc.append([])
@@ -286,6 +292,8 @@ def get_filter_data(filter_id, scores_filter_avg, input_reads, motif_len, rc=Fal
                 motifs.append([input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
                                for non_zero_neuron in non_zero_neurons])
             else:
+                # Assume all reads are the same length
+                non_zero_neurons = scores_filter_avg.shape[1] - 1 - non_zero_neurons
                 ms = [input_reads[seq_id][non_zero_neuron:(non_zero_neuron + motif_len)]
                       for non_zero_neuron in non_zero_neurons]
                 motifs.append([m.reverse_complement(id=m.id + "_rc", description=m.description + "_rc")
@@ -347,22 +355,16 @@ def write_filter_data(filter_id, contribution_data, motifs, data_set_name, out_d
 
 
 def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contribution_data, samples_chunk,
-                 input_reads, intermediate_diff, pad_left, pad_right, lstm=False):
+                 input_reads, intermediate_diff, pad_left, pad_right, lstm=False, check_additivity=False):
     num_reads = len(input_reads)
     if filter_id is None:
         return [], []
     read_ids = []
     scores_pt_all = []
-    print(filter_id)
+    print("Processing filter: {}".format(filter_id))
     if contribution_data[filter_id] is None or not (len(contribution_data[filter_id]) > 0):
         return [], []
-    for seq_id in range(num_reads):
-        if num_reads >= 10 and (seq_id % (num_reads // 10)) == 0:
-            print("|", end="", flush=True)
-        if num_reads >= 100 and (seq_id % (num_reads // 100.0)) == 0:
-            print(".", end="", flush=True)
-        if seq_id == (num_reads-1):
-            print("|", flush=True)
+    for seq_id in tqdm(range(num_reads)):
         read_id = re.search("seq_[0-9]+", input_reads[seq_id].id).group()
         read_id = int(read_id.replace("seq_", ""))
         read_ids.append(read_id)
@@ -373,10 +375,9 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
 
         out = model.get_layer(index=conv_layer_idx).get_output_at(node)
         if lstm:
-            out = out[:, filter_id]
+            out = out[:, filter_id:filter_id+1]
         else:
-            out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id]
-
+            out = out[:, contribution_data[filter_id][seq_id][1][0], filter_id:filter_id+1]
         explainer_nt = DeepExplainer((model.get_layer(index=0).input, out), ref_samples)
 
         sample = samples_chunk[seq_id, :, :].reshape((1, ref_samples.shape[1], ref_samples.shape[2]))
@@ -385,7 +386,7 @@ def get_partials(filter_id, model, conv_layer_idx, node, ref_samples, contributi
             diff = intermediate_diff[seq_id, filter_id]
         else:
             diff = intermediate_diff[seq_id, contribution_data[filter_id][seq_id][1][0], filter_id]
-        scores_nt = explainer_nt.shap_values(sample, check_additivity=False)
+        scores_nt = explainer_nt.shap_values(sample, check_additivity=check_additivity)[0]
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 
         partials = partials.reshape(partials.shape[1], partials.shape[2])
@@ -417,7 +418,7 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
             scores_pt_all.append(None)
             continue
 
-        motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+        motif_length = get_rf_size(model, conv_layer_idx)
         motif_start = contribution_data[filter_id][seq_id][1][0]
         if node == 0:
             sample = samples_chunk[seq_id, ::, ::]
@@ -431,6 +432,10 @@ def get_easy_partials(filter_id, model, conv_layer_idx, node, contribution_data,
         # Assuming: first layer only, all-zero reference, no nonlinearity, one-hot encoded nucleotides
         # Then: contributions to filter output are equal to the weights
         scores_nt = model.get_layer(index=conv_layer_idx).get_weights()[0][:, :, filter_id]
+        dilation = model.get_layer(index=conv_layer_idx).get_config()["dilation_rate"][0]
+        if dilation > 1:
+            scores_nt = np.insert(scores_nt, np.repeat(np.arange(1, scores_nt.shape[0]), dilation-1),
+                                  np.zeros(4), axis=0)
         scores_nt = np.multiply(scores_nt, sample)
         partials = np.asarray([phi_i * contribution_data[filter_id][seq_id][2][0] for phi_i in scores_nt]) / diff
 

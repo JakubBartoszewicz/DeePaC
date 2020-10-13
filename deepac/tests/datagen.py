@@ -42,3 +42,5 @@ def generate_sample_data(gc_pos=0.7, gc_neg=0.3, n_train=1024, n_val=1024):
     generate_reads(n=pos_train, filename=os.path.join("deepac-tests", "sample-train-pos.fasta"), gc=gc_pos)
     generate_reads(n=neg_val, filename=os.path.join("deepac-tests", "sample-val-neg.fasta"), gc=gc_neg)
     generate_reads(n=pos_val, filename=os.path.join("deepac-tests", "sample-val-pos.fasta"), gc=gc_pos)
+    generate_reads(n=neg_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_neg)
+    generate_reads(n=pos_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_pos, append=True)

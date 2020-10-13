@@ -19,10 +19,11 @@ class GWPATester:
 
     """
 
-    def __init__(self, n_cpus=8):
+    def __init__(self, n_cpus=8, additivity_check=False):
         self.n_cpus = n_cpus
-        self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5")
+        self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5")
         self.outpath = os.path.join("deepac-tests", "gwpa")
+        self.additivity_check = additivity_check
         self.__gen_data()
 
     def __gen_data(self):
@@ -107,7 +108,7 @@ class GWPATester:
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250,
-                         chunk_size=500)
+                         chunk_size=500, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
@@ -117,7 +118,7 @@ class GWPATester:
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          train_data=os.path.join("deepac-tests", "sample_train_data.npy"),
                          out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250,
-                         chunk_size=100)
+                         chunk_size=100, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph_gc",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \

@@ -64,18 +64,14 @@ def get_maxact(args):
         motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
         pad_left = 0
         pad_right = 0
-    else:
-        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
-        motif_length = get_rf_size(model, args.inter_layer - 1, conv_layer_ids)
-        pad_left = (motif_length - 1) // 2
-        pad_right = motif_length - 1 - pad_left
-
-    if do_lstm:
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
                           if "Bidirectional" in str(layer)][args.inter_layer - 1]
     else:
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
+        motif_length = get_rf_size(model, conv_layer_idx)
+        pad_left = (motif_length - 1) // 2
+        pad_right = motif_length - 1 - pad_left
 
     print("Loading test data (.npy) ...")
     test_data_set_name = os.path.splitext(os.path.basename(args.test_data))[0]

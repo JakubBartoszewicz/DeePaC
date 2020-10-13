@@ -8,7 +8,7 @@ classification threshold and the epoch range.
 from tensorflow.keras import backend
 import numpy as np
 import csv
-from deepac.eval.eval import get_performance
+from deepac.eval.eval import get_performance, get_eval_header
 
 
 class EvalSpecConfig:
@@ -48,9 +48,11 @@ class EvalSpecConfig:
         self.name_prefix = config['Data']['RunName']
         # Set threshold
         self.thresh = config['Data'].getfloat('Threshold')
+        self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
 
         # Set plotting
         self.do_plots = config['Options'].getboolean('Do_plots')
+        self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
 
 
 def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
@@ -88,17 +90,17 @@ def evaluate_species(config):
     # Read data to memory
     print("Loading {}...".format(evalconfig.datapred_path))
     y_pred_1_raw = np.load("{}/{}".format(evalconfig.dir_path, evalconfig.datapred_path))
-    
+
     # Write CSV header
-    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a',  newline="") as csv_file:
+    with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow(("epoch", "set", "tp", "tn", "fp", "fn", "log_loss", "acc", "auroc", "aupr", "precision",
-                              "recall", "spec", "mcc", "f1"))
+        file_writer.writerow(get_eval_header())
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}...".format(evalconfig.datapred_path))
     y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
+    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path,
+                    ignore_unmatched=evalconfig.ignore_unmatched)
 
     if evalconfig.pairedset_path is not None:
         print("Loading {}...".format(evalconfig.pairedpred_path))      
@@ -106,9 +108,11 @@ def evaluate_species(config):
 
         print("Predicting labels for {}...".format(evalconfig.pairedpred_path))
         y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-        get_performance(evalconfig, y_test, y_pred_2,  dataset_name=evalconfig.pairedset_path)
+        get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path,
+                        ignore_unmatched=evalconfig.ignore_unmatched)
 
         y_pred_combined_raw = np.mean([y_pred_1_raw, y_pred_2_raw], axis=0)
         y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
+        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
+                        ignore_unmatched=evalconfig.ignore_unmatched)
 
