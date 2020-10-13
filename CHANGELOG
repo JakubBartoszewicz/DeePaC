@@ -4,7 +4,7 @@
     *  MC dropout for Bayesian uncertainty
     *  custom weight initialization schemes
     *  bugfix: RC-constraint for "Siam" nets
-    *  bugfix: Fwd and rc filter instances in filter cotributions
+    *  bugfix: Fwd and rc filter instances in filter contributions
     *  bugfix: correct custom weight initialization
     *  minor bugfixes
 
