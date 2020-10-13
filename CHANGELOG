@@ -5,7 +5,7 @@
     *  custom weight initialization schemes
     *  bugfix: RC-constraint for "Siam" nets
     *  bugfix: Fwd and rc filter instances in filter cotributions
-    *  bugfix: correct weight initialization
+    *  bugfix: correct custom weight initialization
     *  minor bugfixes
 
 ### v0.12.2 - 13 Jul 2020
