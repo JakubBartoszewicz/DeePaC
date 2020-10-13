@@ -28,7 +28,7 @@ setup(name='deepac',
       packages=['deepac', 'deepac.eval', 'deepac.tests', 'deepac.explain', 'deepac.gwpa'],
       python_requires='>=3',
       install_requires=[
-          'tensorflow>=2.1',
+          'tensorflow>=2.1.2',
           'biopython>=1.78',
           'scikit-learn>=0.22.1',
           'matplotlib>=3.1.3',
