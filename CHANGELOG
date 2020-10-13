@@ -1,3 +1,40 @@
+### v0.13.0 - 13 Oct 2020
+    *  skip connections
+    *  confidence thresholds for predictions
+    *  MC dropout for Bayesian uncertainty
+    *  custom weight initialization schemes
+    *  bugfix: RC-constraint for "Siam" nets
+    *  bugfix: Fwd and rc filter instances in filter cotributions
+    *  bugfix: correct weight initialization
+    *  minor bugfixes
+
+### v0.12.2 - 13 Jul 2020
+    *  utilities: gff3 to .genome conversion tool, get builtin models
+    *  extended filter enrichment analyses
+    *  L1 option
+    *  bugfixes
+    *  UI/config improvements (last epoch is inclusive)
+
+### v0.12.1 - 2 Jul 2020
+    *  Treat forward and reverse-complement instances of filters separately when checking filter enrichment (detects more instances)
+    *  Bugfixes
+
+### v0.12.0 - 15 May 2020
+    *  Extended multi-GPU support, easy GPU placement
+    *  TPU support (experimental)
+    *  Alternative distributed computation strategies (experimental)
+    *  TFRecord training
+    *  Cleaner config files, CLI improvements
+    *  Additional debugging options
+    *  Bugfixes
+
+### v0.11.0 - 5 May 2020
+    *  Full TensorFlow 2 compatibility (eager exec disabled for SHAP)
+    *  Generate templates with deepac templates
+    *  CLI tweaks
+    *  Dynamic subread generation in training
+    *  Bugfixes
+
 ### v0.10.1 - 20 Feb 2020
     *  Added workaround for a libgomp importing bug present on some systems (including bioconda's mulled-test containers)
 
