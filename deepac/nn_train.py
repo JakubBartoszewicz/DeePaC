@@ -130,6 +130,16 @@ class RCConfig:
                 self.skip_size = config['Architecture'].getint('Skip_Size')
             except KeyError:
                 self.skip_size = 0
+            try:
+                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks')
+            except KeyError:
+                self.bottlenecks = False
+            if self.skip_size > 0 and self.bottlenecks:
+                self.skip_size = self.skip_size - 1
+            try:
+                self.cardinality = config['Architecture'].getint('Cardinality')
+            except KeyError:
+                self.cardinality = 1
             self.n_recurrent = config['Architecture'].getint('N_Recurrent')
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
@@ -461,21 +471,99 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1):
-        shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+        if self.config.bottlenecks:
+            in_conv = Conv1D(filters=units, kernel_size=1, dilation_rate=1,
                              padding=self.config.padding,
                              kernel_initializer=self.config.initializers["conv"],
                              kernel_regularizer=self.config.regularizer,
                              strides=stride)
-        x_fwd = shared_conv(inputs_fwd)
-        x_rc = shared_conv(inputs_rc)
+            inputs_fwd = in_conv(inputs_fwd)
+            inputs_rc = in_conv(inputs_rc)
+
+        if cardinality == 1:
+            shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                 padding=self.config.padding,
+                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_regularizer=self.config.regularizer,
+                                 strides=stride)
+            x_fwd = shared_conv(inputs_fwd)
+            x_rc = shared_conv(inputs_rc)
+        else:
+            fwd_group = []
+            rc_group = []
+            grouped_units = int(units/cardinality)
+            for c in range(cardinality):
+                card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
+                shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                     padding=self.config.padding,
+                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_regularizer=self.config.regularizer,
+                                     strides=stride)
+                c_fwd = card_split(inputs_fwd)
+                c_rc = card_split(inputs_rc)
+                c_fwd = shared_conv(c_fwd)
+                c_rc = shared_conv(c_rc)
+                fwd_group.append(c_fwd)
+                rc_group.append(c_rc)
+            x_fwd = concatenate(fwd_group, axis=-1)
+            x_rc = concatenate(rc_group, axis=-1)
+
+        if self.config.bottlenecks:
+            out_conv = Conv1D(filters=units*4, kernel_size=1, dilation_rate=1,
+                              padding=self.config.padding,
+                              kernel_initializer=self.config.initializers["conv"],
+                              kernel_regularizer=self.config.regularizer,
+                              strides=stride)
+            x_fwd = out_conv(x_fwd)
+            x_rc = out_conv(x_rc)
+
         return x_fwd, x_rc
 
-    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1):
+    def _add_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+        if self.config.bottlenecks:
+            in_conv = Conv1D(filters=units, kernel_size=1, dilation_rate=1,
+                                 padding=self.config.padding,
+                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_regularizer=self.config.regularizer,
+                                 strides=stride)
+            inputs = in_conv(inputs)
+        if cardinality == 1:
+            shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                 padding=self.config.padding,
+                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_regularizer=self.config.regularizer,
+                                 strides=stride)
+            x_out = shared_conv(inputs)
+        else:
+            x_group = []
+            grouped_units = int(units/cardinality)
+            for c in range(cardinality):
+                card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
+                shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                     padding=self.config.padding,
+                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_regularizer=self.config.regularizer,
+                                     strides=stride)
+                c_x = card_split(inputs)
+                c_x = shared_conv(c_x)
+                x_group.append(c_x)
+            x_out = concatenate(x_group, axis=-1)
+
+        if self.config.bottlenecks:
+            out_conv = Conv1D(filters=units*4, kernel_size=1, dilation_rate=1,
+                              padding=self.config.padding,
+                              kernel_initializer=self.config.initializers["conv"],
+                              kernel_regularizer=self.config.regularizer,
+                              strides=stride)
+            x_out = out_conv(x_out)
+        return x_out
+
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride)
+        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
                              name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv + 1))
         x_rc = revcomp_out(x_rc)
@@ -643,11 +731,9 @@ class RCNet:
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
-                       padding=self.config.padding,
-                       kernel_initializer=self.config.initializers["conv"],
-                       kernel_regularizer=self.config.regularizer,
-                       strides=self.config.conv_stride[0])(x)
+            x = self._add_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
+                                 dilation_rate=self.config.conv_dilation[0],
+                                 stride=self.config.conv_stride[0], cardinality=1)
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
@@ -687,11 +773,10 @@ class RCNet:
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
             # Add layer
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
-                       padding=self.config.padding,
-                       kernel_initializer=self.config.initializers["conv"],
-                       kernel_regularizer=self.config.regularizer,
-                       strides=self.config.conv_stride[i])(x)
+            x = self._add_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
+                                 dilation_rate=self.config.conv_dilation[i],
+                                 stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
+
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -794,7 +879,7 @@ class RCNet:
             # Convolutional layers will always be placed before recurrent ones
             x = self._add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
                                     dilation_rate=self.config.conv_dilation[0],
-                                    stride=self.config.conv_stride[0])
+                                    stride=self.config.conv_stride[0], cardinality=1)
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
@@ -840,7 +925,7 @@ class RCNet:
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                                     dilation_rate=self.config.conv_dilation[i],
-                                    stride=self.config.conv_stride[i])
+                                    stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
@@ -957,7 +1042,8 @@ class RCNet:
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
                                                 kernel_size=self.config.conv_filter_size[0],
                                                 dilation_rate=self.config.conv_dilation[0],
-                                                stride=self.config.conv_stride[0])
+                                                stride=self.config.conv_stride[0],
+                                                cardinality=1)
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
@@ -1018,7 +1104,8 @@ class RCNet:
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
                                                 dilation_rate=self.config.conv_dilation[i],
-                                                stride=self.config.conv_stride[i])
+                                                stride=self.config.conv_stride[i],
+                                                cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0:
                 if i % self.config.skip_size == 0:
