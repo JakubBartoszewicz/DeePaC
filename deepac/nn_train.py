@@ -131,11 +131,9 @@ class RCConfig:
             except KeyError:
                 self.skip_size = 0
             try:
-                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks')
+                self.bottleneck_factor = config['Architecture'].getint('Bottleneck_Factor')
             except KeyError:
-                self.bottlenecks = False
-            if self.skip_size > 0 and self.bottlenecks:
-                self.skip_size = self.skip_size - 1
+                self.bottleneck_factor = 0
             try:
                 self.cardinality = config['Architecture'].getint('Cardinality')
             except KeyError:
@@ -472,15 +470,6 @@ class RCNet:
         return out
 
     def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
-        if self.config.bottlenecks:
-            in_conv = Conv1D(filters=units, kernel_size=1, dilation_rate=1,
-                             padding=self.config.padding,
-                             kernel_initializer=self.config.initializers["conv"],
-                             kernel_regularizer=self.config.regularizer,
-                             strides=stride)
-            inputs_fwd = in_conv(inputs_fwd)
-            inputs_rc = in_conv(inputs_rc)
-
         if cardinality == 1:
             shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                  padding=self.config.padding,
@@ -493,6 +482,7 @@ class RCNet:
             fwd_group = []
             rc_group = []
             grouped_units = int(units/cardinality)
+            group_name = ""
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
@@ -500,6 +490,10 @@ class RCNet:
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride)
+                if c == 0:
+                    group_name = shared_conv.name
+                else:
+                    shared_conv._name = group_name + '_gmember_{}'.format(c)
                 c_fwd = card_split(inputs_fwd)
                 c_rc = card_split(inputs_rc)
                 c_fwd = shared_conv(c_fwd)
@@ -508,26 +502,10 @@ class RCNet:
                 rc_group.append(c_rc)
             x_fwd = concatenate(fwd_group, axis=-1)
             x_rc = concatenate(rc_group, axis=-1)
-
-        if self.config.bottlenecks:
-            out_conv = Conv1D(filters=units*4, kernel_size=1, dilation_rate=1,
-                              padding=self.config.padding,
-                              kernel_initializer=self.config.initializers["conv"],
-                              kernel_regularizer=self.config.regularizer,
-                              strides=stride)
-            x_fwd = out_conv(x_fwd)
-            x_rc = out_conv(x_rc)
-
+        self._current_conv = self._current_conv + 1
         return x_fwd, x_rc
 
     def _add_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
-        if self.config.bottlenecks:
-            in_conv = Conv1D(filters=units, kernel_size=1, dilation_rate=1,
-                                 padding=self.config.padding,
-                                 kernel_initializer=self.config.initializers["conv"],
-                                 kernel_regularizer=self.config.regularizer,
-                                 strides=stride)
-            inputs = in_conv(inputs)
         if cardinality == 1:
             shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                  padding=self.config.padding,
@@ -538,6 +516,7 @@ class RCNet:
         else:
             x_group = []
             grouped_units = int(units/cardinality)
+            group_name = ""
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
@@ -545,18 +524,14 @@ class RCNet:
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride)
+                if c == 0:
+                    group_name = shared_conv.name
+                else:
+                    shared_conv._name = group_name + '_gmember_{}'.format(c)
                 c_x = card_split(inputs)
                 c_x = shared_conv(c_x)
                 x_group.append(c_x)
             x_out = concatenate(x_group, axis=-1)
-
-        if self.config.bottlenecks:
-            out_conv = Conv1D(filters=units*4, kernel_size=1, dilation_rate=1,
-                              padding=self.config.padding,
-                              kernel_initializer=self.config.initializers["conv"],
-                              kernel_regularizer=self.config.regularizer,
-                              strides=stride)
-            x_out = out_conv(x_out)
         return x_out
 
     def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
@@ -565,10 +540,22 @@ class RCNet:
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv + 1))
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv))
         x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
+
+    def _add_bottleneck(self, inputs, units, cardinality=1):
+        x = self._add_conv1d(inputs, units=units, kernel_size=1, cardinality=cardinality)
+        return x
+
+    def _add_siam_bottleneck(self, inputs_fwd, inputs_rc, units, cardinality=1):
+        x_fwd, x_rc = self._add_siam_conv1d(inputs_fwd, inputs_rc, units=units, kernel_size=1, cardinality=cardinality)
+        return x_fwd, x_rc
+
+    def _add_rc_bottleneck(self, inputs, units, cardinality=1):
+        x = self._add_rc_conv1d(inputs, units=units, kernel_size=1, cardinality=cardinality)
+        return x
 
     def _add_siam_batchnorm(self, inputs_fwd, inputs_rc):
         input_shape = inputs_rc.shape
@@ -586,6 +573,7 @@ class RCNet:
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
+        self._current_bn = self._current_bn + 1
         return x_fwd, x_rc
 
     def _add_rc_batchnorm(self, inputs):
@@ -603,7 +591,7 @@ class RCNet:
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
         rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
-                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
@@ -634,7 +622,7 @@ class RCNet:
 
         if (source.shape[1] != residual.shape[1]) or (source.shape[-1] != residual.shape[-1]):
             source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding=self.config.padding,
-                            kernel_initializer=self.config.initializer,
+                            kernel_initializer=self.config.initializers["conv"],
                             kernel_regularizer=self.config.regularizer)(source)
 
         return add([source, residual])
@@ -706,6 +694,7 @@ class RCNet:
                         name="split_pooling_rc_output_{n}".format(n=self._current_pool+1))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
+        self._current_pool = self._current_pool + 1
         return out
 
     def _build_simple_model(self):
@@ -753,24 +742,31 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
-        if self.config.skip_size > 0:
-            start = x
-        else:
-            start = None
+        start = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = MaxPooling1D()(x)
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                x = MaxPooling1D()(x)
             elif self.config.conv_pooling == 'average':
                 x = AveragePooling1D()(x)
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            # Add bottleneck
+            if self.config.skip_size > 0 and i == 1:
+                start = x
+                if self.config.bottleneck_factor:
+                    x = self._add_bottleneck(x, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
             # Add layer
             # Standard convolutional layer
             x = self._add_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
@@ -778,11 +774,20 @@ class RCNet:
                                  stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
 
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_skip(start, end)
-                    start = x
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
+                end = x
+                x = self._add_skip(start, end)
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_bottleneck(x, self.config.conv_units[i])
+                start = x
             # Add batch norm
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -799,7 +804,8 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = MaxPooling1D()(x)
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average' or \
+                    self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
@@ -883,9 +889,7 @@ class RCNet:
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self._current_conv = self._current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -893,7 +897,6 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
@@ -902,42 +905,54 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
-        if self.config.skip_size > 0:
-            start = x
-        else:
-            start = None
+        start = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = self._add_rc_pooling(x, MaxPooling1D())
-                self._current_pool = self._current_pool + 1
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                x = self._add_rc_pooling(x, MaxPooling1D())
             elif self.config.conv_pooling == 'average':
                 x = self._add_rc_pooling(x, AveragePooling1D())
-                self._current_pool = self._current_pool + 1
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            # Add bottleneck
+            if self.config.skip_size > 0 and i == 1:
+                start = x
+                if self.config.bottleneck_factor:
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                                     dilation_rate=self.config.conv_dilation[i],
                                     stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_rc_skip(start, end)
-                    start = x
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
+                end = x
+                x = self._add_rc_skip(start, end)
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i])
+                start = x
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self._current_conv = self._current_conv + 1
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -948,15 +963,14 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = self._add_rc_pooling(x, MaxPooling1D())
-                    self._current_pool = self._current_pool + 1
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average' or \
+                    self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
                     x = self._add_rc_pooling(x, AveragePooling1D())
-                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'none':
                 if self.config.n_recurrent == 0:
                     x = Flatten()(x)
@@ -980,7 +994,6 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
@@ -1047,12 +1060,10 @@ class RCNet:
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add activation
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
-            self._current_conv = self._current_conv + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -1062,7 +1073,6 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd,
@@ -1074,12 +1084,7 @@ class RCNet:
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
-        if self.config.skip_size > 0:
-            start_fwd = x_fwd
-            start_rc = x_rc
-        else:
-            start_fwd = None
-            start_rc = None
+        start_fwd, start_rc = None, None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
@@ -1087,11 +1092,15 @@ class RCNet:
                 pool = MaxPooling1D()
                 x_fwd = pool(x_fwd)
                 x_rc = pool(x_rc)
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                pool = MaxPooling1D()
+                x_fwd = pool(x_fwd)
+                x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'average':
                 pool = AveragePooling1D()
                 x_fwd = pool(x_fwd)
                 x_rc = pool(x_rc)
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
@@ -1100,6 +1109,16 @@ class RCNet:
                 x_fwd = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
                 x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
             # Add layer
+            if self.config.skip_size > 0 and i == 1:
+                start_fwd = x_fwd
+                start_rc = x_rc
+                if self.config.bottleneck_factor:
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
@@ -1107,22 +1126,35 @@ class RCNet:
                                                 stride=self.config.conv_stride[i],
                                                 cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end_fwd = x_fwd
-                    end_rc = x_rc
-                    x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
-                    start_fwd = x_fwd
-                    start_rc = x_rc
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc,
+                                                            self.config.conv_units[i] *
+                                                            self.config.bottleneck_factor)
+                end_fwd = x_fwd
+                end_rc = x_rc
+                x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
+                start_fwd = x_fwd
+                start_rc = x_rc
+                if self.config.bottleneck_factor:
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add activation
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
-            self._current_conv = self._current_conv + 1
 
         # Pooling layer
         if self.config.n_conv > 0:
@@ -1137,7 +1169,8 @@ class RCNet:
                     pool = MaxPooling1D()
                     x_fwd = pool(x_fwd)
                     x_rc = pool(x_rc)
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average'\
+                    or self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     pool = GlobalAveragePooling1D()
@@ -1175,7 +1208,6 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd,

@@ -8,30 +8,32 @@ def get_rf_size(mdl, idx, verbose=False):
     dilations = []
     for i, layer in enumerate(mdl.layers):
         config = layer.get_config()
-        try:
-            if config["kernel_size"][0] > 1:
-                if verbose:
-                    print("kernel size: {}".format(config["kernel_size"][0]))
-                kernel_sizes.append(config["kernel_size"][0])
-            else:
-                continue
-        except KeyError:
+        # count only 1 conv per convolution group
+        if "_gmember_" not in layer.name:
             try:
-                if verbose:
-                    print("pooling size: {}".format(config["pool_size"][0]))
-                kernel_sizes.append(config["pool_size"][0])
+                if config["kernel_size"][0] > 1:
+                    if verbose:
+                        print("kernel size: {}".format(config["kernel_size"][0]))
+                    kernel_sizes.append(config["kernel_size"][0])
+                else:
+                    continue
+            except KeyError:
+                try:
+                    if verbose:
+                        print("pooling size: {}".format(config["pool_size"][0]))
+                    kernel_sizes.append(config["pool_size"][0])
+                except KeyError:
+                    continue
+            try:
+                strides.append(config["strides"][0])
             except KeyError:
                 continue
-        try:
-            strides.append(config["strides"][0])
-        except KeyError:
-            continue
-        try:
-            dilations.append(config["dilation_rate"][0])
-        except KeyError:
-            dilations.append(1)
-        if i == idx:
-            break
+            try:
+                dilations.append(config["dilation_rate"][0])
+            except KeyError:
+                dilations.append(1)
+            if i == idx:
+                break
     rf = get_rf_size_from_ksd(kernel_sizes, strides, dilations)
     return rf
 
