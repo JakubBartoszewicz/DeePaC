@@ -430,6 +430,8 @@ class RCNet:
                                    kernel_regularizer=self.config.regularizer,
                                    return_sequences=return_sequences,
                                    recurrent_activation='sigmoid'))(inputs)
+
+        self._current_recurrent = self._current_recurrent + 1
         return x
 
     def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
@@ -454,11 +456,12 @@ class RCNet:
 
         x_fwd = shared_lstm(inputs_fwd)
         x_rc = shared_lstm(inputs_rc)
+        self._current_recurrent = self._current_recurrent + 1
         return x_fwd, x_rc
 
     def _add_rc_lstm(self, inputs, return_sequences, units):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent+1))
+                            name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_lstm(inputs, inputs_rc, return_sequences, units)
         if return_sequences:
@@ -466,7 +469,7 @@ class RCNet:
         else:
             rev_axes = 1
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=x_rc.shape[1:],
-                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent + 1))
+                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent))
         x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
@@ -477,7 +480,8 @@ class RCNet:
                                  padding=self.config.padding,
                                  kernel_initializer=self.config.initializers["conv"],
                                  kernel_regularizer=self.config.regularizer,
-                                 strides=stride)
+                                 strides=stride,
+                                 name="conv1d_{n}".format(n=self._current_conv))
             x_fwd = shared_conv(inputs_fwd)
             x_rc = shared_conv(inputs_rc)
         else:
@@ -499,7 +503,7 @@ class RCNet:
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride,
-                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv+1, gm=c))
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
                 c_fwd = card_split(inputs_fwd)
                 c_rc = card_split(inputs_rc)
                 c_fwd = shared_conv(c_fwd)
@@ -517,7 +521,8 @@ class RCNet:
                                  padding=self.config.padding,
                                  kernel_initializer=self.config.initializers["conv"],
                                  kernel_regularizer=self.config.regularizer,
-                                 strides=stride)
+                                 strides=stride,
+                                 name="conv1d_{n}".format(n=self._current_conv))
             x_out = shared_conv(inputs)
         else:
             x_group = []
@@ -532,7 +537,7 @@ class RCNet:
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride,
-                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv+1, gm=c))
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
                 c_x = card_split(inputs)
                 c_x = shared_conv(c_x)
                 x_group.append(c_x)
@@ -542,11 +547,11 @@ class RCNet:
 
     def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
+                            name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv))
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv-1))
         x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
@@ -573,9 +578,9 @@ class RCNet:
         split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
-                         name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn+1))
+                         name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn))
         rc_out = Lambda(lambda x: x[:, split_shape:, :], output_shape=new_shape,
-                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn))
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
@@ -590,14 +595,14 @@ class RCNet:
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn))
         rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
-                       name="split_batchnorm_rc_input_{n}".format(n=self._current_bn+1))
+                       name="split_batchnorm_rc_input_{n}".format(n=self._current_bn))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
         rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
-                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn))
+                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn-1))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
@@ -627,9 +632,8 @@ class RCNet:
         stride = int(round(source.shape[1] / residual.shape[1]))
 
         if (source.shape[1] != residual.shape[1]) or (source.shape[-1] != residual.shape[-1]):
-            source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding=self.config.padding,
-                            kernel_initializer=self.config.initializers["conv"],
-                            kernel_regularizer=self.config.regularizer)(source)
+            source = self._add_conv1d(source, units=residual.shape[-1],
+                                      kernel_size=1, stride=stride)
 
         return add([source, residual])
 
@@ -660,23 +664,23 @@ class RCNet:
             new_shape_res = [residual.shape[1], split_shape_res]
             fwd_src_in = Lambda(lambda x: x[:, :, :split_shape_src],
                                 output_shape=new_shape_src,
-                                name="forward_skip_src_in_{n}".format(n=self._current_conv + 1))
+                                name="forward_skip_src_in_{n}".format(n=self._current_conv))
             rc_src_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_src:], axes=(1, 2)),
                                output_shape=new_shape_src,
-                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv + 1))
+                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv))
             fwd_res_in = Lambda(lambda x: x[:, :, :split_shape_res],
                                 output_shape=new_shape_res,
-                                name="forward_skip_res_in_{n}".format(n=self._current_conv + 1))
+                                name="forward_skip_res_in_{n}".format(n=self._current_conv))
             rc_res_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_res:], axes=(1, 2)),
                                output_shape=new_shape_res,
-                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv + 1))
+                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv))
             source_fwd = fwd_src_in(source)
             residual_fwd = fwd_res_in(residual)
             source_rc = rc_src_in(source)
             residual_rc = rc_res_in(residual)
             x_fwd, x_rc = self._add_siam_skip(source_fwd, source_rc, residual_fwd, residual_rc)
             revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv + 1))
+                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv))
             x_rc = revcomp_out(x_rc)
             out = concatenate([x_fwd, x_rc], axis=-1)
             return out
@@ -689,15 +693,15 @@ class RCNet:
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool+1))
+                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool))
         rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
-                       name="split_pooling_rc_input_{n}".format(n=self._current_pool+1))
+                       name="split_pooling_rc_input_{n}".format(n=self._current_pool))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd = pooling_layer(inputs_fwd)
         x_rc = pooling_layer(inputs_rc)
         rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
-                        name="split_pooling_rc_output_{n}".format(n=self._current_pool+1))
+                        name="split_pooling_rc_output_{n}".format(n=self._current_pool))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         self._current_pool = self._current_pool + 1
@@ -789,12 +793,12 @@ class RCNet:
                     x = self._add_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
                 end = x
                 x = self._add_skip(start, end)
+                start = x
                 if self.config.bottleneck_factor and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = BatchNormalization()(x)
                     x = Activation(self.config.conv_activation)(x)
                     x = self._add_bottleneck(x, self.config.conv_units[i + 1])
-                start = x
             # Add batch norm
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -950,12 +954,12 @@ class RCNet:
                     x = self._add_rc_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
                 end = x
                 x = self._add_rc_skip(start, end)
+                start = x
                 if self.config.bottleneck_factor and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
                     x = Activation(self.config.conv_activation)(x)
                     x = self._add_rc_bottleneck(x, self.config.conv_units[i + 1])
-                start = x
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
@@ -1046,7 +1050,7 @@ class RCNet:
         else:
             x_fwd = inputs_fwd
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
-                            name="reverse_complement_input_{n}".format(n=self._current_recurrent+1))
+                            name="reverse_complement_input_{n}".format(n=self._current_recurrent))
         x_rc = revcomp_in(x_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
@@ -1086,8 +1090,6 @@ class RCNet:
                                                                                       training=self.config.mc_dropout)
                 x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc,
                                                                                      training=self.config.mc_dropout)
-            # First recurrent layer already added
-            self._current_recurrent = 1
         else:
             raise ValueError('First layer should be convolutional or recurrent')
 
