@@ -14,7 +14,7 @@ from tensorflow.keras.models import load_model
 from deepac.nn_train import RCConfig, RCNet
 
 
-def convert_cudnn(config, saved_model, no_prep, no_weights=False):
+def convert_cudnn(config, saved_model, no_prep, no_weights=False, verbose=True):
     """Rebuild the network using a modified configuration."""
 
     # Load model architecture, device info and weights
@@ -45,4 +45,5 @@ def convert_cudnn(config, saved_model, no_prep, no_weights=False):
 
     # Save output
     paprnet.model.save(save_path)
-    print(paprnet.model.summary())
+    if verbose:
+        print(paprnet.model.summary())

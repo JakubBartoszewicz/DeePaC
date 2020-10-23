@@ -9,7 +9,7 @@ def get_rf_size(mdl, idx, verbose=False):
     for i, layer in enumerate(mdl.layers):
         config = layer.get_config()
         # count only 1 conv per convolution group
-        if "_gmember_" not in layer.name:
+        if "_gmember_" not in layer.name or "_gmember_0" in layer.name:
             try:
                 if config["kernel_size"][0] > 1:
                     if verbose:

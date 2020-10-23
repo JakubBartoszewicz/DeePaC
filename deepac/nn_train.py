@@ -138,6 +138,8 @@ class RCConfig:
                 self.cardinality = config['Architecture'].getint('Cardinality')
             except KeyError:
                 self.cardinality = 1
+            if self.cardinality > 1 and self.bottleneck_factor < 2:
+                raise ValueError("Cardinality > 1 requires bottlenecks (bottleneck factor > 1).")
             self.n_recurrent = config['Architecture'].getint('N_Recurrent')
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
@@ -482,18 +484,22 @@ class RCNet:
             fwd_group = []
             rc_group = []
             grouped_units = int(units/cardinality)
-            group_name = ""
+            assert units <= inputs_fwd.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                                  "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                                    total=units,
+                                                                                    in_size=inputs_fwd.shape[-1])
+            assert units <= inputs_rc.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                                 "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                                   total=units,
+                                                                                   in_size=inputs_rc.shape[-1])
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                      padding=self.config.padding,
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
-                                     strides=stride)
-                if c == 0:
-                    group_name = shared_conv.name
-                else:
-                    shared_conv._name = group_name + '_gmember_{}'.format(c)
+                                     strides=stride,
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv+1, gm=c))
                 c_fwd = card_split(inputs_fwd)
                 c_rc = card_split(inputs_rc)
                 c_fwd = shared_conv(c_fwd)
@@ -516,22 +522,22 @@ class RCNet:
         else:
             x_group = []
             grouped_units = int(units/cardinality)
-            group_name = ""
+            assert units <= inputs.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                              "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                           total=units, in_size=inputs.shape[-1])
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                      padding=self.config.padding,
                                      kernel_initializer=self.config.initializers["conv"],
                                      kernel_regularizer=self.config.regularizer,
-                                     strides=stride)
-                if c == 0:
-                    group_name = shared_conv.name
-                else:
-                    shared_conv._name = group_name + '_gmember_{}'.format(c)
+                                     strides=stride,
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv+1, gm=c))
                 c_x = card_split(inputs)
                 c_x = shared_conv(c_x)
                 x_group.append(c_x)
             x_out = concatenate(x_group, axis=-1)
+        self._current_conv = self._current_conv + 1
         return x_out
 
     def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
@@ -702,6 +708,7 @@ class RCNet:
         print("Building model...")
         # Number of added recurrent layers
         self._current_recurrent = 0
+        self._current_conv = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -782,11 +789,11 @@ class RCNet:
                     x = self._add_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
                 end = x
                 x = self._add_skip(start, end)
-                if self.config.bottleneck_factor:
+                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = BatchNormalization()(x)
                     x = Activation(self.config.conv_activation)(x)
-                    x = self._add_bottleneck(x, self.config.conv_units[i])
+                    x = self._add_bottleneck(x, self.config.conv_units[i + 1])
                 start = x
             # Add batch norm
             if self.config.conv_bn:
@@ -943,11 +950,11 @@ class RCNet:
                     x = self._add_rc_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
                 end = x
                 x = self._add_rc_skip(start, end)
-                if self.config.bottleneck_factor:
+                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
                     x = Activation(self.config.conv_activation)(x)
-                    x = self._add_rc_bottleneck(x, self.config.conv_units[i])
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i + 1])
                 start = x
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
@@ -1141,13 +1148,13 @@ class RCNet:
                 x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
                 start_fwd = x_fwd
                 start_rc = x_rc
-                if self.config.bottleneck_factor:
+                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
                     act = Activation(self.config.conv_activation)
                     x_fwd = act(x_fwd)
                     x_rc = act(x_rc)
-                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i])
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i + 1])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)

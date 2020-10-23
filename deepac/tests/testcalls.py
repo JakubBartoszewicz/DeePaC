@@ -340,6 +340,7 @@ class Tester:
         """Test predicting."""
         print("TEST: Predicting (custom)...")
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
+        print(model.summary())
         compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                    os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
                    replicates=1)
@@ -393,13 +394,15 @@ class Tester:
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
         config['Devices']['DistStrategy'] = "OneDeviceStrategy"
         config['Devices']['Device_build'] = "CPU:0"
-        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"), False)
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
+                      False, verbose=False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_weights.h5"))), "Conversion failed."
         config['Architecture']['MC_Dropout'] = 'True'
-        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"), False)
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"),
+                      False, verbose=False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
