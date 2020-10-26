@@ -208,7 +208,7 @@ class MainRunner:
                     os.remove(os.path.join(root, name))
                 for name in dirs:
                     os.rmdir(os.path.join(root, name))
-        os.rmdir(out_weights_path)
+            os.rmdir(out_weights_path)
         shutil.copytree(builtin_weights_path, out_weights_path)
 
         if args.sensitive:
