@@ -131,19 +131,20 @@ class RCConfig:
             except KeyError:
                 self.skip_size = 0
             try:
-                self.bottleneck_factor = config['Architecture'].getint('Bottleneck_Factor')
+                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks')
             except KeyError:
-                self.bottleneck_factor = 0
+                self.bottlenecks = False
             try:
                 self.cardinality = config['Architecture'].getint('Cardinality')
             except KeyError:
                 self.cardinality = 1
-            if self.cardinality > 1 and self.bottleneck_factor < 2:
-                raise ValueError("Cardinality > 1 requires bottlenecks (bottleneck factor > 1).")
+            if self.cardinality > 1 and not self.bottlenecks:
+                raise ValueError("Cardinality > 1 requires bottlenecks.")
             self.n_recurrent = config['Architecture'].getint('N_Recurrent')
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
+            self.conv_bottle_units = [int(u) for u in config['Architecture']['Conv_Bottleneck_Units'].split(',')]
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
             self.conv_stride = [int(s) for s in config['Architecture']['Conv_Stride'].split(',')]
@@ -773,7 +774,7 @@ class RCNet:
             # Add bottleneck
             if self.config.skip_size > 0 and i == 1:
                 start = x
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     x = self._add_bottleneck(x, self.config.conv_units[i])
                     if self.config.conv_bn:
                         x = BatchNormalization()(x)
@@ -786,15 +787,15 @@ class RCNet:
 
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0 and i % self.config.skip_size == 0:
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     if self.config.conv_bn:
                         x = BatchNormalization()(x)
                     x = Activation(self.config.conv_activation)(x)
-                    x = self._add_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
+                    x = self._add_bottleneck(x, self.config.conv_bottle_units[i])
                 end = x
                 x = self._add_skip(start, end)
                 start = x
-                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = BatchNormalization()(x)
                     x = Activation(self.config.conv_activation)(x)
@@ -936,7 +937,7 @@ class RCNet:
             # Add bottleneck
             if self.config.skip_size > 0 and i == 1:
                 start = x
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     x = self._add_rc_bottleneck(x, self.config.conv_units[i])
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
@@ -947,15 +948,15 @@ class RCNet:
                                     stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0 and i % self.config.skip_size == 0:
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
                     x = Activation(self.config.conv_activation)(x)
-                    x = self._add_rc_bottleneck(x, self.config.conv_units[i] * self.config.bottleneck_factor)
+                    x = self._add_rc_bottleneck(x, self.config.conv_bottle_units[i])
                 end = x
                 x = self._add_rc_skip(start, end)
                 start = x
-                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
                     x = Activation(self.config.conv_activation)(x)
@@ -1121,7 +1122,7 @@ class RCNet:
             if self.config.skip_size > 0 and i == 1:
                 start_fwd = x_fwd
                 start_rc = x_rc
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i])
                     if self.config.conv_bn:
                         x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
@@ -1136,21 +1137,20 @@ class RCNet:
                                                 cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
             if self.config.skip_size > 0 and i % self.config.skip_size == 0:
-                if self.config.bottleneck_factor:
+                if self.config.bottlenecks:
                     if self.config.conv_bn:
                         x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
                     act = Activation(self.config.conv_activation)
                     x_fwd = act(x_fwd)
                     x_rc = act(x_rc)
                     x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc,
-                                                            self.config.conv_units[i] *
-                                                            self.config.bottleneck_factor)
+                                                            self.config.conv_bottle_units[i])
                 end_fwd = x_fwd
                 end_rc = x_rc
                 x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
                 start_fwd = x_fwd
                 start_rc = x_rc
-                if self.config.bottleneck_factor and i < self.config.n_conv - 1:
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
                     if self.config.conv_bn:
                         x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
                     act = Activation(self.config.conv_activation)
