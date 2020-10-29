@@ -74,12 +74,12 @@ def predict_array(model, x_data, output, rc=False, replicates=1):
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,
-                 output_neg=None, confidence_thresh=0.5, output_undef=None, bayes_thresh=None, pred_uncertainty=None):
+                 output_neg=None, confidence_thresh=0.5, output_undef=None, pred_uncertainty=None):
     """Filter reads in a fasta file by pathogenic potential."""
     filter_paired_fasta(input_fasta, predictions, output, input_fasta_2=None, predictions_2=None,
                         output_neg=output_neg, threshold=threshold, print_potentials=print_potentials,
                         precision=precision, confidence_thresh=confidence_thresh, output_undef=output_undef,
-                        bayes_thresh=bayes_thresh, pred_uncertainty=pred_uncertainty)
+                        pred_uncertainty=pred_uncertainty)
 
 
 def ensemble(predictions_list, outpath_npy):
@@ -91,9 +91,8 @@ def ensemble(predictions_list, outpath_npy):
     np.save(outpath_npy, y_pred)
 
 
-def predict_multiread(array, threshold=0.5, confidence_threshold=0.5, ignore_unmatched=False):
-    ignore_unmatched = ignore_unmatched or np.isclose(confidence_threshold, threshold)
-    if not ignore_unmatched:
+def predict_multiread(array, threshold=0.5, confidence_threshold=0.5):
+    if np.isclose(confidence_threshold, threshold):
         pred = np.mean(array)
     else:
         interval = np.abs(confidence_threshold - threshold)
@@ -105,7 +104,7 @@ def predict_multiread(array, threshold=0.5, confidence_threshold=0.5, ignore_unm
 
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
                         output_neg=None, threshold=0.5, print_potentials=False, precision=3,
-                        confidence_thresh=0.5, output_undef=None, bayes_thresh=None, pred_uncertainty=None):
+                        confidence_thresh=0.5, output_undef=None, pred_uncertainty=None):
     """Filter reads in paired fasta files by pathogenic potential."""
     with open(input_fasta_1) as in_handle:
         fasta_data_1 = [(title, seq) for (title, seq) in SimpleFastaParser(in_handle)]
