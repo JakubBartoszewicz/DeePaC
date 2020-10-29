@@ -91,6 +91,18 @@ def ensemble(predictions_list, outpath_npy):
     np.save(outpath_npy, y_pred)
 
 
+def predict_multiread(array, threshold=0.5, confidence_threshold=0.5, ignore_unmatched=False):
+    ignore_unmatched = ignore_unmatched or np.isclose(confidence_threshold, threshold)
+    if not ignore_unmatched:
+        pred = np.mean(array)
+    else:
+        interval = np.abs(confidence_threshold - threshold)
+        y_pred_class_pos = array > (threshold + interval)
+        y_pred_class_neg = array < (threshold - interval)
+        pred = np.mean(np.concatenate(y_pred_class_pos, y_pred_class_neg))
+    return pred
+
+
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
                         output_neg=None, threshold=0.5, print_potentials=False, precision=3,
                         confidence_thresh=0.5, output_undef=None, bayes_thresh=None, pred_uncertainty=None):

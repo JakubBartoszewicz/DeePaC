@@ -9,6 +9,7 @@ from tensorflow.keras import backend
 import numpy as np
 import csv
 from deepac.eval.eval import get_performance, get_eval_header
+from deepac.predict import predict_multiread
 
 
 class EvalSpecConfig:
@@ -55,7 +56,8 @@ class EvalSpecConfig:
         self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
 
 
-def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
+def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';',
+                      threshold=0.5, confidence_thresh=0.5, ignore_unmatched=False):
     """Generate species-wise predictions."""
     neglist = []
     with open(negcsv_path, 'r') as negcsv:
@@ -66,15 +68,15 @@ def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';'):
     with open(poscsv_path, 'r') as poscsv:
         posreader = csv.reader(poscsv, delimiter=delimiter)
         for row in posreader:
-            poslist.append((row[0],int(row[1])))
+            poslist.append((row[0], int(row[1])))
     used = 0
     y_result = []
     for species in neglist:
-        pred = np.mean(y_pred[used:used+species[1]])
+        pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh, ignore_unmatched)
         y_result.append(pred)
         used = used + species[1]
     for species in poslist:
-        pred = np.mean(y_pred[used:used+species[1]])
+        pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh, ignore_unmatched)
         y_result.append(pred)
         used = used + species[1]
     return np.asarray(y_result), np.concatenate((np.repeat(0, len(neglist)), np.repeat(1, len(poslist))))
@@ -98,21 +100,27 @@ def evaluate_species(config):
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}...".format(evalconfig.datapred_path))
-    y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path,
-                    ignore_unmatched=evalconfig.ignore_unmatched)
+    y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+                                         threshold=evalconfig.thresh,
+                                         confidence_thresh=evalconfig.confidence_thresh,
+                                         ignore_unmatched=evalconfig.ignore_unmatched)
+    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
 
     if evalconfig.pairedset_path is not None:
         print("Loading {}...".format(evalconfig.pairedpred_path))      
         y_pred_2_raw = np.load("{}/{}".format(evalconfig.dir_path, evalconfig.pairedpred_path))
 
         print("Predicting labels for {}...".format(evalconfig.pairedpred_path))
-        y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-        get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+                                             threshold=evalconfig.thresh,
+                                             confidence_thresh=evalconfig.confidence_thresh,
+                                             ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path)
 
         y_pred_combined_raw = np.mean([y_pred_1_raw, y_pred_2_raw], axis=0)
-        y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.poscsv_path, evalconfig.negcsv_path)
-        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+                                                    threshold=evalconfig.thresh,
+                                                    confidence_thresh=evalconfig.confidence_thresh,
+                                                    ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
 
