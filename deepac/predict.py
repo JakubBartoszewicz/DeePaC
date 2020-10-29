@@ -98,7 +98,11 @@ def predict_multiread(array, threshold=0.5, confidence_threshold=0.5):
         interval = np.abs(confidence_threshold - threshold)
         y_pred_class_pos = array > (threshold + interval)
         y_pred_class_neg = array < (threshold - interval)
-        pred = np.mean(np.concatenate(y_pred_class_pos, y_pred_class_neg))
+        preds = np.concatenate(array[y_pred_class_pos], array[y_pred_class_neg])
+        if preds.size > 0:
+            pred = np.mean(preds)
+        else:
+            pred = np.nan
     return pred
 
 

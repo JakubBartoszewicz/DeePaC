@@ -147,27 +147,28 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
     prediction_rate = 1
     if np.isclose(evalconfig.confidence_thresh, evalconfig.thresh):
         # Assign classes using the chosen threshold
-        y_pred_class = (y_pred > evalconfig.thresh).astype('int8')
+        y_pred_class = (y_pred > evalconfig.thresh).astype(np.float)
+        y_pred_class[np.isnan(y_pred)] = np.nan
         y_pred_class_matched = y_pred_class
     else:
         interval = np.abs(evalconfig.confidence_thresh - evalconfig.thresh)
         y_pred_class_pos = y_pred > (evalconfig.thresh + interval)
         y_pred_class_neg = y_pred < (evalconfig.thresh - interval)
         y_pred_class_undef = np.logical_not(np.any([y_pred_class_pos, y_pred_class_neg], axis=0))
-        missing = np.sum(y_pred_class_undef.astype('int8'))
+        missing = np.sum(y_pred_class_undef.astype(np.float))
         prediction_rate = (y_test.shape[0] - missing) / y_test.shape[0]
         y_pred_class = np.empty(y_pred.shape)
         y_pred_class[:] = np.nan
-        y_pred_class[y_pred_class_pos] = np.int8(1)
-        y_pred_class[y_pred_class_neg] = np.int8(0)
+        y_pred_class[y_pred_class_pos] = 1
+        y_pred_class[y_pred_class_neg] = 0
         y_pred_class_matched = y_pred_class[np.any([y_pred_class_pos, y_pred_class_neg], axis=0)]
         y_test_matched = y_test[np.any([y_pred_class_pos, y_pred_class_neg], axis=0)]
         if ignore_unmatched:
             y_pred_class = y_pred_class_matched
             y_test_main = y_test_matched
         else:
-            y_pred_class[np.all([y_pred_class_undef, y_test], axis=0)] = np.int8(0)
-            y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = np.int8(1)
+            y_pred_class[np.all([y_pred_class_undef, y_test], axis=0)] = 0
+            y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = 1
     # Calculate performance measures
     log_loss = try_metric(mtr.log_loss, y_test, y_pred, eps=1e-07)
     auroc = try_metric(mtr.roc_auc_score, y_test, y_pred)
