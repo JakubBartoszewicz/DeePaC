@@ -6,6 +6,7 @@ paths to input files and how should be the model trained.
 
 """
 
+import tensorflow as tf
 import numpy as np
 import re
 import os
@@ -30,11 +31,11 @@ from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
-from deepac.tformers import *
+from deepac.tformers import add_transformer_block, add_token_position_embedding
 
 
 def get_custom_layer_dict():
-    custom_layer_dict = {"TokenAndPositionEmbedding": TokenAndPositionEmbedding}
+    custom_layer_dict = {}
     return custom_layer_dict
 
 
@@ -542,7 +543,7 @@ class RCNet:
             grouped_units = int(units/cardinality)
             assert units <= inputs.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
                                               "(input size: {in_size})". format(C=cardinality, d=grouped_units,
-                                                                           total=units, in_size=inputs.shape[-1])
+                                                                                total=units, in_size=inputs.shape[-1])
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
@@ -755,8 +756,7 @@ class RCNet:
             x = Activation(self.config.conv_activation)(x)
         # Transformer blocks
         elif self.config.n_tformer > 0:
-            embedding_layer = TokenAndPositionEmbedding(x.shape[1], x.shape[-1], x.shape[-1])
-            x = embedding_layer(x)
+            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1])
             x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[0],
                                       self.config.tformer_dim[0], self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
