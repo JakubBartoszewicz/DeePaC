@@ -35,8 +35,7 @@ from deepac.tformers import *
 
 def get_custom_layer_dict():
     custom_layer_dict = {"MultiHeadSelfAttention": MultiHeadSelfAttention,
-                         "TokenAndPositionEmbedding": TokenAndPositionEmbedding,
-                         "TransformerBlock": TransformerBlock}
+                         "TokenAndPositionEmbedding": TokenAndPositionEmbedding}
     return custom_layer_dict
 
 
@@ -759,10 +758,10 @@ class RCNet:
         elif self.config.n_tformer > 0:
             embedding_layer = TokenAndPositionEmbedding(x.shape[1], x.shape[-1], x.shape[-1])
             x = embedding_layer(x)
-            transformer_block = TransformerBlock(x.shape[-1], self.config.tformer_heads[0],
-                                                 self.config.tformer_dim[0], self.config.tformer_dropout,
-                                                 initializer=self.config.initializers["dense"])
-            x = transformer_block(x, training=self.config.mc_dropout)
+            x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[0],
+                                      self.config.tformer_dim[0], self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      training=self.config.mc_dropout)
             self._current_tformer = 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.

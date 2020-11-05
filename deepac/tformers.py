@@ -6,7 +6,7 @@ from tensorflow.keras import layers
 
 
 class MultiHeadSelfAttention(layers.Layer):
-    def __init__(self, embed_dim, num_heads, initializer, **kwargs):
+    def __init__(self, embed_dim, num_heads, initializer='glorot_uniform', **kwargs):
         super(MultiHeadSelfAttention, self).__init__(kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -26,7 +26,7 @@ class MultiHeadSelfAttention(layers.Layer):
         config.update({
             'embed_dim': self.embed_dim,
             'num_heads': self.num_heads,
-            "initializer": keras.initializers.serialize(self.initializer)
+            #"initializer": keras.initializers.serialize(self.initializer)
         })
         return config
 
@@ -70,44 +70,25 @@ class MultiHeadSelfAttention(layers.Layer):
         return output
 
 
-class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, dropout_rate, initializer, **kwargs):
-        super(TransformerBlock, self).__init__(kwargs)
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.ff_dim = ff_dim
-        self.dropout_rate = dropout_rate
-        self.initializer = initializer
-        self.att = MultiHeadSelfAttention(embed_dim, num_heads, initializer)
-        self.ffn = keras.Sequential(
-            [layers.Dense(ff_dim, activation="relu", kernel_initializer=self.initializer),
-             layers.Dense(embed_dim, kernel_initializer=self.initializer), ]
-        )
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.dropout1 = layers.Dropout(dropout_rate)
-        self.dropout2 = layers.Dropout(dropout_rate)
+def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, initializer, training=False):
+    att = MultiHeadSelfAttention(embed_dim, num_heads, initializer)
+    ffn = keras.Sequential(
+        [layers.Dense(ff_dim, activation="relu", kernel_initializer=initializer),
+         layers.Dense(embed_dim, kernel_initializer=initializer), ]
+    )
+    layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+    layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+    dropout1 = layers.Dropout(dropout_rate)
+    dropout2 = layers.Dropout(dropout_rate)
 
-    def get_config(self):
-        config = super().get_config().copy()
-        config.update({
-            'dropout_rate': self.dropout_rate,
-            'ff_dim': self.ff_dim,
-            'embed_dim': self.embed_dim,
-            'num_heads': self.num_heads,
-            "initializer": keras.initializers.serialize(self.initializer)
-        })
-        return config
-
-    def call(self, inputs, training=False):
-        attn_output = self.att(inputs)
-        if not np.isclose(self.dropout_rate, 0.0):
-            attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(inputs + attn_output)
-        ffn_output = self.ffn(out1)
-        if not np.isclose(self.dropout_rate, 0.0):
-            ffn_output = self.dropout2(ffn_output, training=training)
-        return self.layernorm2(out1 + ffn_output)
+    attn_output = att(inputs)
+    if not np.isclose(dropout_rate, 0.0):
+        attn_output = dropout1(attn_output, training=training)
+    out1 = layernorm1(inputs + attn_output)
+    ffn_output = ffn(out1)
+    if not np.isclose(dropout_rate, 0.0):
+        ffn_output = dropout2(ffn_output, training=training)
+    return layernorm2(out1 + ffn_output)
 
 
 class TokenAndPositionEmbedding(layers.Layer):
