@@ -34,8 +34,7 @@ from deepac.tformers import *
 
 
 def get_custom_layer_dict():
-    custom_layer_dict = {"MultiHeadSelfAttention": MultiHeadSelfAttention,
-                         "TokenAndPositionEmbedding": TokenAndPositionEmbedding}
+    custom_layer_dict = {"TokenAndPositionEmbedding": TokenAndPositionEmbedding}
     return custom_layer_dict
 
 
@@ -832,10 +831,10 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            transformer_block = TransformerBlock(x.shape[-1], self.config.tformer_heads[i],
-                                                 self.config.tformer_dim[i], self.config.tformer_dropout,
-                                                 initializer=self.config.initializers["dense"])
-            x = transformer_block(x, training=self.config.mc_dropout)
+            x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[i],
+                                      self.config.tformer_dim[i], self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      training=self.config.mc_dropout)
             self._current_tformer = 1
 
         # Pooling layer
