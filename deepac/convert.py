@@ -11,7 +11,7 @@ import re
 
 from tensorflow.keras.models import load_model
 
-from deepac.nn_train import RCConfig, RCNet
+from deepac.nn_train import RCConfig, RCNet, get_custom_layer_dict
 
 
 def convert_cudnn(config, saved_model, no_prep, no_weights=False, verbose=True):
@@ -33,7 +33,7 @@ def convert_cudnn(config, saved_model, no_prep, no_weights=False, verbose=True):
         else:
             weights_path = path + "_weights.h5"
             # Prepare weights
-            model = load_model(saved_model)
+            model = load_model(saved_model, custom_objects=get_custom_layer_dict())
             model.save_weights(weights_path)
         paprnet.model.load_weights(weights_path)
     else:

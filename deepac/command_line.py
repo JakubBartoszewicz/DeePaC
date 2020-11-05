@@ -13,7 +13,7 @@ import shutil
 import multiprocessing
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
-from deepac.nn_train import RCNet, RCConfig
+from deepac.nn_train import RCNet, RCConfig, get_custom_layer_dict
 from deepac.preproc import preproc
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_species import evaluate_species
@@ -27,7 +27,6 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
-from tensorflow.keras.models import load_model
 
 
 def main():
@@ -182,9 +181,9 @@ class MainRunner:
             if self.tpu_resolver is not None:
                 tpu_strategy = tf.distribute.experimental.TPUStrategy(self.tpu_resolver)
                 with tpu_strategy.scope():
-                    model = tf.keras.models.load_model(args.custom)
+                    model = tf.keras.models.load_model(args.custom, custom_objects=get_custom_layer_dict())
             else:
-                model = tf.keras.models.load_model(args.custom)
+                model = tf.keras.models.load_model(args.custom, custom_objects=get_custom_layer_dict())
 
         if args.rc_check:
             compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates)

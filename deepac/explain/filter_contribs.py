@@ -8,6 +8,7 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import to_categorical
 import tensorflow as tf
 from deepac.utils import set_mem_growth
+from deepac.nn_train import get_custom_layer_dict
 
 from Bio import SeqIO
 
@@ -23,7 +24,7 @@ def get_filter_contribs(args, allow_eager=False):
         print("Using SHAP. Disabling eager execution...")
         tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
-    model = load_model(args.model)
+    model = load_model(args.model, custom_objects=get_custom_layer_dict())
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     check_additivity = not args.no_check
     if args.w_norm and not args.do_lstm:

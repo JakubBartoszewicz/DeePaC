@@ -10,6 +10,7 @@ from collections import OrderedDict
 from shap import DeepExplainer, GradientExplainer
 from deepac.utils import set_mem_growth
 from deepac.explain.filter_contribs import get_reference_seqs
+from deepac.nn_train import get_custom_layer_dict
 
 
 def nt_map(args, allow_eager=False):
@@ -23,7 +24,7 @@ def nt_map(args, allow_eager=False):
         print("Using SHAP. Disabling eager execution...")
         tf.compat.v1.disable_v2_behavior()
     set_mem_growth()
-    model = load_model(args.model)
+    model = load_model(args.model, custom_objects=get_custom_layer_dict())
     if args.gradient:
         explainer = GradientExplainer(model, ref_samples)
     else:

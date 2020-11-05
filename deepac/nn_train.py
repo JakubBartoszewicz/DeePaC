@@ -7,7 +7,6 @@ paths to input files and how should be the model trained.
 """
 
 import numpy as np
-import tensorflow as tf
 import re
 import os
 import sys
@@ -31,6 +30,14 @@ from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
+from deepac.tformers import *
+
+
+def get_custom_layer_dict():
+    custom_layer_dict = {"MultiHeadSelfAttention": MultiHeadSelfAttention,
+                         "TokenAndPositionEmbedding": TokenAndPositionEmbedding,
+                         "TransformerBlock": TransformerBlock}
+    return custom_layer_dict
 
 
 class RCConfig:
@@ -156,6 +163,13 @@ class RCConfig:
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+            try:
+                self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
+                self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
+                self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
+                self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
+            except KeyError:
+                self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
             self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
             if self.n_recurrent == 1 and self.recurrent_bn:
@@ -324,7 +338,7 @@ class RCNet:
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
             with self.get_device_strategy_scope():
-                self.model = load_model(model_file)
+                self.model = load_model(model_file, custom_objects=get_custom_layer_dict())
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
@@ -714,6 +728,7 @@ class RCNet:
         # Number of added recurrent layers
         self._current_recurrent = 0
         self._current_conv = 0
+        self._current_tformer = 0
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -740,6 +755,15 @@ class RCNet:
                 x = BatchNormalization()(x)
             # Add activation
             x = Activation(self.config.conv_activation)(x)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            embedding_layer = TokenAndPositionEmbedding(x.shape[1], x.shape[-1], x.shape[-1])
+            x = embedding_layer(x)
+            transformer_block = TransformerBlock(x.shape[-1], self.config.tformer_heads[0],
+                                                 self.config.tformer_dim[0], self.config.tformer_dropout,
+                                                 initializer=self.config.initializers["dense"])
+            x = transformer_block(x, training=self.config.mc_dropout)
+            self._current_tformer = 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -752,11 +776,11 @@ class RCNet:
             # First recurrent layer already added
             self._current_recurrent = 1
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should convolutional, recurrent or a transformer')
 
         start = None
         # For next convolutional layers
-        for i in range(1, self.config.n_conv):
+        for i in range(self._current_conv, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = MaxPooling1D()(x)
@@ -807,8 +831,16 @@ class RCNet:
             # Add activation
             x = Activation(self.config.conv_activation)(x)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            transformer_block = TransformerBlock(x.shape[-1], self.config.tformer_heads[i],
+                                                 self.config.tformer_dim[i], self.config.tformer_dropout,
+                                                 initializer=self.config.initializers["dense"])
+            x = transformer_block(x, training=self.config.mc_dropout)
+            self._current_tformer = 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
