@@ -1,4 +1,7 @@
-# implemented as functions as keras/tf had problems loading models with custom layers in custom layers
+# partially inspired by
+# https://keras.io/examples/nlp/text_classification_with_transformer/ (by Apoorv Nandan)
+# and https://github.com/kpot/keras-transformer/blob/master/keras_transformer/position.py (by Kirill Mavreshko)
+# implemented as functions since keras/tf had problems loading models with custom layers in custom layers
 # (wrong weight order)
 import tensorflow as tf
 import numpy as np
@@ -71,12 +74,26 @@ def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, in
     return layernorm2(add([out1, ffn_output]))
 
 
+def get_positional_encoding(length, embed_dim):
+    if embed_dim % 2 != 0:
+        raise ValueError("Channel dimension of the input embedding for the transformer "
+                         "with fixed position signal must be divisible by 2. Received: {}".format(embed_dim))
+    position = K.arange(0, length, dtype=K.floatx())
+    num_timescales = embed_dim // 2
+    log_timescale_increment = np.log(10000) / (num_timescales - 1)
+    inv_timescales = (K.exp(K.arange(num_timescales, dtype=K.floatx()) * (-log_timescale_increment)))
+    scaled_time = K.expand_dims(position, 1) * K.expand_dims(inv_timescales, 0)
+    signal = K.concatenate([K.sin(scaled_time), K.cos(scaled_time)], axis=1)
+    return K.expand_dims(signal, axis=0)
+
+
 class PositionEmbedding(Layer):
-    def __init__(self, max_depth, seed, use_depth=True, **kwargs):
+    def __init__(self, max_depth, seed, use_depth=True, fixed=True, **kwargs):
         self.max_depth = max_depth
         self.horizontal_position_embeddings = None
         self.vertical_position_embeddings = None
         self.seed = seed
+        self.fixed = fixed
         self.use_depth = False if max_depth == 1 else use_depth
         self.initializer = tf.keras.initializers.RandomUniform(seed=self.seed)
         super().__init__(**kwargs)
@@ -86,28 +103,36 @@ class PositionEmbedding(Layer):
         config['max_depth'] = self.max_depth
         config['seed'] = self.seed
         config['use_depth'] = self.use_depth
+        config['fixed'] = self.fixed
         return config
 
     def build(self, input_shape):
         seq_length, embed_dim = input_shape[-2:]
-        self.horizontal_position_embeddings = self.add_weight(
-            shape=(seq_length, embed_dim),
-            initializer=self.initializer,
-            name='horizontal_position_embeddings',
-            trainable=True)
-        if self.use_depth:
-            self.vertical_position_embeddings = self.add_weight(
-                shape=(self.max_depth, embed_dim),
+        if self.fixed:
+            self.horizontal_position_embeddings = get_positional_encoding(seq_length, embed_dim)
+            self.vertical_position_embeddings = self.horizontal_position_embeddings
+        else:
+            self.horizontal_position_embeddings = self.add_weight(
+                shape=(seq_length, embed_dim),
                 initializer=self.initializer,
-                name='vertical_position_embeddings',
+                name='horizontal_position_embeddings',
                 trainable=True)
+            if self.use_depth:
+                self.vertical_position_embeddings = self.add_weight(
+                    shape=(self.max_depth, embed_dim),
+                    initializer=self.initializer,
+                    name='vertical_position_embeddings',
+                    trainable=True)
         super().build(input_shape)
 
     def call(self, inputs, **kwargs):
         current_tformer = kwargs.get('current_tformer')
         out = inputs + self.horizontal_position_embeddings
         if self.use_depth:
-            out = out + self.vertical_position_embeddings[current_tformer, :]
+            if self.fixed:
+                K.expand_dims(self.vertical_position_embeddings[:, current_tformer, :], axis=1)
+            else:
+                out = out + self.vertical_position_embeddings[current_tformer, :]
         return out
 
 
