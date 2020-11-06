@@ -756,12 +756,14 @@ class RCNet:
             x = Activation(self.config.conv_activation)(x)
         # Transformer blocks
         elif self.config.n_tformer > 0:
-            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1])
+            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1],
+                                             current_tformer=self._current_tformer, token_identity=True)
             x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[0],
                                       self.config.tformer_dim[0], self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
                                       training=self.config.mc_dropout)
-            self._current_tformer = 1
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -831,11 +833,14 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
+            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1],
+                                             current_tformer=self._current_tformer, token_identity=False)
             x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[i],
                                       self.config.tformer_dim[i], self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
                                       training=self.config.mc_dropout)
-            self._current_tformer = 1
+            self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
         if self.config.n_conv > 0 or self.config.n_tformer > 0:
