@@ -1,4 +1,6 @@
 # inspired by https://keras.io/examples/nlp/text_classification_with_transformer/ by Apoorv Nandan
+# implemented as functions as keras/tf had problems loading models with custom layers in custom layers
+# (wrong weight order)
 import tensorflow as tf
 import numpy as np
 import tensorflow.keras.backend as K
@@ -72,16 +74,14 @@ def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, in
     return layernorm2(add([out1, ffn_output]))
 
 
-def add_token_position_embedding(inputs, maxlen, vocab_size, embed_dim, current_tformer,
-                                 token_identity=True):
-    # token_emb = Embedding(input_dim=vocab_size, output_dim=embed_dim) if not token_identity else None
-    # pos_emb = Embedding(input_dim=maxlen, output_dim=embed_dim)
-    #
-    # positions = K.arange(start=0, stop=maxlen, step=1)
-    # positions = pos_emb(positions)
-    # if not token_identity:
-    #     inputs = token_emb(inputs)
-    # out = inputs + positions
-    out = inputs
+def add_position_embedding(inputs, max_len, max_depth, embed_dim, current_tformer):
+    horiz_emb = Embedding(input_dim=max_len, output_dim=embed_dim)
+    horiz_positions = K.arange(start=0, stop=max_len, step=1)
+    horiz_positions_emb = horiz_emb(horiz_positions)
+    vertical_emb = Embedding(input_dim=max_len, output_dim=embed_dim)
+    vertical_positions = K.arange(start=0, stop=max_depth, step=1)
+    vertical_positions_emb = vertical_emb(vertical_positions)
+    out = inputs + horiz_positions_emb
+    out = out + vertical_positions_emb[current_tformer]
     return out
 

@@ -31,7 +31,7 @@ from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
-from deepac.tformers import add_transformer_block, add_token_position_embedding
+from deepac.tformers import add_transformer_block, add_position_embedding
 
 
 def get_custom_layer_dict():
@@ -756,10 +756,11 @@ class RCNet:
             x = Activation(self.config.conv_activation)(x)
         # Transformer blocks
         elif self.config.n_tformer > 0:
-            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1],
-                                             current_tformer=self._current_tformer, token_identity=True)
-            x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[0],
-                                      self.config.tformer_dim[0], self.config.tformer_dropout,
+            x = add_position_embedding(x, max_len=self.config.seq_length, max_depth=self.config.n_tformer,
+                                       embed_dim=x.shape[-1],
+                                       current_tformer=self._current_tformer)
+            x = add_transformer_block(x, embed_dim=x.shape[-1], num_heads=self.config.tformer_heads[0],
+                                      ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
                                       current_tformer=self._current_tformer,
                                       training=self.config.mc_dropout)
@@ -833,10 +834,11 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            x = add_token_position_embedding(x, x.shape[1], x.shape[-1], x.shape[-1],
-                                             current_tformer=self._current_tformer, token_identity=False)
-            x = add_transformer_block(x, x.shape[-1], self.config.tformer_heads[i],
-                                      self.config.tformer_dim[i], self.config.tformer_dropout,
+            x = add_position_embedding(x, max_len=x.shape[1], max_depth=self.config.n_tformer,
+                                       embed_dim=x.shape[-1],
+                                       current_tformer=self._current_tformer)
+            x = add_transformer_block(x, embed_dim=x.shape[-1], num_heads=self.config.tformer_heads[i],
+                                      ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
                                       current_tformer=self._current_tformer,
                                       training=self.config.mc_dropout)
