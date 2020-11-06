@@ -15,6 +15,7 @@ import errno
 import warnings
 from contextlib import redirect_stdout
 import math
+from tensorflow.keras.utils import get_custom_objects
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda, Masking
@@ -31,12 +32,7 @@ from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
-from deepac.tformers import add_transformer_block, add_position_embedding
-
-
-def get_custom_layer_dict():
-    custom_layer_dict = {}
-    return custom_layer_dict
+from deepac.tformers import add_transformer_block, PositionEmbedding
 
 
 class RCConfig:
@@ -121,7 +117,6 @@ class RCConfig:
                 self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit_Dense']]
                 self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit_Out']]
             else:
-
                 self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit']]
@@ -337,7 +332,7 @@ class RCNet:
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
             with self.get_device_strategy_scope():
-                self.model = load_model(model_file, custom_objects=get_custom_layer_dict())
+                self.model = load_model(model_file, custom_objects=get_custom_objects())
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
@@ -728,6 +723,7 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -756,9 +752,9 @@ class RCNet:
             x = Activation(self.config.conv_activation)(x)
         # Transformer blocks
         elif self.config.n_tformer > 0:
-            x = add_position_embedding(x, max_len=self.config.seq_length, max_depth=self.config.n_tformer,
-                                       embed_dim=x.shape[-1],
-                                       current_tformer=self._current_tformer)
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x = position_embedding(x, current_tformer=self._current_tformer)
             x = add_transformer_block(x, embed_dim=x.shape[-1], num_heads=self.config.tformer_heads[0],
                                       ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
@@ -834,9 +830,7 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            x = add_position_embedding(x, max_len=x.shape[1], max_depth=self.config.n_tformer,
-                                       embed_dim=x.shape[-1],
-                                       current_tformer=self._current_tformer)
+            x = position_embedding(x, current_tformer=self._current_tformer)
             x = add_transformer_block(x, embed_dim=x.shape[-1], num_heads=self.config.tformer_heads[i],
                                       ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],

@@ -11,7 +11,7 @@ import numpy as np
 import csv
 from deepac.eval.eval import get_performance, get_eval_header
 from deepac.predict import predict_array
-from deepac.nn_train import get_custom_layer_dict
+from tensorflow.keras.utils import get_custom_objects
 
 
 class EvalEnsConfig:
@@ -105,7 +105,7 @@ def predict(evalconfig, x_test, paired=False, do_pred=True):
                                                               s=dataset_path)
         if do_pred:
             model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.run_prefixes[i], ne=evalconfig.epoch[i]),
-                               custom_objects=get_custom_layer_dict())
+                               custom_objects=get_custom_objects())
             # Predict class probabilities
             y_preds.append(predict_array(model, x_test, filename))
         else:

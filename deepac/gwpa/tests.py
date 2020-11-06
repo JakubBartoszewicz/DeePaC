@@ -11,7 +11,8 @@ from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
 from deepac.gwpa.command_line import run_gff2genome
-from deepac.nn_train import get_custom_layer_dict
+from tensorflow.keras.utils import get_custom_objects
+
 
 class GWPATester:
     """
@@ -76,7 +77,7 @@ class GWPATester:
 
     def test_genomemap(self):
         """Test genome-wide phenotype potential map generation."""
-        model = load_model(self.model, custom_objects=get_custom_layer_dict())
+        model = load_model(self.model, custom_objects=get_custom_objects())
 
         if not os.path.exists(os.path.join(self.outpath, "genome_frag_pred")):
             os.makedirs(os.path.join(self.outpath, "genome_frag_pred"))

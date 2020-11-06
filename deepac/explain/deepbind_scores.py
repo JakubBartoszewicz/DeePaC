@@ -11,7 +11,7 @@ from multiprocessing import cpu_count
 from functools import partial
 from deepac.utils import set_mem_growth
 from deepac.explain.rf_sizes import get_rf_size
-from deepac.nn_train import get_custom_layer_dict
+from tensorflow.keras.utils import get_custom_objects
 
 
 def get_filter_data(filter_id, activation_list, motif_start_list, reads_chunk, motif_length, test_data_set_name,
@@ -57,7 +57,7 @@ def get_maxact(args):
     and extract all motifs for which a filter neuron got a positive score."""
     set_mem_growth()
     # Creates the model and loads weights
-    model = load_model(args.model, custom_objects=get_custom_layer_dict())
+    model = load_model(args.model, custom_objects=get_custom_objects())
     print(model.summary())
     do_lstm = args.do_lstm
     if do_lstm:

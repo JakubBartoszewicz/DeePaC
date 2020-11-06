@@ -12,7 +12,7 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 from deepac.predict import predict_array
-from deepac.nn_train import get_custom_layer_dict
+from tensorflow.keras.utils import get_custom_objects
 
 
 class EvalConfig:
@@ -122,7 +122,7 @@ def predict(evalconfig, x_test, n_epoch, paired=False, rc=False):
     else:
         dataset_path = evalconfig.dataset_path
     model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.name_prefix, ne=n_epoch),
-                       custom_objects=get_custom_layer_dict())
+                       custom_objects=get_custom_objects())
     # Backup predicted probabilities for future analyses
     if rc:
         filename = "{p}-e{ne:03d}-predictions-{s}-rc.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)

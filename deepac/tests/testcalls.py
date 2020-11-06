@@ -1,6 +1,7 @@
 import tensorflow as tf
 from deepac.predict import predict_fasta, filter_fasta
-from deepac.nn_train import RCConfig, RCNet, get_custom_layer_dict
+from deepac.nn_train import RCConfig, RCNet
+from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
@@ -340,7 +341,7 @@ class Tester:
         """Test predicting."""
         print("TEST: Predicting (custom)...")
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
-                                           custom_objects=get_custom_layer_dict())
+                                           custom_objects=get_custom_objects())
         print(model.summary())
         compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
                    os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
@@ -413,7 +414,7 @@ class Tester:
         """Test filtering."""
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs",
                                                         "deepac-test-e002_converted_converted.h5"),
-                                           custom_objects=get_custom_layer_dict())
+                                           custom_objects=get_custom_objects())
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
                                    "deepac-test-e002-predictions-sample_test.npy"),

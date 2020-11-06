@@ -1,11 +1,11 @@
-# inspired by https://keras.io/examples/nlp/text_classification_with_transformer/ by Apoorv Nandan
 # implemented as functions as keras/tf had problems loading models with custom layers in custom layers
 # (wrong weight order)
 import tensorflow as tf
 import numpy as np
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Embedding, Dropout, Reshape, add, Activation, Dot
+from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Embedding, Layer, Dropout, Reshape, add, Activation, Conv1D
 from tensorflow.keras.activations import softmax
+from tensorflow.keras.utils import get_custom_objects
 
 
 def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer):
@@ -18,8 +18,6 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     key_dense = Dense(embed_dim, kernel_initializer=initializer)
     value_dense = Dense(embed_dim, kernel_initializer=initializer)
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
-
-    # x.shape = [batch_size, seq_len, embedding_dim]
     seq_len = inputs.shape[1]
 
     def separate_heads(input, qkv_name):
@@ -39,19 +37,18 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
         output = tf.matmul(weights, value)
         return output, weights
 
-    query = query_dense(inputs)  # (batch_size, seq_len, embed_dim)
-    key = key_dense(inputs)  # (batch_size, seq_len, embed_dim)
-    value = value_dense(inputs)  # (batch_size, seq_len, embed_dim)
-    query = separate_heads(query, "query")  # (batch_size, num_heads, seq_len, projection_dim)
-    key = separate_heads(key, "key")  # (batch_size, num_heads, seq_len, projection_dim)
-    value = separate_heads(value, "value")  # (batch_size, num_heads, seq_len, projection_dim)
+    query = query_dense(inputs)
+    key = key_dense(inputs)
+    value = value_dense(inputs)
+    query = separate_heads(query, "query")
+    key = separate_heads(key, "key")
+    value = separate_heads(value, "value")
     att_out, weights = get_attention(query, key, value)
     perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                   name="permute_attention_out_{n}".format(n=current_tformer))
-    att_out = perm(att_out)  # (batch_size, seq_len, num_heads, projection_dim)
+    att_out = perm(att_out)
     att_out = Reshape((seq_len, embed_dim))(att_out)
-    # (batch_size, seq_len, embed_dim)
-    output = combine_heads(att_out)  # (batch_size, seq_len, embed_dim)
+    output = combine_heads(att_out)
     return output
 
 
@@ -74,14 +71,46 @@ def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, in
     return layernorm2(add([out1, ffn_output]))
 
 
-def add_position_embedding(inputs, max_len, max_depth, embed_dim, current_tformer):
-    horiz_emb = Embedding(input_dim=max_len, output_dim=embed_dim)
-    horiz_positions = K.arange(start=0, stop=max_len, step=1)
-    horiz_positions_emb = horiz_emb(horiz_positions)
-    vertical_emb = Embedding(input_dim=max_len, output_dim=embed_dim)
-    vertical_positions = K.arange(start=0, stop=max_depth, step=1)
-    vertical_positions_emb = vertical_emb(vertical_positions)
-    out = inputs + horiz_positions_emb
-    out = out + vertical_positions_emb[current_tformer]
-    return out
+class PositionEmbedding(Layer):
+    def __init__(self, max_depth, seed, use_depth=True, **kwargs):
+        self.max_depth = max_depth
+        self.horizontal_position_embeddings = None
+        self.vertical_position_embeddings = None
+        self.seed = seed
+        self.use_depth = False if max_depth == 1 else use_depth
+        self.initializer = tf.keras.initializers.RandomUniform(seed=self.seed)
+        super().__init__(**kwargs)
 
+    def get_config(self):
+        config = super().get_config()
+        config['max_depth'] = self.max_depth
+        config['seed'] = self.seed
+        config['use_depth'] = self.use_depth
+        return config
+
+    def build(self, input_shape):
+        seq_length, embed_dim = input_shape[-2:]
+        self.horizontal_position_embeddings = self.add_weight(
+            shape=(seq_length, embed_dim),
+            initializer=self.initializer,
+            name='horizontal_position_embeddings',
+            trainable=True)
+        if self.use_depth:
+            self.vertical_position_embeddings = self.add_weight(
+                shape=(self.max_depth, embed_dim),
+                initializer=self.initializer,
+                name='vertical_position_embeddings',
+                trainable=True)
+        super().build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        current_tformer = kwargs.get('current_tformer')
+        out = inputs + self.horizontal_position_embeddings
+        if self.use_depth:
+            out = out + self.vertical_position_embeddings[current_tformer, :]
+        return out
+
+
+get_custom_objects().update({
+    'PositionEmbedding': PositionEmbedding,
+})

@@ -6,7 +6,7 @@ import tensorflow.keras.backend as K
 import tensorflow as tf
 from Bio import SeqIO
 from deepac.utils import set_mem_growth
-from deepac.nn_train import get_custom_layer_dict
+from tensorflow.keras.utils import get_custom_objects
 import pandas as pd
 from math import floor, log10
 
@@ -17,7 +17,7 @@ def filter_activations(args):
     # Creates the model and loads weights
     set_mem_growth()
 
-    model = load_model(args.model, custom_objects=get_custom_layer_dict())
+    model = load_model(args.model, custom_objects=get_custom_objects())
     conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
     conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
     motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
