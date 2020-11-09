@@ -112,8 +112,10 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
     return output_fwd, output_rc
 
 
-def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, initializer,
+def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
                           current_tformer, seed, training=False):
+
+    inputs = position_embedding(inputs, current_tformer=current_tformer)
     attn_output = add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer)
 
     layernorm1 = LayerNormalization(epsilon=1e-6)
@@ -129,8 +131,11 @@ def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, in
     return layernorm2(add([out1, ffn_output]))
 
 
-def add_siam_transformer_block(inputs_fwd, inputs_rc, embed_dim, num_heads, ff_dim, dropout_rate, initializer,
-                               current_tformer, seed, training=False):
+def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_dim, num_heads, ff_dim, dropout_rate,
+                               initializer, current_tformer, seed, training=False):
+
+    inputs_fwd = position_embedding(inputs_fwd, current_tformer=current_tformer)
+    inputs_rc = position_embedding(inputs_rc, current_tformer=current_tformer)
     attn_output_fwd, attn_output_rc = add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer,
                                                              current_tformer)
 
@@ -151,6 +156,23 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, embed_dim, num_heads, ff_d
     output_fwd, output_rc = add_siam_layernorm(add([out1_fwd, ffn_output_fwd]), add([out1_rc, ffn_output_rc]),
                                                current_ln=(current_tformer*2)+1)
     return output_fwd, output_rc
+
+
+def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
+                             current_tformer, seed, training=False):
+
+    revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
+                        name="reverse_complement_tformer_input_{n}".format(n=current_tformer))
+    inputs_rc = revcomp_in(inputs)
+    output_fwd, output_rc = add_siam_transformer_block(inputs, inputs_rc, position_embedding, embed_dim, num_heads,
+                                                       ff_dim, dropout_rate, initializer, current_tformer, seed,
+                                                       training)
+
+    revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=output_rc.shape[1:],
+                         name="reverse_complement_tformer_output_{n}".format(n=current_tformer))
+    output_rc = revcomp_out(output_rc)
+    out = concatenate([output_fwd, output_rc], axis=-1)
+    return out
 
 
 def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
