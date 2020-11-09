@@ -12,6 +12,29 @@ from tensorflow.keras.activations import softmax
 from tensorflow.keras.utils import get_custom_objects
 
 
+def separate_heads(input, qkv_name, seq_len, num_heads, projection_dim, current_tformer):
+    out = Reshape((seq_len, num_heads, projection_dim))(input)
+    perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
+                  name="permute_attention_{qkv}_{n}".format(qkv=qkv_name, n=current_tformer))
+    out = perm(out)
+    return out
+
+
+def get_attention(query, key, value, current_tformer, mode_name=None):
+    score = tf.matmul(query, key, transpose_b=True)
+    dim_key = key.shape[-1]
+    if mode_name is None:
+        layer_name = "scale_attention_{n}".format(n=current_tformer)
+    else:
+        layer_name = "scale_attention_{mode}_{n}".format(mode=mode_name, n=current_tformer)
+    scale = Lambda(lambda x: x / np.sqrt(dim_key),
+                   name=layer_name)
+    scaled_score = scale(score)
+    weights = Activation(softmax)(scaled_score)
+    output = tf.matmul(weights, value)
+    return output, weights
+
+
 def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer):
     if embed_dim % num_heads != 0:
         raise ValueError(
@@ -24,30 +47,13 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
     seq_len = inputs.shape[1]
 
-    def separate_heads(input, qkv_name):
-        out = Reshape((seq_len, num_heads, projection_dim))(input)
-        perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
-                      name="permute_attention_{qkv}_{n}".format(qkv=qkv_name, n=current_tformer))
-        out = perm(out)
-        return out
-
-    def get_attention(query, key, value):
-        score = tf.matmul(query, key, transpose_b=True)
-        dim_key = key.shape[-1]
-        scale = Lambda(lambda x: x / np.sqrt(dim_key),
-                       name="scale_attention_{n}".format(n=current_tformer))
-        scaled_score = scale(score)
-        weights = Activation(softmax)(scaled_score)
-        output = tf.matmul(weights, value)
-        return output, weights
-
     query = query_dense(inputs)
     key = key_dense(inputs)
     value = value_dense(inputs)
-    query = separate_heads(query, "query")
-    key = separate_heads(key, "key")
-    value = separate_heads(value, "value")
-    att_out, weights = get_attention(query, key, value)
+    query = separate_heads(query, "query", seq_len, num_heads, projection_dim, current_tformer)
+    key = separate_heads(key, "key", seq_len, num_heads, projection_dim, current_tformer)
+    value = separate_heads(value, "value", seq_len, num_heads, projection_dim, current_tformer)
+    att_out, weights = get_attention(query, key, value, current_tformer)
     perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                   name="permute_attention_out_{n}".format(n=current_tformer))
     att_out = perm(att_out)
@@ -68,37 +74,20 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
     seq_len = inputs_fwd.shape[1]
 
-    def separate_heads(input, qkv_name):
-        out = Reshape((seq_len, num_heads, projection_dim))(input)
-        perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
-                      name="permute_attention_{qkv}_{n}".format(qkv=qkv_name, n=current_tformer))
-        out = perm(out)
-        return out
-
-    def get_attention(query, key, value, mode_name=""):
-        score = tf.matmul(query, key, transpose_b=True)
-        dim_key = key.shape[-1]
-        scale = Lambda(lambda x: x / np.sqrt(dim_key),
-                       name="scale_attention_{mode}_{n}".format(mode=mode_name, n=current_tformer))
-        scaled_score = scale(score)
-        weights = Activation(softmax)(scaled_score)
-        output = tf.matmul(weights, value)
-        return output, weights
-
     query_fwd = query_dense(inputs_fwd)
     key_fwd = key_dense(inputs_fwd)
     value_fwd = value_dense(inputs_fwd)
     query_rc = query_dense(inputs_rc)
     key_rc = key_dense(inputs_rc)
     value_rc = value_dense(inputs_rc)
-    query_fwd = separate_heads(query_fwd, "query_fwd")
-    key_fwd = separate_heads(key_fwd, "key_fwd")
-    value_fwd = separate_heads(value_fwd, "value_fwd")
-    query_rc = separate_heads(query_rc, "query_rc")
-    key_rc = separate_heads(key_rc, "key_rc")
-    value_rc = separate_heads(value_rc, "value_rc")
-    att_out_fwd, weights_fwd = get_attention(query_fwd, key_fwd, value_fwd, "fwd")
-    att_out_rc, weights_rc = get_attention(query_rc, key_rc, value_rc, "rc")
+    query_fwd = separate_heads(query_fwd, "query_fwd", seq_len, num_heads, projection_dim, current_tformer)
+    key_fwd = separate_heads(key_fwd, "key_fwd", seq_len, num_heads, projection_dim, current_tformer)
+    value_fwd = separate_heads(value_fwd, "value_fwd", seq_len, num_heads, projection_dim, current_tformer)
+    query_rc = separate_heads(query_rc, "query_rc", seq_len, num_heads, projection_dim, current_tformer)
+    key_rc = separate_heads(key_rc, "key_rc", seq_len, num_heads, projection_dim, current_tformer)
+    value_rc = separate_heads(value_rc, "value_rc", seq_len, num_heads, projection_dim, current_tformer)
+    att_out_fwd, weights_fwd = get_attention(query_fwd, key_fwd, value_fwd, current_tformer, "fwd")
+    att_out_rc, weights_rc = get_attention(query_rc, key_rc, value_rc, current_tformer, "rc")
     perm_fwd = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                       name="permute_attention_fwd_out_{n}".format(n=current_tformer))
     att_out_fwd = perm_fwd(att_out_fwd)
