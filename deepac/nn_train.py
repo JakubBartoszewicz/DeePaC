@@ -163,6 +163,7 @@ class RCConfig:
                 self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
                 self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
                 self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
+                self.tformer_keep_edim = config['Architecture'].getboolean('Tformer_Keep_Edim')
             except KeyError:
                 self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
@@ -945,13 +946,22 @@ class RCNet:
         elif self.config.n_tformer > 0:
             position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                    seed=self.config.seed)
-            x = add_rc_transformer_block(x, embed_dim=x.shape[-1], position_embedding=position_embedding,
+            embed_dim = x.shape[-1]
+            x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[0],
                                          ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
                                          training=self.config.mc_dropout)
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                x = self._add_rc_conv1d(x, units=embed_dim/2, kernel_size=1,
+                                        dilation_rate=1,
+                                        stride=1, cardinality=1)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -1019,16 +1029,25 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None:
+            if position_embedding is None or not self.config.tformer_keep_edim:
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                        seed=self.config.seed)
-            x = add_rc_transformer_block(x, embed_dim=x.shape[-1], position_embedding=position_embedding,
+            embed_dim = x.shape[-1]
+            x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[i],
                                          ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
                                          training=self.config.mc_dropout)
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                x = self._add_rc_conv1d(x, units=embed_dim/2, kernel_size=1,
+                                        dilation_rate=1,
+                                        stride=1, cardinality=1)
             self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
