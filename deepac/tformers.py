@@ -6,7 +6,8 @@
 import tensorflow as tf
 import numpy as np
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Embedding, Layer, Dropout, Reshape, add, Activation, Conv1D
+from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Layer, Dropout,\
+    Reshape, add, Activation, concatenate
 from tensorflow.keras.activations import softmax
 from tensorflow.keras.utils import get_custom_objects
 
@@ -55,23 +56,120 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     return output
 
 
-def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, initializer, current_tformer,
-                          training=False):
+def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer, current_tformer):
+    if embed_dim % num_heads != 0:
+        raise ValueError(
+            f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}"
+        )
+    projection_dim = embed_dim // num_heads
+    query_dense = Dense(embed_dim, kernel_initializer=initializer)
+    key_dense = Dense(embed_dim, kernel_initializer=initializer)
+    value_dense = Dense(embed_dim, kernel_initializer=initializer)
+    combine_heads = Dense(embed_dim, kernel_initializer=initializer)
+    seq_len = inputs_fwd.shape[1]
+
+    def separate_heads(input, qkv_name):
+        out = Reshape((seq_len, num_heads, projection_dim))(input)
+        perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
+                      name="permute_attention_{qkv}_{n}".format(qkv=qkv_name, n=current_tformer))
+        out = perm(out)
+        return out
+
+    def get_attention(query, key, value, mode_name=""):
+        score = tf.matmul(query, key, transpose_b=True)
+        dim_key = key.shape[-1]
+        scale = Lambda(lambda x: x / np.sqrt(dim_key),
+                       name="scale_attention_{mode}_{n}".format(mode=mode_name, n=current_tformer))
+        scaled_score = scale(score)
+        weights = Activation(softmax)(scaled_score)
+        output = tf.matmul(weights, value)
+        return output, weights
+
+    query_fwd = query_dense(inputs_fwd)
+    key_fwd = key_dense(inputs_fwd)
+    value_fwd = value_dense(inputs_fwd)
+    query_rc = query_dense(inputs_rc)
+    key_rc = key_dense(inputs_rc)
+    value_rc = value_dense(inputs_rc)
+    query_fwd = separate_heads(query_fwd, "query_fwd")
+    key_fwd = separate_heads(key_fwd, "key_fwd")
+    value_fwd = separate_heads(value_fwd, "value_fwd")
+    query_rc = separate_heads(query_rc, "query_rc")
+    key_rc = separate_heads(key_rc, "key_rc")
+    value_rc = separate_heads(value_rc, "value_rc")
+    att_out_fwd, weights_fwd = get_attention(query_fwd, key_fwd, value_fwd, "fwd")
+    att_out_rc, weights_rc = get_attention(query_rc, key_rc, value_rc, "rc")
+    perm_fwd = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
+                      name="permute_attention_fwd_out_{n}".format(n=current_tformer))
+    att_out_fwd = perm_fwd(att_out_fwd)
+    att_out_fwd = Reshape((seq_len, embed_dim))(att_out_fwd)
+    output_fwd = combine_heads(att_out_fwd)
+    perm_rc = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
+                     name="permute_attention_rc_out_{n}".format(n=current_tformer))
+    att_out_rc = perm_rc(att_out_rc)
+    att_out_rc = Reshape((seq_len, embed_dim))(att_out_rc)
+    output_rc = combine_heads(att_out_rc)
+    return output_fwd, output_rc
+
+
+def add_transformer_block(inputs, embed_dim, num_heads, ff_dim, dropout_rate, initializer,
+                          current_tformer, seed, training=False):
     attn_output = add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer)
 
     layernorm1 = LayerNormalization(epsilon=1e-6)
     layernorm2 = LayerNormalization(epsilon=1e-6)
-    dropout1 = Dropout(dropout_rate)
-    dropout2 = Dropout(dropout_rate)
 
     if not np.isclose(dropout_rate, 0.0):
-        attn_output = dropout1(attn_output, training=training)
+        attn_output = Dropout(dropout_rate, seed=seed)(attn_output, training=training)
     out1 = layernorm1(add([inputs, attn_output]))
     ffn_output = Dense(ff_dim, activation="relu", kernel_initializer=initializer)(out1)
     ffn_output = Dense(embed_dim, kernel_initializer=initializer)(ffn_output)
     if not np.isclose(dropout_rate, 0.0):
-        ffn_output = dropout2(ffn_output, training=training)
+        ffn_output = Dropout(dropout_rate, seed=seed)(ffn_output, training=training)
     return layernorm2(add([out1, ffn_output]))
+
+
+def add_siam_transformer_block(inputs_fwd, inputs_rc, embed_dim, num_heads, ff_dim, dropout_rate, initializer,
+                               current_tformer, seed, training=False):
+    attn_output_fwd, attn_output_rc = add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer,
+                                                             current_tformer)
+
+    if not np.isclose(dropout_rate, 0.0):
+        attn_output_fwd = Dropout(dropout_rate, seed=seed)(attn_output_fwd, training=training)
+        attn_output_rc = Dropout(dropout_rate, seed=seed)(attn_output_rc, training=training)
+    out1_fwd, out1_rc = add_siam_layernorm(add([inputs_fwd, attn_output_fwd]), add([inputs_rc, attn_output_rc]),
+                                           current_ln=current_tformer*2)
+    ffn_1 = Dense(ff_dim, activation="relu", kernel_initializer=initializer)
+    ffn_2 = Dense(embed_dim, kernel_initializer=initializer)
+    ffn_output_fwd = ffn_1(out1_fwd)
+    ffn_output_fwd = ffn_2(ffn_output_fwd)
+    ffn_output_rc = ffn_1(out1_rc)
+    ffn_output_rc = ffn_2(ffn_output_rc)
+    if not np.isclose(dropout_rate, 0.0):
+        ffn_output_fwd = Dropout(dropout_rate, seed=seed)(ffn_output_fwd, training=training)
+        ffn_output_rc = Dropout(dropout_rate, seed=seed)(ffn_output_rc, training=training)
+    output_fwd, output_rc = add_siam_layernorm(add([out1_fwd, ffn_output_fwd]), add([out1_rc, ffn_output_rc]),
+                                               current_ln=(current_tformer*2)+1)
+    return output_fwd, output_rc
+
+
+def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
+    input_shape = inputs_rc.shape
+    if len(input_shape) != 3:
+        raise ValueError("Intended for RC layers with 2D output."
+                         "Expected dimension: 3, but got: " + str(len(input_shape)))
+    out = concatenate([inputs_fwd, inputs_rc], axis=1)
+    out = LayerNormalization(epsilon=1e-6)(out)
+    split_shape = out.shape[1] // 2
+    new_shape = [split_shape, input_shape[2]]
+    fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
+                     name="split_layernorm_fwd_output_{n}".format(n=current_ln))
+    rc_out = Lambda(lambda x: x[:, split_shape:, :], output_shape=new_shape,
+                    name="split_layernorm_rc_output1_{n}".format(n=current_ln))
+
+    x_fwd = fwd_out(out)
+    x_rc = rc_out(out)
+    return x_fwd, x_rc
 
 
 def get_positional_encoding(length, embed_dim):

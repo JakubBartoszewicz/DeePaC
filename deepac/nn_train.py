@@ -32,7 +32,7 @@ from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
-from deepac.tformers import add_transformer_block, PositionEmbedding
+from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block
 
 
 class RCConfig:
@@ -759,6 +759,7 @@ class RCNet:
                                       ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
                                       current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
                                       training=self.config.mc_dropout)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
@@ -830,11 +831,15 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None:
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed)
             x = position_embedding(x, current_tformer=self._current_tformer)
             x = add_transformer_block(x, embed_dim=x.shape[-1], num_heads=self.config.tformer_heads[i],
                                       ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
                                       current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
                                       training=self.config.mc_dropout)
             self._current_tformer = self._current_tformer + 1
 
@@ -1075,6 +1080,8 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_bn = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -1107,6 +1114,21 @@ class RCNet:
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x_fwd = position_embedding(x_fwd, current_tformer=self._current_tformer)
+            x_rc = position_embedding(x_rc, current_tformer=self._current_tformer)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, embed_dim=x_fwd.shape[-1],
+                                                     num_heads=self.config.tformer_heads[0],
+                                                     ff_dim=self.config.tformer_dim[0],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -1123,7 +1145,7 @@ class RCNet:
                 x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc,
                                                                                      training=self.config.mc_dropout)
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should be convolutional, recurrent or a transformer')
 
         start_fwd, start_rc = None, None
         # For next convolutional layers
@@ -1196,8 +1218,25 @@ class RCNet:
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None:
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed)
+            x_fwd = position_embedding(x_fwd, current_tformer=self._current_tformer)
+            x_rc = position_embedding(x_rc, current_tformer=self._current_tformer)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, embed_dim=x_fwd.shape[-1],
+                                                     num_heads=self.config.tformer_heads[i],
+                                                     ff_dim=self.config.tformer_dim[i],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
