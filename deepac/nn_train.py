@@ -34,6 +34,7 @@ from tensorflow.keras.models import load_model
 from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
 from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
     add_rc_transformer_block
+from functools import partial
 
 
 class RCConfig:
@@ -700,7 +701,7 @@ class RCNet:
         input_shape = inputs.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
-                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+                             "Expected dimensions: 3, but got: " + str(len(input_shape)))
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
@@ -945,23 +946,26 @@ class RCNet:
         # Transformer blocks
         elif self.config.n_tformer > 0:
             position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                   seed=self.config.seed)
+                                                   seed=self.config.seed,
+                                                   growing_rc=(not self.config.tformer_keep_edim))
             embed_dim = x.shape[-1]
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim // 2, kernel_size=1)
+            else:
+                edim_compressor = None
+
             x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[0],
                                          ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
+                                         keep_edim_fction=edim_compressor,
                                          training=self.config.mc_dropout)
-            # Maintain embedding dimension
-            if self.config.tformer_keep_edim:
-                if embed_dim % 2 != 0:
-                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
-                                     "Received: {}".format(embed_dim))
-                x = self._add_rc_conv1d(x, units=embed_dim/2, kernel_size=1,
-                                        dilation_rate=1,
-                                        stride=1, cardinality=1)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -1029,25 +1033,32 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None or not self.config.tformer_keep_edim:
+            if position_embedding is None:
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                       seed=self.config.seed, full_rc=True)
+                                                       seed=self.config.seed,
+                                                       growing_rc=(not self.config.tformer_keep_edim))
+            elif not self.config.tformer_keep_edim:
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed, growing_rc=True)
             embed_dim = x.shape[-1]
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim//2, kernel_size=1)
+            else:
+                edim_compressor = None
+
             x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[i],
                                          ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
+                                         keep_edim_fction=edim_compressor,
                                          training=self.config.mc_dropout)
-            # Maintain embedding dimension
-            if self.config.tformer_keep_edim:
-                if embed_dim % 2 != 0:
-                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
-                                     "Received: {}".format(embed_dim))
-                x = self._add_rc_conv1d(x, units=embed_dim/2, kernel_size=1,
-                                        dilation_rate=1,
-                                        stride=1, cardinality=1)
+
             self._current_tformer = self._current_tformer + 1
 
         # Pooling layer

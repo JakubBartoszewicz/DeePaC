@@ -148,7 +148,7 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
 
 
 def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
-                             current_tformer, seed, training=False):
+                             current_tformer, seed, keep_edim_fction=None, training=False):
 
     revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                         name="reverse_complement_tformer_input_{n}".format(n=current_tformer))
@@ -161,6 +161,9 @@ def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, f
                          name="reverse_complement_tformer_output_{n}".format(n=current_tformer))
     output_rc = revcomp_out(output_rc)
     out = concatenate([output_fwd, output_rc], axis=-1)
+    if keep_edim_fction is not None:
+        out = keep_edim_fction(out)
+
     return out
 
 
@@ -183,7 +186,7 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     return x_fwd, x_rc
 
 
-def get_positional_encoding(length, embed_dim, rc_folds=1):
+def get_position_encoding(length, embed_dim, rc_folds=1):
     if embed_dim % 2 != 0:
         raise ValueError("Channel dimension of the input embedding for the transformer "
                          "with fixed position signal must be divisible by 2. Received: {}".format(embed_dim))
@@ -206,13 +209,15 @@ def get_positional_encoding(length, embed_dim, rc_folds=1):
 
 
 class PositionEmbedding(Layer):
-    def __init__(self, max_depth, seed, use_depth=True, fixed=True, full_rc=False, **kwargs):
+    def __init__(self, max_depth, seed, use_depth=True, fixed=True, growing_rc=False, **kwargs):
         self.max_depth = max_depth
         self.horizontal_position_embeddings = None
         self.vertical_position_embeddings = None
         self.seed = seed
         self.fixed = fixed
-        self.full_rc = full_rc
+        self.growing_rc = growing_rc
+        self.seq_length = None
+        self.embed_dim = None
         self.use_depth = False if max_depth == 1 else use_depth
         self.initializer = tf.keras.initializers.RandomUniform(seed=self.seed)
         super().__init__(**kwargs)
@@ -223,27 +228,20 @@ class PositionEmbedding(Layer):
         config['seed'] = self.seed
         config['use_depth'] = self.use_depth
         config['fixed'] = self.fixed
-        config['full_rc'] = self.full_rc
+        config['growing_rc'] = self.growing_rc
         return config
 
     def build(self, input_shape):
-        seq_length, embed_dim = input_shape[-2:]
-        if self.fixed:
-            self.horizontal_position_embeddings = get_positional_encoding(seq_length, embed_dim)
-            if self.full_rc:
-                self.vertical_position_embeddings = get_positional_encoding(seq_length, embed_dim,
-                                                                            rc_folds=embed_dim//4)
-            else:
-                self.vertical_position_embeddings = self.horizontal_position_embeddings
-        else:
+        self.seq_length, self.embed_dim = input_shape[-2:]
+        if not self.fixed:
             self.horizontal_position_embeddings = self.add_weight(
-                shape=(seq_length, embed_dim),
+                shape=(self.seq_length, self.embed_dim),
                 initializer=self.initializer,
                 name='horizontal_position_embeddings',
                 trainable=True)
             if self.use_depth:
                 self.vertical_position_embeddings = self.add_weight(
-                    shape=(self.max_depth, embed_dim),
+                    shape=(self.max_depth, self.embed_dim),
                     initializer=self.initializer,
                     name='vertical_position_embeddings',
                     trainable=True)
@@ -251,12 +249,15 @@ class PositionEmbedding(Layer):
 
     def call(self, inputs, **kwargs):
         current_tformer = kwargs.get('current_tformer')
-        out = inputs + self.horizontal_position_embeddings
-        if self.use_depth:
-            if self.fixed:
-                vpe = K.expand_dims(self.vertical_position_embeddings[:, current_tformer, :], axis=1)
-                out = out + vpe
-            else:
+        if self.fixed:
+            rc_folds = current_tformer + 1 if self.growing_rc else 1
+            position_encoding = get_position_encoding(self.seq_length, self.embed_dim, rc_folds=rc_folds)
+            out = inputs + position_encoding
+            if self.use_depth:
+                out = out + K.expand_dims(position_encoding[:, current_tformer, :], axis=1)
+        else:
+            out = inputs + self.horizontal_position_embeddings
+            if self.use_depth:
                 out = out + self.vertical_position_embeddings[current_tformer, :]
         return out
 
