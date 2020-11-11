@@ -183,26 +183,36 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     return x_fwd, x_rc
 
 
-def get_positional_encoding(length, embed_dim):
+def get_positional_encoding(length, embed_dim, rc_folds=1):
     if embed_dim % 2 != 0:
         raise ValueError("Channel dimension of the input embedding for the transformer "
                          "with fixed position signal must be divisible by 2. Received: {}".format(embed_dim))
     position = K.arange(0, length, dtype=K.floatx())
-    num_timescales = embed_dim // 2
+    num_timescales = embed_dim // (2*rc_folds)
     log_timescale_increment = np.log(10000) / (num_timescales - 1)
     inv_timescales = (K.exp(K.arange(num_timescales, dtype=K.floatx()) * (-log_timescale_increment)))
     scaled_time = K.expand_dims(position, 1) * K.expand_dims(inv_timescales, 0)
+    # This follows the Tensor2Tensor library implementation
+    # (https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py)
+    # Note that this slightly differs from the ordering in the Attention Is All You Need paper
+    # The difference doesn't really matter.
+    # See a discussion here: https://github.com/tensorflow/tensor2tensor/pull/177
     signal = K.concatenate([K.sin(scaled_time), K.cos(scaled_time)], axis=1)
+    for i in range(1, rc_folds):
+        signal_rc = K.reverse(signal, axes=(0, 1))
+        signal = K.concatenate([signal, signal_rc], axis=1)
+
     return K.expand_dims(signal, axis=0)
 
 
 class PositionEmbedding(Layer):
-    def __init__(self, max_depth, seed, use_depth=True, fixed=True, **kwargs):
+    def __init__(self, max_depth, seed, use_depth=True, fixed=True, full_rc=False, **kwargs):
         self.max_depth = max_depth
         self.horizontal_position_embeddings = None
         self.vertical_position_embeddings = None
         self.seed = seed
         self.fixed = fixed
+        self.full_rc = full_rc
         self.use_depth = False if max_depth == 1 else use_depth
         self.initializer = tf.keras.initializers.RandomUniform(seed=self.seed)
         super().__init__(**kwargs)
@@ -213,13 +223,18 @@ class PositionEmbedding(Layer):
         config['seed'] = self.seed
         config['use_depth'] = self.use_depth
         config['fixed'] = self.fixed
+        config['full_rc'] = self.full_rc
         return config
 
     def build(self, input_shape):
         seq_length, embed_dim = input_shape[-2:]
         if self.fixed:
             self.horizontal_position_embeddings = get_positional_encoding(seq_length, embed_dim)
-            self.vertical_position_embeddings = self.horizontal_position_embeddings
+            if self.full_rc:
+                self.vertical_position_embeddings = get_positional_encoding(seq_length, embed_dim,
+                                                                            rc_folds=embed_dim//4)
+            else:
+                self.vertical_position_embeddings = self.horizontal_position_embeddings
         else:
             self.horizontal_position_embeddings = self.add_weight(
                 shape=(seq_length, embed_dim),
@@ -239,7 +254,8 @@ class PositionEmbedding(Layer):
         out = inputs + self.horizontal_position_embeddings
         if self.use_depth:
             if self.fixed:
-                K.expand_dims(self.vertical_position_embeddings[:, current_tformer, :], axis=1)
+                vpe = K.expand_dims(self.vertical_position_embeddings[:, current_tformer, :], axis=1)
+                out = out + vpe
             else:
                 out = out + self.vertical_position_embeddings[current_tformer, :]
         return out

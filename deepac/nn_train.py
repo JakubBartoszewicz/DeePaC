@@ -1031,7 +1031,7 @@ class RCNet:
         for i in range(self._current_tformer, self.config.n_tformer):
             if position_embedding is None or not self.config.tformer_keep_edim:
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                       seed=self.config.seed)
+                                                       seed=self.config.seed, full_rc=True)
             embed_dim = x.shape[-1]
             x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[i],
