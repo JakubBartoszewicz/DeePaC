@@ -261,7 +261,7 @@ def get_position_encoding(length, embed_dim, rc_folds=1):
 
 
 class PositionEmbedding(Layer):
-    def __init__(self, max_depth, seed, use_depth=True, growing_rc=False, **kwargs):
+    def __init__(self, max_depth, seed, use_depth=False, growing_rc=False, **kwargs):
         self.max_depth = max_depth
         self.horizontal_position_embeddings = None
         self.vertical_position_embeddings = None
