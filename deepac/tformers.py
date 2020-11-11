@@ -8,7 +8,6 @@ import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Layer, Dropout,\
     Reshape, add, Activation, concatenate
-from tensorflow.keras.activations import softmax
 from tensorflow.keras.utils import get_custom_objects
 
 
@@ -30,19 +29,40 @@ def get_attention(query, key, value, current_tformer, mode_name=None):
     scale = Lambda(lambda x: x / np.sqrt(dim_key),
                    name=layer_name)
     scaled_score = scale(score)
-    weights = Activation(softmax)(scaled_score)
+    weights = Activation("softmax")(scaled_score)
     output = tf.matmul(weights, value)
-    return output, weights
+    return output
 
 
-def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer):
+def get_perf_attention(query, key, value, activation="relu", kernel_epsilon=0.001):
+    query = Activation(activation)(query) + kernel_epsilon
+    key = Activation(activation)(key) + kernel_epsilon
+    value = Activation(activation)(value) + kernel_epsilon
+    score_z = tf.matmul(key, value, transpose_a=True)
+    # based on https://github.com/lucidrains/performer-pytorch/blob/main/performer_pytorch/performer_pytorch.py
+    k_sum = tf.math.reduce_sum(key, axis=-2)
+    d_inv = 1. / tf.einsum('...nd,...d->...n', query, k_sum)
+    out = tf.einsum('...de,...nd,...n->...ne', score_z, query, d_inv)
+    return out
+
+
+def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer, perf_dim=0):
     if embed_dim % num_heads != 0:
         raise ValueError(
             f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}"
         )
-    projection_dim = embed_dim // num_heads
-    query_dense = Dense(embed_dim, kernel_initializer=initializer)
-    key_dense = Dense(embed_dim, kernel_initializer=initializer)
+
+    if perf_dim > 0:
+        projection_dim_m = perf_dim // num_heads
+        query_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+                            name="random_projection_query_{}".format(current_tformer))
+        key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+                          name="random_projection_key_{}".format(current_tformer))
+    else:
+        projection_dim_m = embed_dim // num_heads
+        query_dense = Dense(embed_dim, kernel_initializer=initializer)
+        key_dense = Dense(embed_dim, kernel_initializer=initializer)
+    projection_dim_v = embed_dim // num_heads
     value_dense = Dense(embed_dim, kernel_initializer=initializer)
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
     seq_len = inputs.shape[1]
@@ -50,10 +70,15 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     query = query_dense(inputs)
     key = key_dense(inputs)
     value = value_dense(inputs)
-    query = separate_heads(query, "query", seq_len, num_heads, projection_dim, current_tformer)
-    key = separate_heads(key, "key", seq_len, num_heads, projection_dim, current_tformer)
-    value = separate_heads(value, "value", seq_len, num_heads, projection_dim, current_tformer)
-    att_out, weights = get_attention(query, key, value, current_tformer)
+    query = separate_heads(query, "query", seq_len, num_heads, projection_dim_m, current_tformer)
+    key = separate_heads(key, "key", seq_len, num_heads, projection_dim_m, current_tformer)
+    value = separate_heads(value, "value", seq_len, num_heads, projection_dim_v, current_tformer)
+
+    if perf_dim > 0:
+        att_out = get_perf_attention(query, key, value)
+    else:
+        att_out = get_attention(query, key, value, current_tformer)
+
     perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                   name="permute_attention_out_{n}".format(n=current_tformer))
     att_out = perm(att_out)
@@ -62,14 +87,23 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     return output
 
 
-def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer, current_tformer):
+def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer, current_tformer, perf_dim=0):
     if embed_dim % num_heads != 0:
         raise ValueError(
             f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}"
         )
-    projection_dim = embed_dim // num_heads
-    query_dense = Dense(embed_dim, kernel_initializer=initializer)
-    key_dense = Dense(embed_dim, kernel_initializer=initializer)
+
+    if perf_dim > 0:
+        projection_dim_m = perf_dim // num_heads
+        query_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+                            name="random_projection_query_{}".format(current_tformer))
+        key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+                          name="random_projection_key_{}".format(current_tformer))
+    else:
+        projection_dim_m = embed_dim // num_heads
+        query_dense = Dense(embed_dim, kernel_initializer=initializer)
+        key_dense = Dense(embed_dim, kernel_initializer=initializer)
+    projection_dim_v = embed_dim // num_heads
     value_dense = Dense(embed_dim, kernel_initializer=initializer)
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
     seq_len = inputs_fwd.shape[1]
@@ -80,14 +114,20 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
     query_rc = query_dense(inputs_rc)
     key_rc = key_dense(inputs_rc)
     value_rc = value_dense(inputs_rc)
-    query_fwd = separate_heads(query_fwd, "query_fwd", seq_len, num_heads, projection_dim, current_tformer)
-    key_fwd = separate_heads(key_fwd, "key_fwd", seq_len, num_heads, projection_dim, current_tformer)
-    value_fwd = separate_heads(value_fwd, "value_fwd", seq_len, num_heads, projection_dim, current_tformer)
-    query_rc = separate_heads(query_rc, "query_rc", seq_len, num_heads, projection_dim, current_tformer)
-    key_rc = separate_heads(key_rc, "key_rc", seq_len, num_heads, projection_dim, current_tformer)
-    value_rc = separate_heads(value_rc, "value_rc", seq_len, num_heads, projection_dim, current_tformer)
-    att_out_fwd, weights_fwd = get_attention(query_fwd, key_fwd, value_fwd, current_tformer, "fwd")
-    att_out_rc, weights_rc = get_attention(query_rc, key_rc, value_rc, current_tformer, "rc")
+    query_fwd = separate_heads(query_fwd, "query_fwd", seq_len, num_heads, projection_dim_m, current_tformer)
+    key_fwd = separate_heads(key_fwd, "key_fwd", seq_len, num_heads, projection_dim_m, current_tformer)
+    value_fwd = separate_heads(value_fwd, "value_fwd", seq_len, num_heads, projection_dim_v, current_tformer)
+    query_rc = separate_heads(query_rc, "query_rc", seq_len, num_heads, projection_dim_m, current_tformer)
+    key_rc = separate_heads(key_rc, "key_rc", seq_len, num_heads, projection_dim_m, current_tformer)
+    value_rc = separate_heads(value_rc, "value_rc", seq_len, num_heads, projection_dim_v, current_tformer)
+
+    if perf_dim > 0:
+        att_out_fwd = get_perf_attention(query_fwd, key_fwd, value_fwd)
+        att_out_rc = get_perf_attention(query_rc, key_rc, value_rc)
+    else:
+        att_out_fwd = get_attention(query_fwd, key_fwd, value_fwd, current_tformer, "fwd")
+        att_out_rc = get_attention(query_rc, key_rc, value_rc, current_tformer, "rc")
+
     perm_fwd = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                       name="permute_attention_fwd_out_{n}".format(n=current_tformer))
     att_out_fwd = perm_fwd(att_out_fwd)
@@ -102,10 +142,10 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
 
 
 def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
-                          current_tformer, seed, training=False):
+                          current_tformer, seed, perf_dim=0, training=False):
 
     inputs = position_embedding(inputs, current_tformer=current_tformer)
-    attn_output = add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer)
+    attn_output = add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer, perf_dim=perf_dim)
 
     layernorm1 = LayerNormalization(epsilon=1e-6)
     layernorm2 = LayerNormalization(epsilon=1e-6)
@@ -122,12 +162,12 @@ def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_d
 
 def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_dim, num_heads, ff_dim, dropout_rate,
                                initializer, current_tformer, seed, full_rc_att=False, full_rc_ffn=False,
-                               training=False):
+                               perf_dim=0, training=False):
 
     inputs_fwd = position_embedding(inputs_fwd, current_tformer=current_tformer)
     inputs_rc = position_embedding(inputs_rc, current_tformer=current_tformer)
     attn_output_fwd, attn_output_rc = add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initializer,
-                                                             current_tformer)
+                                                             current_tformer, perf_dim=perf_dim)
 
     if not np.isclose(dropout_rate, 0.0):
         attn_output_fwd = Dropout(dropout_rate, seed=seed)(attn_output_fwd, training=training)
@@ -160,14 +200,14 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
 
 def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
                              current_tformer, seed, keep_edim_fction=None, full_rc_att=False, full_rc_ffn=False,
-                             training=False):
+                             perf_dim=0, training=False):
 
     revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                         name="reverse_complement_tformer_input_{n}".format(n=current_tformer))
     inputs_rc = revcomp_in(inputs)
     output_fwd, output_rc = add_siam_transformer_block(inputs, inputs_rc, position_embedding, embed_dim, num_heads,
                                                        ff_dim, dropout_rate, initializer, current_tformer, seed,
-                                                       full_rc_att, full_rc_ffn, training)
+                                                       full_rc_att, full_rc_ffn, perf_dim=perf_dim, training=training)
 
     revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=output_rc.shape[1:],
                          name="reverse_complement_tformer_output_{n}".format(n=current_tformer))
