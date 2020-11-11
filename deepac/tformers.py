@@ -121,7 +121,8 @@ def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_d
 
 
 def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_dim, num_heads, ff_dim, dropout_rate,
-                               initializer, current_tformer, seed, training=False):
+                               initializer, current_tformer, seed, full_rc_att=False, full_rc_ffn=False,
+                               training=False):
 
     inputs_fwd = position_embedding(inputs_fwd, current_tformer=current_tformer)
     inputs_rc = position_embedding(inputs_rc, current_tformer=current_tformer)
@@ -131,8 +132,13 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
     if not np.isclose(dropout_rate, 0.0):
         attn_output_fwd = Dropout(dropout_rate, seed=seed)(attn_output_fwd, training=training)
         attn_output_rc = Dropout(dropout_rate, seed=seed)(attn_output_rc, training=training)
-    out1_fwd, out1_rc = add_siam_layernorm(add([inputs_fwd, attn_output_fwd]), add([inputs_rc, attn_output_rc]),
-                                           current_ln=current_tformer*2)
+    if full_rc_att:
+        out1_fwd, out1_rc = add_siam_layernorm(add([inputs_fwd, attn_output_fwd, attn_output_rc]),
+                                               add([inputs_rc, attn_output_fwd, attn_output_rc]),
+                                               current_ln=current_tformer * 2)
+    else:
+        out1_fwd, out1_rc = add_siam_layernorm(add([inputs_fwd, attn_output_fwd]), add([inputs_rc, attn_output_rc]),
+                                               current_ln=current_tformer*2)
     ffn_1 = Dense(ff_dim, activation="relu", kernel_initializer=initializer)
     ffn_2 = Dense(embed_dim, kernel_initializer=initializer)
     ffn_output_fwd = ffn_1(out1_fwd)
@@ -142,20 +148,26 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
     if not np.isclose(dropout_rate, 0.0):
         ffn_output_fwd = Dropout(dropout_rate, seed=seed)(ffn_output_fwd, training=training)
         ffn_output_rc = Dropout(dropout_rate, seed=seed)(ffn_output_rc, training=training)
-    output_fwd, output_rc = add_siam_layernorm(add([out1_fwd, ffn_output_fwd]), add([out1_rc, ffn_output_rc]),
-                                               current_ln=(current_tformer*2)+1)
+    if full_rc_ffn:
+        output_fwd, output_rc = add_siam_layernorm(add([out1_fwd, ffn_output_fwd, ffn_output_rc]),
+                                                   add([out1_rc, ffn_output_fwd, ffn_output_rc]),
+                                                   current_ln=(current_tformer*2)+1)
+    else:
+        output_fwd, output_rc = add_siam_layernorm(add([out1_fwd, ffn_output_fwd]), add([out1_rc, ffn_output_rc]),
+                                                   current_ln=(current_tformer*2)+1)
     return output_fwd, output_rc
 
 
 def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
-                             current_tformer, seed, keep_edim_fction=None, training=False):
+                             current_tformer, seed, keep_edim_fction=None, full_rc_att=False, full_rc_ffn=False,
+                             training=False):
 
     revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                         name="reverse_complement_tformer_input_{n}".format(n=current_tformer))
     inputs_rc = revcomp_in(inputs)
     output_fwd, output_rc = add_siam_transformer_block(inputs, inputs_rc, position_embedding, embed_dim, num_heads,
                                                        ff_dim, dropout_rate, initializer, current_tformer, seed,
-                                                       training)
+                                                       full_rc_att, full_rc_ffn, training)
 
     revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=output_rc.shape[1:],
                          name="reverse_complement_tformer_output_{n}".format(n=current_tformer))
@@ -209,12 +221,11 @@ def get_position_encoding(length, embed_dim, rc_folds=1):
 
 
 class PositionEmbedding(Layer):
-    def __init__(self, max_depth, seed, use_depth=True, fixed=True, growing_rc=False, **kwargs):
+    def __init__(self, max_depth, seed, use_depth=True, growing_rc=False, **kwargs):
         self.max_depth = max_depth
         self.horizontal_position_embeddings = None
         self.vertical_position_embeddings = None
         self.seed = seed
-        self.fixed = fixed
         self.growing_rc = growing_rc
         self.seq_length = None
         self.embed_dim = None
@@ -227,38 +238,20 @@ class PositionEmbedding(Layer):
         config['max_depth'] = self.max_depth
         config['seed'] = self.seed
         config['use_depth'] = self.use_depth
-        config['fixed'] = self.fixed
         config['growing_rc'] = self.growing_rc
         return config
 
     def build(self, input_shape):
         self.seq_length, self.embed_dim = input_shape[-2:]
-        if not self.fixed:
-            self.horizontal_position_embeddings = self.add_weight(
-                shape=(self.seq_length, self.embed_dim),
-                initializer=self.initializer,
-                name='horizontal_position_embeddings',
-                trainable=True)
-            if self.use_depth:
-                self.vertical_position_embeddings = self.add_weight(
-                    shape=(self.max_depth, self.embed_dim),
-                    initializer=self.initializer,
-                    name='vertical_position_embeddings',
-                    trainable=True)
         super().build(input_shape)
 
     def call(self, inputs, **kwargs):
         current_tformer = kwargs.get('current_tformer')
-        if self.fixed:
-            rc_folds = current_tformer + 1 if self.growing_rc else 1
-            position_encoding = get_position_encoding(self.seq_length, self.embed_dim, rc_folds=rc_folds)
-            out = inputs + position_encoding
-            if self.use_depth:
-                out = out + K.expand_dims(position_encoding[:, current_tformer, :], axis=1)
-        else:
-            out = inputs + self.horizontal_position_embeddings
-            if self.use_depth:
-                out = out + self.vertical_position_embeddings[current_tformer, :]
+        rc_folds = current_tformer + 1 if self.growing_rc else 1
+        position_encoding = get_position_encoding(self.seq_length, self.embed_dim, rc_folds=rc_folds)
+        out = inputs + position_encoding
+        if self.use_depth:
+            out = out + K.expand_dims(position_encoding[:, current_tformer, :], axis=1)
         return out
 
 

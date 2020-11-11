@@ -160,6 +160,8 @@ class RCConfig:
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
             try:
+                self.full_rc_att = config['Architecture'].getboolean('Full_RC_Attention')
+                self.full_rc_ffn = config['Architecture'].getboolean('Full_RC_FFN')
                 self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
                 self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
                 self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
@@ -965,6 +967,8 @@ class RCNet:
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
                                          keep_edim_fction=edim_compressor,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
                                          training=self.config.mc_dropout)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
@@ -1057,6 +1061,8 @@ class RCNet:
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
                                          keep_edim_fction=edim_compressor,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
                                          training=self.config.mc_dropout)
 
             self._current_tformer = self._current_tformer + 1
@@ -1185,6 +1191,8 @@ class RCNet:
                                                      initializer=self.config.initializers["dense"],
                                                      current_tformer=self._current_tformer,
                                                      seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
                                                      training=self.config.mc_dropout)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
@@ -1289,6 +1297,8 @@ class RCNet:
                                                      initializer=self.config.initializers["dense"],
                                                      current_tformer=self._current_tformer,
                                                      seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
                                                      training=self.config.mc_dropout)
             self._current_tformer = self._current_tformer + 1
 
