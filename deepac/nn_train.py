@@ -954,14 +954,14 @@ class RCNet:
                                                    seed=self.config.seed,
                                                    growing_rc=(not self.config.tformer_keep_edim))
             embed_dim = x.shape[-1]
-            # Maintain embedding dimension
-            if self.config.tformer_keep_edim:
-                if embed_dim % 2 != 0:
-                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
-                                     "Received: {}".format(embed_dim))
-                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim // 2, kernel_size=1)
-            else:
-                edim_compressor = None
+            # # Maintain embedding dimension
+            # if self.config.tformer_keep_edim:
+            #     if embed_dim % 2 != 0:
+            #         raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+            #                          "Received: {}".format(embed_dim))
+            #     edim_compressor = partial(self._add_rc_conv1d, units=embed_dim // 2, kernel_size=1)
+            # else:
+            #     edim_compressor = None
 
             x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[0],
@@ -969,7 +969,7 @@ class RCNet:
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
-                                         keep_edim_fction=edim_compressor,
+                                         keep_edim_fction=None,
                                          full_rc_att=self.config.full_rc_att,
                                          full_rc_ffn=self.config.full_rc_ffn,
                                          perf_dim=self.config.tformer_perf_dim[0],
@@ -1041,7 +1041,7 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None:
+            if position_embedding is None or (self.config.tformer_keep_edim and self._current_tformer == 1):
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                        seed=self.config.seed,
                                                        growing_rc=(not self.config.tformer_keep_edim))
