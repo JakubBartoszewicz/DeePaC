@@ -243,7 +243,7 @@ def get_position_encoding(length, embed_dim, rc_folds=1):
         raise ValueError("Channel dimension of the input embedding for the transformer "
                          "with fixed position signal must be divisible by 2. Received: {}".format(embed_dim))
     position = K.arange(0, length, dtype=K.floatx())
-    num_timescales = embed_dim // (2*rc_folds)
+    num_timescales = embed_dim // (2**rc_folds)
     log_timescale_increment = np.log(10000) / (num_timescales - 1)
     inv_timescales = (K.exp(K.arange(num_timescales, dtype=K.floatx()) * (-log_timescale_increment)))
     scaled_time = K.expand_dims(position, 1) * K.expand_dims(inv_timescales, 0)
