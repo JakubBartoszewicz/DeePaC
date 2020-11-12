@@ -89,8 +89,10 @@ def run_templates(args):
     modulepath = os.path.dirname(__file__)
     extra_templates_path = os.path.join(modulepath, "builtin", "config_templates")
     training_templates_path = os.path.join(modulepath, "builtin", "config")
+    test_templates_path = os.path.join(modulepath, "tests", "configs", "nn-test-L.ini")
     shutil.copytree(training_templates_path, os.path.join(os.getcwd(), "deepac_training_configs"))
     shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
+    shutil.copyfile(test_templates_path, os.path.join(os.getcwd(), "deepac_training_configs", "nn-test-L.ini"))
 
 
 def global_setup(args):
