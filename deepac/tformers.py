@@ -34,14 +34,22 @@ def get_attention(query, key, value, current_tformer, mode_name=None):
     return output
 
 
-def get_perf_attention(query, key, value, activation="relu", kernel_epsilon=0.001):
-    query = Activation(activation)(query) + kernel_epsilon
-    key = Activation(activation)(key) + kernel_epsilon
-    value = Activation(activation)(value) + kernel_epsilon
+def get_perf_attention(query, key, value, current_tformer, mode_name=None, activation="relu", kernel_epsilon=0.001):
+    if mode_name is None:
+        layer_name_postfix = "_{n}".format(n=current_tformer)
+    else:
+        layer_name_postfix = "_{mode}_{n}".format(mode=mode_name, n=current_tformer)
+
+    add_eps = Lambda(lambda x: tf.add(x, kernel_epsilon), name="add_eps_{}".format(layer_name_postfix))
+    query = add_eps(Activation(activation)(query))
+    key = add_eps(Activation(activation)(key))
+    value = add_eps(Activation(activation)(value))
     score_z = tf.matmul(key, value, transpose_a=True)
     # based on https://github.com/lucidrains/performer-pytorch/blob/main/performer_pytorch/performer_pytorch.py
     k_sum = tf.math.reduce_sum(key, axis=-2)
-    d_inv = 1. / tf.einsum('...nd,...d->...n', query, k_sum)
+    invert = Lambda(lambda x: tf.truediv(tf.cast(1, x.dtype), x), name="d_inv_{}".format(layer_name_postfix))
+    d_inv = tf.einsum('...nd,...d->...n', query, k_sum)
+    d_inv = invert(d_inv)
     out = tf.einsum('...de,...nd,...n->...ne', score_z, query, d_inv)
     return out
 
@@ -58,10 +66,12 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
                             name="random_projection_query_{}".format(current_tformer))
         key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
                           name="random_projection_key_{}".format(current_tformer))
+        att_fction = get_perf_attention
     else:
         projection_dim_m = embed_dim // num_heads
         query_dense = Dense(embed_dim, kernel_initializer=initializer)
         key_dense = Dense(embed_dim, kernel_initializer=initializer)
+        att_fction = get_attention
     projection_dim_v = embed_dim // num_heads
     value_dense = Dense(embed_dim, kernel_initializer=initializer)
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
@@ -74,10 +84,7 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
     key = separate_heads(key, "key", seq_len, num_heads, projection_dim_m, current_tformer)
     value = separate_heads(value, "value", seq_len, num_heads, projection_dim_v, current_tformer)
 
-    if perf_dim > 0:
-        att_out = get_perf_attention(query, key, value)
-    else:
-        att_out = get_attention(query, key, value, current_tformer)
+    att_out = att_fction(query, key, value, current_tformer)
 
     perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                   name="permute_attention_out_{n}".format(n=current_tformer))
@@ -99,10 +106,12 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
                             name="random_projection_query_{}".format(current_tformer))
         key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
                           name="random_projection_key_{}".format(current_tformer))
+        att_fction = get_perf_attention
     else:
         projection_dim_m = embed_dim // num_heads
         query_dense = Dense(embed_dim, kernel_initializer=initializer)
         key_dense = Dense(embed_dim, kernel_initializer=initializer)
+        att_fction = get_attention
     projection_dim_v = embed_dim // num_heads
     value_dense = Dense(embed_dim, kernel_initializer=initializer)
     combine_heads = Dense(embed_dim, kernel_initializer=initializer)
@@ -121,12 +130,8 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
     key_rc = separate_heads(key_rc, "key_rc", seq_len, num_heads, projection_dim_m, current_tformer)
     value_rc = separate_heads(value_rc, "value_rc", seq_len, num_heads, projection_dim_v, current_tformer)
 
-    if perf_dim > 0:
-        att_out_fwd = get_perf_attention(query_fwd, key_fwd, value_fwd)
-        att_out_rc = get_perf_attention(query_rc, key_rc, value_rc)
-    else:
-        att_out_fwd = get_attention(query_fwd, key_fwd, value_fwd, current_tformer, "fwd")
-        att_out_rc = get_attention(query_rc, key_rc, value_rc, current_tformer, "rc")
+    att_out_fwd = att_fction(query_fwd, key_fwd, value_fwd, current_tformer, "fwd")
+    att_out_rc = att_fction(query_rc, key_rc, value_rc, current_tformer, "rc")
 
     perm_fwd = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                       name="permute_attention_fwd_out_{n}".format(n=current_tformer))
@@ -238,14 +243,14 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     return x_fwd, x_rc
 
 
-def get_position_encoding(length, embed_dim, rc_folds=1):
+def get_position_encoding(length, embed_dim, rc_folds=1, dtype='float32'):
     if embed_dim % 2 != 0:
         raise ValueError("Channel dimension of the input embedding for the transformer "
                          "with fixed position signal must be divisible by 2. Received: {}".format(embed_dim))
-    position = K.arange(0, length, dtype=K.floatx())
+    position = K.arange(0, length, dtype=dtype)
     num_timescales = embed_dim // (2**rc_folds)
     log_timescale_increment = np.log(10000) / (num_timescales - 1)
-    inv_timescales = (K.exp(K.arange(num_timescales, dtype=K.floatx()) * (-log_timescale_increment)))
+    inv_timescales = (K.exp(K.arange(num_timescales, dtype=dtype) * (-log_timescale_increment)))
     scaled_time = K.expand_dims(position, 1) * K.expand_dims(inv_timescales, 0)
     # This follows the Tensor2Tensor library implementation
     # (https://github.com/tensorflow/tensor2tensor/blob/master/tensor2tensor/layers/common_attention.py)
@@ -288,7 +293,8 @@ class PositionEmbedding(Layer):
     def call(self, inputs, **kwargs):
         current_tformer = kwargs.get('current_tformer')
         rc_folds = current_tformer + 1 if self.growing_rc else 1
-        position_encoding = get_position_encoding(self.seq_length, self.embed_dim, rc_folds=rc_folds)
+        position_encoding = get_position_encoding(self.seq_length, self.embed_dim, rc_folds=rc_folds,
+                                                  dtype=inputs.dtype)
         out = inputs + position_encoding
         if self.use_depth:
             out = out + K.expand_dims(position_encoding[:, current_tformer, :], axis=1)

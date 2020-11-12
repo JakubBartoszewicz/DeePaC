@@ -28,6 +28,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 
 def main():
@@ -94,8 +95,11 @@ def run_templates(args):
 
 def global_setup(args):
     tpu_resolver = None
+    precision_policy = None
     if args.tpu:
         tpu_resolver = config_tpus(args.tpu)
+    if args.dtype_policy != "":
+        precision_policy = args.dtype_policy
     if args.no_eager:
         print("Disabling eager mode...")
         tf.compat.v1.disable_v2_behavior()
@@ -107,7 +111,7 @@ def global_setup(args):
     default_verbosity = '3' if args.subparser == 'test' else '2'
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf) if args.debug_tf is not None else default_verbosity
 
-    return tpu_resolver
+    return tpu_resolver, precision_policy
 
 
 def add_global_parser(gparser):
@@ -122,6 +126,7 @@ def add_global_parser(gparser):
     gparser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
                          default=False, action="store_true")
     gparser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+    gparser.add_argument('--dtype-policy', default="", help="Set dtype precision policy.")
 
     return gparser
 
@@ -132,12 +137,17 @@ class MainRunner:
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
         self.tpu_resolver = None
+        self.precision_policy = None
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
         if args.tpu is None:
             config_cpus(args.n_cpus)
             config_gpus(args.gpus)
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config()
         elif args.rapid:
@@ -171,6 +181,10 @@ class MainRunner:
         if args.tpu is None:
             config_cpus(args.n_cpus)
             config_gpus(args.gpus)
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
@@ -232,6 +246,10 @@ class MainRunner:
         else:
             n_cpus = multiprocessing.cpu_count()
             scale = args.scale
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
                         tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
@@ -373,7 +391,7 @@ class MainRunner:
 
         args = parser.parse_args()
 
-        self.tpu_resolver = global_setup(args)
+        self.tpu_resolver, self.precision_policy = global_setup(args)
 
         if args.version:
             print(__version__)

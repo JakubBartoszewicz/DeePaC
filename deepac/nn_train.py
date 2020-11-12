@@ -31,7 +31,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
+from deepac.utils import ReadSequence, CSVMemoryLogger, DatasetParser
 from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
     add_rc_transformer_block
 from functools import partial
@@ -269,7 +269,6 @@ class RCConfig:
         # If no GPUs, use CPUs
         if self._n_gpus == 0:
             self.model_build_device = '/cpu:0'
-        set_mem_growth()
 
     def set_n_gpus(self):
         self._n_gpus = len(tf.config.get_visible_devices('GPU'))
@@ -909,7 +908,7 @@ class RCNet:
         x = Dense(1,
                   kernel_initializer=self.config.initializers["out"],
                   kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1138,7 +1137,7 @@ class RCNet:
             x = Dense(1,
                       kernel_initializer=self.config.initializers["out"],
                       kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1393,7 +1392,7 @@ class RCNet:
             x = Dense(1,
                       kernel_initializer=self.config.initializers["out"],
                       kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs_fwd, x)

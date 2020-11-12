@@ -170,6 +170,7 @@ def config_gpus(gpus):
     else:
         print("Used GPUs: None")
     n_gpus = len(used_devices)
+    set_mem_growth()
     return n_gpus
 
 
