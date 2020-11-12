@@ -128,6 +128,7 @@ class RCConfig:
 
             # Define the network architecture
             self.rc_mode = config['Architecture']['RC_Mode']
+            self.reemb_dim = config['Architecture'].getint('Reembed_Dim')
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
                 self.skip_size = config['Architecture'].getint('Skip_Size')
@@ -488,11 +489,16 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1, cardinality=1,
+                         embed_init=False):
+        if embed_init:
+            init = tf.keras.initializers.RandomUniform(seed=self.config.seed)
+        else:
+            init = self.config.initializers["conv"]
         if cardinality == 1:
             shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                  padding=self.config.padding,
-                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_initializer=init,
                                  kernel_regularizer=self.config.regularizer,
                                  strides=stride,
                                  name="conv1d_{n}".format(n=self._current_conv))
@@ -514,7 +520,7 @@ class RCNet:
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                      padding=self.config.padding,
-                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_initializer=init,
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride,
                                      name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
@@ -529,11 +535,16 @@ class RCNet:
         self._current_conv = self._current_conv + 1
         return x_fwd, x_rc
 
-    def _add_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+    def _add_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1,
+                    embed_init=False):
+        if embed_init:
+            init = tf.keras.initializers.RandomUniform(seed=self.config.seed)
+        else:
+            init = self.config.initializers["conv"]
         if cardinality == 1:
             shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                  padding=self.config.padding,
-                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_initializer=init,
                                  kernel_regularizer=self.config.regularizer,
                                  strides=stride,
                                  name="conv1d_{n}".format(n=self._current_conv))
@@ -548,7 +559,7 @@ class RCNet:
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
                                      padding=self.config.padding,
-                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_initializer=init,
                                      kernel_regularizer=self.config.regularizer,
                                      strides=stride,
                                      name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
@@ -559,11 +570,13 @@ class RCNet:
         self._current_conv = self._current_conv + 1
         return x_out
 
-    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1,
+                       embed_init=False):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                             name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality)
+        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality,
+                                            embed_init=embed_init)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
                              name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv-1))
         x_rc = revcomp_out(x_rc)
@@ -743,6 +756,10 @@ class RCNet:
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
         else:
             x = inputs
+        # Embeddings
+        if self.config.reemb_dim > 0:
+            x = self._add_conv1d(x, units=self.config.reemb_dim, kernel_size=1, embed_init=True)
+            # linear activation
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -937,6 +954,10 @@ class RCNet:
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
         else:
             x = inputs
+        # Embeddings
+        if self.config.reemb_dim > 0:
+            x = self._add_rc_conv1d(x, units=self.config.reemb_dim, kernel_size=1, embed_init=True)
+            # linear activation
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -953,14 +974,14 @@ class RCNet:
                                                    seed=self.config.seed,
                                                    growing_rc=(not self.config.tformer_keep_edim))
             embed_dim = x.shape[-1]
-            # # Maintain embedding dimension
-            # if self.config.tformer_keep_edim:
-            #     if embed_dim % 2 != 0:
-            #         raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
-            #                          "Received: {}".format(embed_dim))
-            #     edim_compressor = partial(self._add_rc_conv1d, units=embed_dim // 2, kernel_size=1)
-            # else:
-            #     edim_compressor = None
+
+            if self.config.tformer_keep_edim and self.config.reemb_dim > 0:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim//2, kernel_size=1)
+            else:
+                edim_compressor = None
 
             x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[0],
@@ -968,7 +989,7 @@ class RCNet:
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
-                                         keep_edim_fction=None,
+                                         keep_edim_fction=edim_compressor,
                                          full_rc_att=self.config.full_rc_att,
                                          full_rc_ffn=self.config.full_rc_ffn,
                                          perf_dim=self.config.tformer_perf_dim[0],
@@ -1040,7 +1061,8 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None or (self.config.tformer_keep_edim and self._current_tformer == 1):
+            if position_embedding is None or \
+                    (self.config.tformer_keep_edim and not self.config.reemb_dim and self._current_tformer == 1):
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                        seed=self.config.seed,
                                                        growing_rc=(not self.config.tformer_keep_edim))
@@ -1167,6 +1189,11 @@ class RCNet:
         if not np.isclose(self.config.input_dropout, 0.0):
             x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
             x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
+        # Embeddings
+        if self.config.reemb_dim > 0:
+            x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.reemb_dim, kernel_size=1,
+                                                embed_init=True)
+            # linear activation
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
