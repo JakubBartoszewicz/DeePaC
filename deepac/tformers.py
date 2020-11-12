@@ -62,9 +62,11 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
 
     if perf_dim > 0:
         projection_dim_m = perf_dim // num_heads
-        query_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+        q_init = tf.keras.initializers.Orthogonal(seed=2 * current_tformer)
+        k_init = tf.keras.initializers.Orthogonal(seed=(2 * current_tformer) + 1)
+        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False,
                             name="random_projection_query_{}".format(current_tformer))
-        key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False,
                           name="random_projection_key_{}".format(current_tformer))
         att_fction = get_perf_attention
     else:
@@ -102,9 +104,11 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
 
     if perf_dim > 0:
         projection_dim_m = perf_dim // num_heads
-        query_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+        q_init = tf.keras.initializers.Orthogonal(seed=2 * current_tformer)
+        k_init = tf.keras.initializers.Orthogonal(seed=(2 * current_tformer) + 1)
+        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False,
                             name="random_projection_query_{}".format(current_tformer))
-        key_dense = Dense(perf_dim, kernel_initializer="orthogonal", trainable=False,
+        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False,
                           name="random_projection_key_{}".format(current_tformer))
         att_fction = get_perf_attention
     else:

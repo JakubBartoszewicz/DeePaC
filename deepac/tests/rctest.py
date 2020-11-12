@@ -35,8 +35,12 @@ def test_all_close(fwd, rc, tol_mode, severe=True):
     rtol, atol = get_tolerance_from_mode(tol_mode)
     if np.allclose(fwd, rc, rtol=rtol, atol=atol):
         print(colored("All close: HOLDS at rel. tol={r}, abs. tol={a}.".format(r=rtol, a=atol), 'green'))
+        return True
     else:
         print(colored("All close: VIOLATED at rel. tol={r}, abs. tol={a}!".format(r=rtol, a=atol), warncolor))
+        print(colored("If this model should be RC-symmetric, test again at higher precision, "
+                      "e.g. --dtype-policy float64.", warncolor))
+        return False
 
 
 def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1):
