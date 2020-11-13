@@ -33,7 +33,7 @@ from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, DatasetParser
 from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
-    add_rc_transformer_block, add_rc_embedding, add_siam_embedding, add_embedding
+    add_rc_transformer_block
 from functools import partial
 
 
@@ -128,7 +128,6 @@ class RCConfig:
 
             # Define the network architecture
             self.rc_mode = config['Architecture']['RC_Mode']
-            self.reemb_dim = config['Architecture'].getint('Reembed_Dim')
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
                 self.skip_size = config['Architecture'].getint('Skip_Size')
@@ -166,6 +165,7 @@ class RCConfig:
                 self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
                 self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
                 self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
+                self.tformer_edim = [int(u) for u in config['Architecture']['Tformer_EDim'].split(',')]
                 self.tformer_perf_dim = [int(u) for u in config['Architecture']['Tformer_Performer_Dim'].split(',')]
                 self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
                 self.tformer_keep_edim = config['Architecture'].getboolean('Tformer_Keep_Edim')
@@ -744,11 +744,6 @@ class RCNet:
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
         else:
             x = inputs
-        # Embeddings
-        if self.config.reemb_dim > 0:
-            x = add_embedding(x, input_dim=self.config.seq_dim+1, output_dim=self.config.reemb_dim,
-                              seed=self.config.seed)
-            # linear activation
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -765,7 +760,8 @@ class RCNet:
         elif self.config.n_tformer > 0:
             position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                    seed=self.config.seed)
-            x = add_transformer_block(x, embed_dim=x.shape[-1], position_embedding=position_embedding,
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                      position_embedding=position_embedding,
                                       num_heads=self.config.tformer_heads[0],
                                       ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
@@ -843,10 +839,13 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None:
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x.shape[-1]):
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                       seed=self.config.seed)
-            x = add_transformer_block(x, embed_dim=x.shape[-1], position_embedding=position_embedding,
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                      position_embedding=position_embedding,
                                       num_heads=self.config.tformer_heads[i],
                                       ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                       initializer=self.config.initializers["dense"],
@@ -943,10 +942,6 @@ class RCNet:
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
         else:
             x = inputs
-        # Embeddings
-        if self.config.reemb_dim > 0:
-            x = add_rc_embedding(x, input_dim=self.config.seq_dim+1, output_dim=self.config.reemb_dim,
-                                 seed=self.config.seed)
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -962,23 +957,15 @@ class RCNet:
             position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                    seed=self.config.seed,
                                                    growing_rc=(not self.config.tformer_keep_edim))
-            embed_dim = x.shape[-1]
 
-            if self.config.tformer_keep_edim and self.config.reemb_dim > 0:
-                if embed_dim % 2 != 0:
-                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
-                                     "Received: {}".format(embed_dim))
-                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim//2, kernel_size=1)
-            else:
-                edim_compressor = None
-
-            x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                         position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[0],
                                          ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
                                          current_tformer=self._current_tformer,
                                          seed=self.config.seed,
-                                         keep_edim_fction=edim_compressor,
+                                         keep_edim_fction=None,
                                          full_rc_att=self.config.full_rc_att,
                                          full_rc_ffn=self.config.full_rc_ffn,
                                          perf_dim=self.config.tformer_perf_dim[0],
@@ -1051,14 +1038,12 @@ class RCNet:
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
             if position_embedding is None or \
-                    (self.config.tformer_keep_edim and not self.config.reemb_dim and self._current_tformer == 1):
+                    (position_embedding.input_shape[-1] != x.shape[-1]//2):
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                        seed=self.config.seed,
                                                        growing_rc=(not self.config.tformer_keep_edim))
-            elif not self.config.tformer_keep_edim:
-                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                       seed=self.config.seed, growing_rc=True)
-            embed_dim = x.shape[-1]
+
+            embed_dim = self.config.tformer_edim[0]
             # Maintain embedding dimension
             if self.config.tformer_keep_edim:
                 if embed_dim % 2 != 0:
@@ -1068,7 +1053,8 @@ class RCNet:
             else:
                 edim_compressor = None
 
-            x = add_rc_transformer_block(x, embed_dim=embed_dim, position_embedding=position_embedding,
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                         position_embedding=position_embedding,
                                          num_heads=self.config.tformer_heads[i],
                                          ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
                                          initializer=self.config.initializers["dense"],
@@ -1178,11 +1164,6 @@ class RCNet:
         if not np.isclose(self.config.input_dropout, 0.0):
             x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
             x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
-        # Embeddings
-        if self.config.reemb_dim > 0:
-            x_fwd, x_rc = add_siam_embedding(x_fwd, x_rc, input_dim=self.config.seq_dim+1,
-                                             output_dim=self.config.reemb_dim, seed=self.config.seed)
-            # linear activation
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -1204,7 +1185,7 @@ class RCNet:
             position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                    seed=self.config.seed)
             x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
-                                                     embed_dim=x_fwd.shape[-1],
+                                                     embed_dim=self.config.tformer_edim[0],
                                                      num_heads=self.config.tformer_heads[0],
                                                      ff_dim=self.config.tformer_dim[0],
                                                      dropout_rate=self.config.tformer_dropout,
@@ -1311,7 +1292,7 @@ class RCNet:
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
                                                        seed=self.config.seed)
             x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
-                                                     embed_dim=x_fwd.shape[-1],
+                                                     embed_dim=self.config.tformer_edim[i],
                                                      num_heads=self.config.tformer_heads[i],
                                                      ff_dim=self.config.tformer_dim[i],
                                                      dropout_rate=self.config.tformer_dropout,

@@ -7,7 +7,7 @@ import tensorflow as tf
 import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Layer, Dropout,\
-    Reshape, add, Activation, concatenate, Embedding
+    Reshape, add, Activation, concatenate, Conv1D
 from tensorflow.keras.utils import get_custom_objects
 
 
@@ -161,6 +161,10 @@ def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_d
 
     if not np.isclose(dropout_rate, 0.0):
         attn_output = Dropout(dropout_rate, seed=seed)(attn_output, training=training)
+    if inputs.shape[-1] != embed_dim:
+        conv = Conv1D(filters=embed_dim, kernel_size=1, kernel_initializer=initializer,
+                      name="conv_skip_tformer_{}".format(current_tformer))
+        inputs = conv(inputs)
     out1 = layernorm1(add([inputs, attn_output]))
     ffn_output = Dense(ff_dim, activation="relu", kernel_initializer=initializer)(out1)
     ffn_output = Dense(embed_dim, kernel_initializer=initializer)(ffn_output)
@@ -181,6 +185,11 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
     if not np.isclose(dropout_rate, 0.0):
         attn_output_fwd = Dropout(dropout_rate, seed=seed)(attn_output_fwd, training=training)
         attn_output_rc = Dropout(dropout_rate, seed=seed)(attn_output_rc, training=training)
+    if inputs_fwd.shape[-1] != embed_dim:
+        conv = Conv1D(filters=embed_dim, kernel_size=1, kernel_initializer=initializer,
+                      name="conv_skip_tformer_{}".format(current_tformer))
+        inputs_fwd = conv(inputs_fwd)
+        inputs_rc = conv(inputs_rc)
     if full_rc_att:
         out1_fwd, out1_rc = add_siam_layernorm(add([inputs_fwd, attn_output_fwd, attn_output_rc]),
                                                add([inputs_rc, attn_output_fwd, attn_output_rc]),
@@ -247,47 +256,47 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     return x_fwd, x_rc
 
 
-def squash(x):
-    squasher = K.expand_dims(K.arange(x.shape[-1], dtype=x.dtype) + 1, axis=0)
-    x = tf.matmul(x, squasher, transpose_b=True)
-    x = tf.reduce_sum(x, axis=-1)
-    return x
-
-
-def add_squash_back(x, mode_name=None):
-    if mode_name is None:
-        layer_name = "squashback"
-    else:
-        layer_name = "squashback_{}".format(mode_name)
-    sq = Lambda(lambda _x: squash(_x), name=layer_name)
-    return sq(x)
-
-
-def add_embedding(x, input_dim, output_dim, seed):
-    x = add_squash_back(x)
-    init = tf.keras.initializers.RandomUniform(seed=seed)
-    emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
-    return emb(x)
-
-
-def add_siam_embedding(x_fwd, x_rc, input_dim, output_dim, seed):
-    x_fwd = add_squash_back(x_fwd, "fwd")
-    x_rc = add_squash_back(x_rc, "rc")
-    init = tf.keras.initializers.RandomUniform(seed=seed)
-    emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
-    return emb(x_fwd), emb(x_rc)
-
-
-def add_rc_embedding(x, input_dim, output_dim, seed):
-    revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x.shape[1:],
-                        name="reverse_complement_embed_input")
-    x_rc = revcomp_in(x)
-    x_fwd, x_rc = add_siam_embedding(x, x_rc, input_dim, output_dim, seed)
-    revcomp_out = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                         name="reverse_complement_embed_output")
-    x_rc = revcomp_out(x_rc)
-    out = concatenate([x_fwd, x_rc], axis=-1)
-    return out
+# def squash(x):
+#     squasher = K.expand_dims(K.arange(x.shape[-1], dtype=x.dtype) + 1, axis=0)
+#     x = tf.matmul(x, squasher, transpose_b=True)
+#     x = tf.reduce_sum(x, axis=-1)
+#     return x
+#
+#
+# def add_squash_back(x, mode_name=None):
+#     if mode_name is None:
+#         layer_name = "squashback"
+#     else:
+#         layer_name = "squashback_{}".format(mode_name)
+#     sq = Lambda(lambda _x: squash(_x), name=layer_name)
+#     return sq(x)
+#
+#
+# def add_embedding(x, input_dim, output_dim, seed):
+#     x = add_squash_back(x)
+#     init = tf.keras.initializers.RandomUniform(seed=seed)
+#     emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
+#     return emb(x)
+#
+#
+# def add_siam_embedding(x_fwd, x_rc, input_dim, output_dim, seed):
+#     x_fwd = add_squash_back(x_fwd, "fwd")
+#     x_rc = add_squash_back(x_rc, "rc")
+#     init = tf.keras.initializers.RandomUniform(seed=seed)
+#     emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
+#     return emb(x_fwd), emb(x_rc)
+#
+#
+# def add_rc_embedding(x, input_dim, output_dim, seed):
+#     revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x.shape[1:],
+#                         name="reverse_complement_embed_input")
+#     x_rc = revcomp_in(x)
+#     x_fwd, x_rc = add_siam_embedding(x, x_rc, input_dim, output_dim, seed)
+#     revcomp_out = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+#                          name="reverse_complement_embed_output")
+#     x_rc = revcomp_out(x_rc)
+#     out = concatenate([x_fwd, x_rc], axis=-1)
+#     return out
 
 
 def get_position_encoding(length, embed_dim, rc_folds=1, dtype='float32'):
