@@ -64,9 +64,9 @@ def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer
         projection_dim_m = perf_dim // num_heads
         q_init = tf.keras.initializers.Orthogonal(seed=2 * current_tformer)
         k_init = tf.keras.initializers.Orthogonal(seed=(2 * current_tformer) + 1)
-        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False,
+        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False, use_bias=False,
                             name="random_projection_query_{}".format(current_tformer))
-        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False,
+        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False, use_bias=False,
                           name="random_projection_key_{}".format(current_tformer))
         att_fction = get_perf_attention
     else:
@@ -106,9 +106,9 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
         projection_dim_m = perf_dim // num_heads
         q_init = tf.keras.initializers.Orthogonal(seed=2 * current_tformer)
         k_init = tf.keras.initializers.Orthogonal(seed=(2 * current_tformer) + 1)
-        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False,
+        query_dense = Dense(perf_dim, kernel_initializer=q_init, trainable=False, use_bias=False,
                             name="random_projection_query_{}".format(current_tformer))
-        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False,
+        key_dense = Dense(perf_dim, kernel_initializer=k_init, trainable=False, use_bias=False,
                           name="random_projection_key_{}".format(current_tformer))
         att_fction = get_perf_attention
     else:
@@ -254,7 +254,7 @@ def squash(x):
     return x
 
 
-def add_squash_back(x, mode_name="fwd"):
+def add_squash_back(x, mode_name=None):
     if mode_name is None:
         layer_name = "squashback"
     else:
