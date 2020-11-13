@@ -11,8 +11,8 @@ from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Layer, Dr
 from tensorflow.keras.utils import get_custom_objects
 
 
-def separate_heads(input, qkv_name, seq_len, num_heads, projection_dim, current_tformer):
-    out = Reshape((seq_len, num_heads, projection_dim))(input)
+def separate_heads(inputs, qkv_name, seq_len, num_heads, projection_dim, current_tformer):
+    out = Reshape((seq_len, num_heads, projection_dim))(inputs)
     perm = Lambda(lambda x: K.permute_dimensions(x, pattern=[0, 2, 1, 3]),
                   name="permute_attention_{qkv}_{n}".format(qkv=qkv_name, n=current_tformer))
     out = perm(out)
