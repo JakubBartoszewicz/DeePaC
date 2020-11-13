@@ -1288,9 +1288,11 @@ class RCNet:
 
         # Transformer blocks
         for i in range(self._current_tformer, self.config.n_tformer):
-            if position_embedding is None:
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x_fwd.shape[-1]):
                 position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
-                                                       seed=self.config.seed)
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
             x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
                                                      embed_dim=self.config.tformer_edim[i],
                                                      num_heads=self.config.tformer_heads[i],
