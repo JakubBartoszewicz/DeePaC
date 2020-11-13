@@ -20,38 +20,44 @@ def separate_heads(input, qkv_name, seq_len, num_heads, projection_dim, current_
 
 
 def get_attention(query, key, value, current_tformer, mode_name=None):
-    score = tf.matmul(query, key, transpose_b=True)
     dim_key = key.shape[-1]
     if mode_name is None:
-        layer_name = "scale_attention_{n}".format(n=current_tformer)
+        layer_name_postfix = "{n}".format(n=current_tformer)
     else:
-        layer_name = "scale_attention_{mode}_{n}".format(mode=mode_name, n=current_tformer)
-    scale = Lambda(lambda x: x / np.sqrt(dim_key),
-                   name=layer_name)
-    scaled_score = scale(score)
+        layer_name_postfix = "{mode}_{n}".format(mode=mode_name, n=current_tformer)
+
+    scaled_score = Lambda(lambda qk: tf.matmul(qk[0], qk[1], transpose_b=True) / np.sqrt(dim_key),
+                          name="scaled_attention_{}".format(layer_name_postfix))([query, key])
     weights = Activation("softmax")(scaled_score)
-    output = tf.matmul(weights, value)
+    output = Lambda(lambda wv: tf.matmul(wv[0], wv[1]),
+                    name="attention_output_{}".format(layer_name_postfix))([weights, value])
     return output
 
 
 def get_perf_attention(query, key, value, current_tformer, mode_name=None, activation="relu", kernel_epsilon=0.001):
     if mode_name is None:
-        layer_name_postfix = "_{n}".format(n=current_tformer)
+        layer_name_postfix = "{n}".format(n=current_tformer)
     else:
-        layer_name_postfix = "_{mode}_{n}".format(mode=mode_name, n=current_tformer)
+        layer_name_postfix = "{mode}_{n}".format(mode=mode_name, n=current_tformer)
 
     add_eps = Lambda(lambda x: tf.add(x, kernel_epsilon), name="add_eps_{}".format(layer_name_postfix))
     query = add_eps(Activation(activation)(query))
     key = add_eps(Activation(activation)(key))
     value = add_eps(Activation(activation)(value))
-    score_z = tf.matmul(key, value, transpose_a=True)
+    score_z = Lambda(lambda kv: tf.matmul(kv[0], kv[1], transpose_a=True),
+                     name="Z_{}".format(layer_name_postfix))([key, value])
+    d_inv = Lambda(lambda qk: get_d_inv(qk[0], qk[1]), name="d_inv_{}".format(layer_name_postfix))([query, key])
+    out = Lambda(lambda zqd: tf.einsum('...de,...nd,...n->...ne', zqd[0], zqd[1], zqd[2]),
+                 name="attention_output{}".format(layer_name_postfix))([score_z, query, d_inv])
+    return out
+
+
+def get_d_inv(query, key):
     # based on https://github.com/lucidrains/performer-pytorch/blob/main/performer_pytorch/performer_pytorch.py
     k_sum = tf.math.reduce_sum(key, axis=-2)
-    invert = Lambda(lambda x: tf.truediv(tf.cast(1, x.dtype), x), name="d_inv_{}".format(layer_name_postfix))
     d_inv = tf.einsum('...nd,...d->...n', query, k_sum)
-    d_inv = invert(d_inv)
-    out = tf.einsum('...de,...nd,...n->...ne', score_z, query, d_inv)
-    return out
+    d_inv = tf.truediv(tf.cast(1, d_inv.dtype), d_inv)
+    return d_inv
 
 
 def add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer, perf_dim=0):
@@ -254,49 +260,6 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     x_fwd = fwd_out(out)
     x_rc = rc_out(out)
     return x_fwd, x_rc
-
-
-# def squash(x):
-#     squasher = K.expand_dims(K.arange(x.shape[-1], dtype=x.dtype) + 1, axis=0)
-#     x = tf.matmul(x, squasher, transpose_b=True)
-#     x = tf.reduce_sum(x, axis=-1)
-#     return x
-#
-#
-# def add_squash_back(x, mode_name=None):
-#     if mode_name is None:
-#         layer_name = "squashback"
-#     else:
-#         layer_name = "squashback_{}".format(mode_name)
-#     sq = Lambda(lambda _x: squash(_x), name=layer_name)
-#     return sq(x)
-#
-#
-# def add_embedding(x, input_dim, output_dim, seed):
-#     x = add_squash_back(x)
-#     init = tf.keras.initializers.RandomUniform(seed=seed)
-#     emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
-#     return emb(x)
-#
-#
-# def add_siam_embedding(x_fwd, x_rc, input_dim, output_dim, seed):
-#     x_fwd = add_squash_back(x_fwd, "fwd")
-#     x_rc = add_squash_back(x_rc, "rc")
-#     init = tf.keras.initializers.RandomUniform(seed=seed)
-#     emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
-#     return emb(x_fwd), emb(x_rc)
-#
-#
-# def add_rc_embedding(x, input_dim, output_dim, seed):
-#     revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x.shape[1:],
-#                         name="reverse_complement_embed_input")
-#     x_rc = revcomp_in(x)
-#     x_fwd, x_rc = add_siam_embedding(x, x_rc, input_dim, output_dim, seed)
-#     revcomp_out = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-#                          name="reverse_complement_embed_output")
-#     x_rc = revcomp_out(x_rc)
-#     out = concatenate([x_fwd, x_rc], axis=-1)
-#     return out
 
 
 def get_position_encoding(length, embed_dim, rc_folds=1, dtype='float32'):
