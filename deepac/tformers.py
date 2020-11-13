@@ -7,7 +7,7 @@ import tensorflow as tf
 import numpy as np
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Dense, Lambda, LayerNormalization, Layer, Dropout,\
-    Reshape, add, Activation, concatenate
+    Reshape, add, Activation, concatenate, Embedding
 from tensorflow.keras.utils import get_custom_objects
 
 
@@ -245,6 +245,49 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     x_fwd = fwd_out(out)
     x_rc = rc_out(out)
     return x_fwd, x_rc
+
+
+def squash(x):
+    squasher = K.expand_dims(K.arange(x.shape[-1], dtype=x.dtype) + 1, axis=0)
+    x = tf.matmul(x, squasher, transpose_b=True)
+    x = tf.reduce_sum(x, axis=-1)
+    return x
+
+
+def add_squash_back(x, mode_name="fwd"):
+    if mode_name is None:
+        layer_name = "squashback"
+    else:
+        layer_name = "squashback_{}".format(mode_name)
+    sq = Lambda(lambda _x: squash(_x), name=layer_name)
+    return sq(x)
+
+
+def add_embedding(x, input_dim, output_dim, seed):
+    x = add_squash_back(x)
+    init = tf.keras.initializers.RandomUniform(seed=seed)
+    emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
+    return emb(x)
+
+
+def add_siam_embedding(x_fwd, x_rc, input_dim, output_dim, seed):
+    x_fwd = add_squash_back(x_fwd, "fwd")
+    x_rc = add_squash_back(x_rc, "rc")
+    init = tf.keras.initializers.RandomUniform(seed=seed)
+    emb = Embedding(input_dim=input_dim, output_dim=output_dim, embeddings_initializer=init)
+    return emb(x_fwd), emb(x_rc)
+
+
+def add_rc_embedding(x, input_dim, output_dim, seed):
+    revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x.shape[1:],
+                        name="reverse_complement_embed_input")
+    x_rc = revcomp_in(x)
+    x_fwd, x_rc = add_siam_embedding(x, x_rc, input_dim, output_dim, seed)
+    revcomp_out = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=x_rc.shape[1:],
+                         name="reverse_complement_embed_output")
+    x_rc = revcomp_out(x_rc)
+    out = concatenate([x_fwd, x_rc], axis=-1)
+    return out
 
 
 def get_position_encoding(length, embed_dim, rc_folds=1, dtype='float32'):
