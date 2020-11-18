@@ -44,8 +44,12 @@ class Tester:
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
         # all are true by default, unless input_modes is specified
+        do_sequence_input = self.input_modes is None or "sequence" in input_modes
+        if float(tf.__version__[:3]) == 2.2:
+            print('Disabling keras Sequence input in TF 2.2.')
+            do_sequence_input = False
         self.input_modes_dict = {"memory": self.input_modes is None or "memory" in input_modes,
-                                 "sequence": self.input_modes is None or "sequence" in input_modes,
+                                 "sequence": do_sequence_input,
                                  "tfdata": self.input_modes is None or "tfdata" in input_modes}
 
     def run_datagen(self, npy=True, tfrec=True):

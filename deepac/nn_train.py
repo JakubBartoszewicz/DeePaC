@@ -197,8 +197,10 @@ class RCConfig:
             self.dense_dropout = config['Architecture'].getfloat('Dense_Dropout')
             try:
                 self.mc_dropout = config['Architecture'].getboolean('MC_Dropout')
+                self.dropout_training_mode = None if not self.mc_dropout else True
             except KeyError:
                 self.mc_dropout = False
+                self.dropout_training_mode = None
 
             # If needed, weight classes
             self.use_weights = config['ClassWeights'].getboolean('UseWeights')
@@ -987,6 +989,7 @@ class RCNet:
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout,
                             seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             # First recurrent layer already added
             self._current_recurrent = self._current_recurrent + 1
         else:
@@ -1018,6 +1021,7 @@ class RCNet:
                     if self.config.conv_bn:
                         x = self._add_rc_batchnorm(x)
                     x = Activation(self.config.conv_activation)(x)
+
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                                     dilation_rate=self.config.conv_dilation[i],
@@ -1120,6 +1124,7 @@ class RCNet:
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout,
                             seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             self._current_recurrent = self._current_recurrent + 1
 
         # Dense layers
@@ -1176,6 +1181,7 @@ class RCNet:
                             seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
             x_rc = Dropout(self.config.input_dropout,
                            seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
+
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -1253,6 +1259,7 @@ class RCNet:
                                 seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
                 x_rc = Dropout(self.config.conv_dropout,
                                seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
+
             # Add layer
             if self.config.skip_size > 0 and i == 1:
                 start_fwd = x_fwd
@@ -1394,6 +1401,7 @@ class RCNet:
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             for i in range(1, self.config.n_dense):
                 x = Dense(self.config.dense_units[i],
                           kernel_initializer=self.config.initializers["dense"],

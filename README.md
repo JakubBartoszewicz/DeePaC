@@ -50,6 +50,17 @@ You can install DeePaC with `bioconda`. Set up the [bioconda channel](
 conda install deepac
 ```
 
+Note: the latest version of deepac is not available on bioconda. If you use the builtin models only, the older version 
+should be perfectly fine. If you want to use more advanced functionalities (custom models, interpretability suite etc.), install deepac with `pip`. You can conveniently install all the dependencies via conda:
+
+```
+conda install tensorflow-gpu # For GPU support; see below
+conda install deepac --only-deps
+conda install seaborn
+pip install deepac --no-deps
+```
+
+
 If you want to install the plugins as well, use:
 
 ```
@@ -62,7 +73,6 @@ You can also install DeePaC with `pip`:
 ```
 pip install deepac
 ```
-Note: TensorFlow 2.0 is not yet supported.
 
 If you want to install the plugins, use:
 
