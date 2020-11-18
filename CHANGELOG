@@ -1,3 +1,6 @@
+### v0.13.1 - 18 Nov 2020
+    *  bugfix: dropout would be disabled if MC dropout was
+
 ### v0.13.0 - 13 Oct 2020
     *  skip connections
     *  confidence thresholds for predictions
