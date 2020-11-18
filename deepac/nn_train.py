@@ -6,8 +6,8 @@ paths to input files and how should be the model trained.
 
 """
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 import re
 import os
 import sys
@@ -15,6 +15,7 @@ import errno
 import warnings
 from contextlib import redirect_stdout
 import math
+from tensorflow.keras.utils import get_custom_objects
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda, Masking
@@ -30,7 +31,10 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
+from deepac.utils import ReadSequence, CSVMemoryLogger, DatasetParser
+from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
+    add_rc_transformer_block
+from functools import partial
 
 
 class RCConfig:
@@ -115,7 +119,6 @@ class RCConfig:
                 self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit_Dense']]
                 self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit_Out']]
             else:
-
                 self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit']]
@@ -156,6 +159,18 @@ class RCConfig:
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+            try:
+                self.full_rc_att = config['Architecture'].getboolean('Full_RC_Attention')
+                self.full_rc_ffn = config['Architecture'].getboolean('Full_RC_FFN')
+                self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
+                self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
+                self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
+                self.tformer_edim = [int(u) for u in config['Architecture']['Tformer_EDim'].split(',')]
+                self.tformer_perf_dim = [int(u) for u in config['Architecture']['Tformer_Performer_Dim'].split(',')]
+                self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
+                self.tformer_keep_edim = config['Architecture'].getboolean('Tformer_Keep_Edim')
+            except KeyError:
+                self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
             self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
             if self.n_recurrent == 1 and self.recurrent_bn:
@@ -255,7 +270,6 @@ class RCConfig:
         # If no GPUs, use CPUs
         if self._n_gpus == 0:
             self.model_build_device = '/cpu:0'
-        set_mem_growth()
 
     def set_n_gpus(self):
         self._n_gpus = len(tf.config.get_visible_devices('GPU'))
@@ -324,7 +338,7 @@ class RCNet:
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
             with self.get_device_strategy_scope():
-                self.model = load_model(model_file)
+                self.model = load_model(model_file, custom_objects=get_custom_objects())
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
@@ -530,7 +544,7 @@ class RCNet:
             grouped_units = int(units/cardinality)
             assert units <= inputs.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
                                               "(input size: {in_size})". format(C=cardinality, d=grouped_units,
-                                                                           total=units, in_size=inputs.shape[-1])
+                                                                                total=units, in_size=inputs.shape[-1])
             for c in range(cardinality):
                 card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
                 shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
@@ -690,7 +704,7 @@ class RCNet:
         input_shape = inputs.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
-                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+                             "Expected dimensions: 3, but got: " + str(len(input_shape)))
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
@@ -714,6 +728,8 @@ class RCNet:
         # Number of added recurrent layers
         self._current_recurrent = 0
         self._current_conv = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -740,6 +756,20 @@ class RCNet:
                 x = BatchNormalization()(x)
             # Add activation
             x = Activation(self.config.conv_activation)(x)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                      position_embedding=position_embedding,
+                                      num_heads=self.config.tformer_heads[0],
+                                      ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
+                                      perf_dim=self.config.tformer_perf_dim[0],
+                                      training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -752,11 +782,11 @@ class RCNet:
             # First recurrent layer already added
             self._current_recurrent = 1
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should convolutional, recurrent or a transformer')
 
         start = None
         # For next convolutional layers
-        for i in range(1, self.config.n_conv):
+        for i in range(self._current_conv, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = MaxPooling1D()(x)
@@ -807,8 +837,26 @@ class RCNet:
             # Add activation
             x = Activation(self.config.conv_activation)(x)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x.shape[-1]):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                      position_embedding=position_embedding,
+                                      num_heads=self.config.tformer_heads[i],
+                                      ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
+                                      perf_dim=self.config.tformer_perf_dim[i],
+                                      training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -865,7 +913,7 @@ class RCNet:
         x = Dense(1,
                   kernel_initializer=self.config.initializers["out"],
                   kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -878,6 +926,8 @@ class RCNet:
         self._current_conv = 0
         self._current_bn = 0
         self._current_pool = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -902,6 +952,25 @@ class RCNet:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
             x = Activation(self.config.conv_activation)(x)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed,
+                                                   growing_rc=(not self.config.tformer_keep_edim))
+
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                         position_embedding=position_embedding,
+                                         num_heads=self.config.tformer_heads[0],
+                                         ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
+                                         initializer=self.config.initializers["dense"],
+                                         current_tformer=self._current_tformer,
+                                         seed=self.config.seed,
+                                         keep_edim_fction=None,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
+                                         perf_dim=self.config.tformer_perf_dim[0],
+                                         training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -966,8 +1035,41 @@ class RCNet:
                 x = self._add_rc_batchnorm(x)
             x = Activation(self.config.conv_activation)(x)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x.shape[-1]//2):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=(not self.config.tformer_keep_edim))
+
+            embed_dim = self.config.tformer_edim[0]
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim//2, kernel_size=1)
+            else:
+                edim_compressor = None
+
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                         position_embedding=position_embedding,
+                                         num_heads=self.config.tformer_heads[i],
+                                         ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
+                                         initializer=self.config.initializers["dense"],
+                                         current_tformer=self._current_tformer,
+                                         seed=self.config.seed,
+                                         keep_edim_fction=edim_compressor,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
+                                         perf_dim=self.config.tformer_perf_dim[i],
+                                         training=self.config.mc_dropout)
+
+            self._current_tformer = self._current_tformer + 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -1032,7 +1134,7 @@ class RCNet:
             x = Dense(1,
                       kernel_initializer=self.config.initializers["out"],
                       kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1044,6 +1146,8 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_bn = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
         if self.config.mask_zeros:
@@ -1076,6 +1180,23 @@ class RCNet:
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
+                                                     embed_dim=self.config.tformer_edim[0],
+                                                     num_heads=self.config.tformer_heads[0],
+                                                     ff_dim=self.config.tformer_dim[0],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
+                                                     perf_dim=self.config.tformer_perf_dim[0],
+                                                     training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -1092,7 +1213,7 @@ class RCNet:
                 x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc,
                                                                                      training=self.config.mc_dropout)
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should be convolutional, recurrent or a transformer')
 
         start_fwd, start_rc = None, None
         # For next convolutional layers
@@ -1165,8 +1286,29 @@ class RCNet:
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x_fwd.shape[-1]):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
+                                                     embed_dim=self.config.tformer_edim[i],
+                                                     num_heads=self.config.tformer_heads[i],
+                                                     ff_dim=self.config.tformer_dim[i],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
+                                                     perf_dim=self.config.tformer_perf_dim[i],
+                                                     training=self.config.mc_dropout)
+            self._current_tformer = self._current_tformer + 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -1249,7 +1391,7 @@ class RCNet:
             x = Dense(1,
                       kernel_initializer=self.config.initializers["out"],
                       kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs_fwd, x)
