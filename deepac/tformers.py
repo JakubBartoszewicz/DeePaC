@@ -157,7 +157,7 @@ def add_siam_mhs_attention(inputs_fwd, inputs_rc, embed_dim, num_heads, initiali
 
 
 def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
-                          current_tformer, seed, perf_dim=0, training=False):
+                          current_tformer, seed, perf_dim=0, training=None):
 
     inputs = position_embedding(inputs, current_tformer=current_tformer)
     attn_output = add_mhs_attention(inputs, embed_dim, num_heads, initializer, current_tformer, perf_dim=perf_dim)
@@ -181,7 +181,7 @@ def add_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_d
 
 def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_dim, num_heads, ff_dim, dropout_rate,
                                initializer, current_tformer, seed, full_rc_att=False, full_rc_ffn=False,
-                               perf_dim=0, training=False):
+                               perf_dim=0, training=None):
 
     inputs_fwd = position_embedding(inputs_fwd, current_tformer=current_tformer)
     inputs_rc = position_embedding(inputs_rc, current_tformer=current_tformer)
@@ -224,7 +224,7 @@ def add_siam_transformer_block(inputs_fwd, inputs_rc, position_embedding, embed_
 
 def add_rc_transformer_block(inputs, embed_dim, position_embedding, num_heads, ff_dim, dropout_rate, initializer,
                              current_tformer, seed, keep_edim_fction=None, full_rc_att=False, full_rc_ffn=False,
-                             perf_dim=0, training=False):
+                             perf_dim=0, training=None):
 
     revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
                         name="reverse_complement_tformer_input_{n}".format(n=current_tformer))

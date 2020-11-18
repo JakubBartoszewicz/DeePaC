@@ -741,7 +741,7 @@ class RCNet:
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
         else:
             x = inputs
         # First convolutional/recurrent layer
@@ -768,7 +768,7 @@ class RCNet:
                                       current_tformer=self._current_tformer,
                                       seed=self.config.seed,
                                       perf_dim=self.config.tformer_perf_dim[0],
-                                      training=self.config.mc_dropout)
+                                      training=self.config.dropout_training_mode)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -778,7 +778,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
+                                                                              training=self.config.dropout_training_mode)
             # First recurrent layer already added
             self._current_recurrent = 1
         else:
@@ -800,7 +801,8 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x,
+                                                                             training=self.config.dropout_training_mode)
             # Add bottleneck
             if self.config.skip_size > 0 and i == 1:
                 start = x
@@ -852,7 +854,7 @@ class RCNet:
                                       current_tformer=self._current_tformer,
                                       seed=self.config.seed,
                                       perf_dim=self.config.tformer_perf_dim[i],
-                                      training=self.config.mc_dropout)
+                                      training=self.config.dropout_training_mode)
             self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
@@ -883,7 +885,8 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x,
+                                                                             training=self.config.dropout_training_mode)
 
         # Recurrent layers
         for i in range(self._current_recurrent, self.config.n_recurrent):
@@ -896,7 +899,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
+                                                                              training=self.config.dropout_training_mode)
 
         # Dense layers
         for i in range(0, self.config.n_dense):
@@ -907,7 +911,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x,
+                                                                          training=self.config.dropout_training_mode)
 
         # Output layer for binary classification
         x = Dense(1,
@@ -939,7 +944,7 @@ class RCNet:
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
         else:
             x = inputs
         # First convolutional/recurrent layer
@@ -969,7 +974,7 @@ class RCNet:
                                          full_rc_att=self.config.full_rc_att,
                                          full_rc_ffn=self.config.full_rc_ffn,
                                          perf_dim=self.config.tformer_perf_dim[0],
-                                         training=self.config.mc_dropout)
+                                         training=self.config.dropout_training_mode)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -980,7 +985,8 @@ class RCNet:
                 x = self._add_rc_batchnorm(x)
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
-                x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.recurrent_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # First recurrent layer already added
             self._current_recurrent = self._current_recurrent + 1
         else:
@@ -1002,7 +1008,8 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.conv_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # Add bottleneck
             if self.config.skip_size > 0 and i == 1:
                 start = x
@@ -1064,7 +1071,7 @@ class RCNet:
                                          full_rc_att=self.config.full_rc_att,
                                          full_rc_ffn=self.config.full_rc_ffn,
                                          perf_dim=self.config.tformer_perf_dim[i],
-                                         training=self.config.mc_dropout)
+                                         training=self.config.dropout_training_mode)
 
             self._current_tformer = self._current_tformer + 1
 
@@ -1096,7 +1103,8 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.conv_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Recurrent layers
         for i in range(self._current_recurrent, self.config.n_recurrent):
@@ -1110,7 +1118,8 @@ class RCNet:
                 x = self._add_rc_batchnorm(x)
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
-                x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.recurrent_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             self._current_recurrent = self._current_recurrent + 1
 
         # Dense layers
@@ -1125,7 +1134,8 @@ class RCNet:
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
             if not np.isclose(self.config.dense_dropout, 0.0):
-                x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.dense_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
@@ -1162,8 +1172,10 @@ class RCNet:
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
-            x_fwd = Dropout(self.config.input_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
-            x_rc = Dropout(self.config.input_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
+            x_fwd = Dropout(self.config.input_dropout,
+                            seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
+            x_rc = Dropout(self.config.input_dropout,
+                           seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -1195,7 +1207,7 @@ class RCNet:
                                                      full_rc_att=self.config.full_rc_att,
                                                      full_rc_ffn=self.config.full_rc_ffn,
                                                      perf_dim=self.config.tformer_perf_dim[0],
-                                                     training=self.config.mc_dropout)
+                                                     training=self.config.dropout_training_mode)
             self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
@@ -1208,10 +1220,10 @@ class RCNet:
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
-                x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd,
-                                                                                      training=self.config.mc_dropout)
-                x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc,
-                                                                                     training=self.config.mc_dropout)
+                x_fwd = Dropout(self.config.recurrent_dropout,
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
+                x_rc = Dropout(self.config.recurrent_dropout,
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
         else:
             raise ValueError('First layer should be convolutional, recurrent or a transformer')
 
@@ -1237,8 +1249,10 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x_fwd = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
-                x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
+                x_fwd = Dropout(self.config.conv_dropout,
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
+                x_rc = Dropout(self.config.conv_dropout,
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
             # Add layer
             if self.config.skip_size > 0 and i == 1:
                 start_fwd = x_fwd
@@ -1304,7 +1318,7 @@ class RCNet:
                                                      full_rc_att=self.config.full_rc_att,
                                                      full_rc_ffn=self.config.full_rc_ffn,
                                                      perf_dim=self.config.tformer_perf_dim[i],
-                                                     training=self.config.mc_dropout)
+                                                     training=self.config.dropout_training_mode)
             self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
@@ -1345,8 +1359,10 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x_fwd = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_fwd, training=self.config.mc_dropout)
-                x_rc = Dropout(self.config.conv_dropout, seed=self.config.seed)(x_rc, training=self.config.mc_dropout)
+                x_fwd = Dropout(self.config.conv_dropout,
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
+                x_rc = Dropout(self.config.conv_dropout,
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
 
         # Recurrent layers
         for i in range(self._current_recurrent, self.config.n_recurrent):
@@ -1361,10 +1377,10 @@ class RCNet:
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
-                x_fwd = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_fwd,
-                                                                                      training=self.config.mc_dropout)
-                x_rc = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x_rc,
-                                                                                     training=self.config.mc_dropout)
+                x_fwd = Dropout(self.config.recurrent_dropout,
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
+                x_rc = Dropout(self.config.recurrent_dropout,
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
@@ -1377,7 +1393,7 @@ class RCNet:
                 # Batch normalization layer
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             for i in range(1, self.config.n_dense):
                 x = Dense(self.config.dense_units[i],
                           kernel_initializer=self.config.initializers["dense"],
@@ -1386,7 +1402,8 @@ class RCNet:
                     # Batch normalization layer
                     x = BatchNormalization()(x)
                 x = Activation(self.config.dense_activation)(x)
-                x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.mc_dropout)
+                x = Dropout(self.config.dense_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # Output layer for binary classification
             x = Dense(1,
                       kernel_initializer=self.config.initializers["out"],
