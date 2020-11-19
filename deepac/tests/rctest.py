@@ -1,10 +1,10 @@
 import numpy as np
 import os
 import scipy
+import matplotlib.pyplot as plt
 import seaborn as sns
 from deepac.predict import predict_npy
 from deepac.explain.rf_sizes import get_rf_size
-import matplotlib.pyplot as plt
 
 
 def pred_fwd_rc(model, input_npy, output_fwd, output_rc, replicates=1):

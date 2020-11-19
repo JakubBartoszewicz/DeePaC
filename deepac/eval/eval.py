@@ -5,12 +5,12 @@ Requires a config file describing the data directory, dataset and run name,
 classification threshold and the epoch range.
   
 """
+import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
 from tensorflow.keras import backend
 import sklearn.metrics as mtr
 import numpy as np
 import csv
-import matplotlib.pyplot as plt
 from deepac.predict import predict_array
 
 
