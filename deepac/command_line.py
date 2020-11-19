@@ -2,7 +2,8 @@
 A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
 
 """
-import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
+import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled tests
+import matplotlib.pyplot as plt # also to solve import ordering problems in bioconda mulled tests
 import numpy as np
 import tensorflow as tf
 import random as rn
@@ -27,7 +28,6 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
-from tensorflow.keras.models import load_model
 
 
 def main():
