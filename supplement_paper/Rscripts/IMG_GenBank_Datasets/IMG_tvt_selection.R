@@ -84,7 +84,7 @@ SampleBestStrains <- function(){
     IMG.all$subset[IMG.all$assembly_accession %in% selected_assemblies] <- "selected"
 }
 
-if(!random.best){
+if(!random.best & !ambiguous.species){
     Labels_test <- c(rep(T,length(Species_HP_test)),rep(F,length(Species_NP_test)))
     IMG.all <- SampleStrains(Species_test, Labels_test, IMG.all, "Test")
 }
@@ -125,7 +125,7 @@ for (i in 1:k) {
     Species_HP_done <- c(Species_HP_done, Species_HP_validation)
     Species_NP_done <- c(Species_NP_done, Species_NP_validation)
     
-    if(!random.best & i==1){
+    if(!random.best & !ambiguous.species & i==1){
         Species_training <- c(Species_HP_training,Species_NP_training)
         Labels_training <- c(rep(T,length(Species_HP_training)),rep(F,length(Species_NP_training)))
         Species_validation <- c(Species_HP_validation,Species_NP_validation)
@@ -140,6 +140,9 @@ if(random.best){
     SampleBestStrains()
 }
 
+if (ambiguous.species) {
+    IMG.all$subset <- "selected"
+}
 
 IMG.all[, grep(pattern = "\\.orig", x = colnames(IMG.all))] <- NULL
 selected <- IMG.all[IMG.all$subset == "selected",]
