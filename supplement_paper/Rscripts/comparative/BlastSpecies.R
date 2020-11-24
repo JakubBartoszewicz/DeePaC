@@ -1,9 +1,9 @@
-P <- 0
-N <- 0
+P <- 96
+N <- 797
 Paired <- T
 SetName <- "test"
-Path.L <- "SCRATCH_NOBAK/Benchmark_ROGAL/PathogenReads/OtherData/HP_NHP/testData/Reads/Left_250bp_fold1/Blast/"
-Path.R <- "SCRATCH_NOBAK/Benchmark_ROGAL/PathogenReads/OtherData/HP_NHP/testData/Reads/Right_250bp_fold1/Blast/"
+Path.L <- "SCRATCH_NOBAK/Benchmark_virS/PathogenReads/OtherData/HP_NHP/testData/Reads/Left_250bp_fold1/Blast/"
+Path.R <- "SCRATCH_NOBAK/Benchmark_virS/PathogenReads/OtherData/HP_NHP/testData/Reads/Right_250bp_fold1/Blast/"
 
 accept.anything <- Vectorize(function (x,y) {
     if (is.na(x)) return (y)
@@ -54,24 +54,38 @@ get.performance <- function (prediction, y, P=0, N=0) {
     return(data.frame(TP=TP,TN=TN,FP=FP,FN=FN,TPR = sensitivity, TNR=specificity, PPV = precision, ACC = ACC, F1 = F1, MCC = MCC, total.TPR = total.sensitivity, total.TNR=total.specificity, total.PPV = total.precision, total.ACC = total.ACC, total.F1 = total.F1, total.MCC = total.MCC, predictions = predictions))
 }
 
-for (trainingSet in c("AllTrainingGenomes", "AllStrains")){
+for (trainingSet in c("AllTrainingGenomes")){
     file.paths.L <- list.files(path = paste0(Path.L, trainingSet), pattern = "matched\\.rds$", full.names = T)
     file.data.L <- lapply(file.paths.L, readRDS)
     #merged.L <- do.call("rbind", file.data)
     #merged.L$read <- rownames(merged.L)
-    
+   
+    specnames.L <-  make.names(sapply(file.data.L, function(x){return(x$QuerySpecies[1])}), unique=TRUE)
+    for (i in 1:length(specnames.L)){
+    	file.data.L[[i]]$QuerySpecies <- specnames.L[i]
+    }
+
     species.L <- lapply(file.data.L, function(x){label <- sum(x$MatchedLabel) >= sum(!(x$MatchedLabel)); return(data.frame(MatchedLabel=label, QueryLabel=x$QueryLabel[1], QuerySpecies = x$QuerySpecies[1]))})
     species.L <- do.call("rbind", species.L)
-    
-    rownames(species.L) <-  sapply(file.data.L, function(x){return(x$QuerySpecies[1])})
+
+    rownames(species.L) <- specnames.L
     
     if (Paired){
         file.paths.R <- list.files(path = paste0(Path.R, trainingSet), pattern = "matched\\.rds$", full.names = T)
         file.data.R <- lapply(file.paths.R, readRDS)
-        species.R <- lapply(file.data.R, function(x){label <- sum(x$MatchedLabel) >= sum(!(x$MatchedLabel)); return(data.frame(MatchedLabel=label, QueryLabel=x$QueryLabel[1], QuerySpecies = x$QuerySpecies[1]))})
+
+        specnames.R <- make.names(sapply(file.data.R, function(x){return(x$QuerySpecies[1])}), unique=TRUE)
+        for (i in 1:length(specnames.R)){
+            file.data.R[[i]]$QuerySpecies <- specnames.R[i]
+        }
+
+	species.R <- lapply(file.data.R, function(x){label <- sum(x$MatchedLabel) >= sum(!(x$MatchedLabel)); return(data.frame(MatchedLabel=label, QueryLabel=x$QueryLabel[1], QuerySpecies = x$QuerySpecies[1]))})
         species.R <- do.call("rbind", species.R)
-        rownames(species.R) <- sapply(file.data.R, function(x){return(x$QuerySpecies[1])})
-        species.join <-  merge(species.L, species.R, by = "QuerySpecies", all = TRUE, suffixes = c(".L", ".R"))
+
+
+	rownames(species.R) <- specnames.R
+
+	species.join <-  merge(species.L, species.R, by = "QuerySpecies", all = TRUE, suffixes = c(".L", ".R"))
         species.join$Prediction <- accept.anything(species.join$MatchedLabel.L, species.join$MatchedLabel.R)
         species.pred <- species.join[!is.na(species.join$Prediction),]   
         species.pred$QueryLabel.L[is.na(species.pred$QueryLabel.L)] <- species.pred$QueryLabel.R[is.na(species.pred$QueryLabel.L)]
