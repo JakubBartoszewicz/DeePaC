@@ -225,7 +225,7 @@ if(Do.ProcessBlast == T) {
     if(length(Dups>0) )Blast <- Blast[-Dups,]
 
     # Match to IMG
-    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable)
+    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable, by.contig)
 
     Time <- proc.time() - Time1
     write(paste("Blast analysis of file",BlastFiles[i],"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
