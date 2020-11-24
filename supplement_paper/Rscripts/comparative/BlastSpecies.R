@@ -79,13 +79,13 @@ for (trainingSet in c("AllTrainingGenomes")){
             file.data.R[[i]]$QuerySpecies <- specnames.R[i]
         }
 
-	species.R <- lapply(file.data.R, function(x){label <- sum(x$MatchedLabel) >= sum(!(x$MatchedLabel)); return(data.frame(MatchedLabel=label, QueryLabel=x$QueryLabel[1], QuerySpecies = x$QuerySpecies[1]))})
+	    species.R <- lapply(file.data.R, function(x){label <- sum(x$MatchedLabel) >= sum(!(x$MatchedLabel)); return(data.frame(MatchedLabel=label, QueryLabel=x$QueryLabel[1], QuerySpecies = x$QuerySpecies[1]))})
         species.R <- do.call("rbind", species.R)
 
 
-	rownames(species.R) <- specnames.R
+	    rownames(species.R) <- specnames.R
 
-	species.join <-  merge(species.L, species.R, by = "QuerySpecies", all = TRUE, suffixes = c(".L", ".R"))
+	    species.join <-  merge(species.L, species.R, by = "QuerySpecies", all = TRUE, suffixes = c(".L", ".R"))
         species.join$Prediction <- accept.anything(species.join$MatchedLabel.L, species.join$MatchedLabel.R)
         species.pred <- species.join[!is.na(species.join$Prediction),]   
         species.pred$QueryLabel.L[is.na(species.pred$QueryLabel.L)] <- species.pred$QueryLabel.R[is.na(species.pred$QueryLabel.L)]
