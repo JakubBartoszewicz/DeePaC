@@ -7,15 +7,38 @@
 
 require(stringr, quietly = T)
 options(warn=1)
-MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL){
+MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL, byContig=FALSE){
 
   if(groundTruth == T){
-    query_acc <- sapply(strsplit(as.character(Blast$Query),"[/]"), function(x) tail(x,1))
-    query_acc <- str_replace(string=query_acc, pattern="\\.fq.*", replacement="")
-    # map to IMG and extract species and label
-    Query2IMG <- match(query_acc,as.character(IMGdata$assembly_accession))
-    Query_Species <- as.character(IMGdata$Species)[Query2IMG]
-    Query_Label <- IMGdata$Pathogenic[Query2IMG]
+    if (byContig == F){
+      query_acc <- sapply(strsplit(as.character(Blast$Query),"[/]"), function(x) tail(x,1))
+      query_acc <- str_replace(string=query_acc, pattern="\\.fq.*", replacement="")
+      # map to IMG and extract species and label
+      Query2IMG <- match(query_acc,as.character(IMGdata$assembly_accession))
+      Query_Species <- as.character(IMGdata$Species)[Query2IMG]
+      Query_Label <- IMGdata$Pathogenic[Query2IMG]
+    } else {
+      query_acc <- as.character(Blast$Query)
+
+      if(use.suppTable){
+        reptable <- read.table(suppTable)
+        ids_right = as.character(reptable$V2)
+        names(ids_right) <- as.character(reptable$V1)
+        query_new <- ids_right[query_acc]
+        names(query_new) <- NULL
+        if (!isTRUE(all.equal(query_new, query_acc))){
+          query_acc = query_new
+        }
+      }
+      # map to IMG and extract species and label
+      queries <- sapply(query_acc, function(q){grepl(pattern = q, x=IMGdata$refseq.id, fixed=TRUE)})
+      if(ncol(queries) > 1) {
+        queries <- rowSums(queries) > 0
+      }
+      Query2IMG <- IMGdata[queries,]
+      Query_Species <- Query2IMG$Species
+      Query_Label <- Query2IMG$Pathogenic
+    }
   }
 
   # myReferences_acc <- str_replace(string=as.character(Blast$Target), pattern=".*_", replacement="")
@@ -56,6 +79,7 @@ WorkingDirectory <- "HP_NHP"
 # Choose test folder
 ReadType <- "Left_250bp"
 Fold <- 1
+by.contig <- FALSE
 
 IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"VHDB_all.rds") )
 suppTable = "~/SCRATCH_NOBAK/blastrepair/ids_tab"
@@ -201,7 +225,7 @@ if(Do.ProcessBlast == T) {
     if(length(Dups>0) )Blast <- Blast[-Dups,]
 
     # Match to IMG
-    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable)
+    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable, by.contig)
 
     Time <- proc.time() - Time1
     write(paste("Blast analysis of file",BlastFiles[i],"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
