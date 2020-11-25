@@ -80,10 +80,11 @@ virtualenv -p /usr/bin/python3 my_env
 source my_env/bin/activate
 ```
 
-You can then install DeePaC with `pip`:
+You can then install DeePaC with `pip`: 
 ```
 pip install deepac
 ```
+If you ancounter errors, make sure that libz-dev (a pysam dependency) is present on your system.
 
 If you want to install the plugins, use:
 
