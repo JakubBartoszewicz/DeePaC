@@ -75,7 +75,7 @@ For docker containers no latest version is available, you always need to use the
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
 ```
-# use -p to use the desired python interpreter
+# use -p to use the desired python interpreter (python 3.6 or higher required)
 virtualenv -p /usr/bin/python3 my_env
 source my_env/bin/activate
 ```
