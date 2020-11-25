@@ -127,7 +127,7 @@ def predict(evalconfig, x_test, n_epoch, paired=False, rc=False):
     else:
         filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
     # Predict class probabilities
-    y_pred = predict_array(model, x_test, output=filename, rc=rc)
+    y_pred, _ = predict_array(model, x_test, output=filename, rc=rc)
     return y_pred
 
 
