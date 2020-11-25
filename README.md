@@ -271,7 +271,7 @@ Unfortunately, the following issues are independent of the DeePaC codebase:
 * pip installation of pybedtools (a deepac dependency) requires libz-dev and will fail if it is not present on your system. To solve this, install libz-dev or use the bioconda installation.
 * A bug in TF 2.2 may cause training to hang when using Keras Sequence input (i.e. if your training config contains
  `Use_TFData = False` and `LoadTrainingByBatch = True`). To solve this, use TF 2.1 or TF 2.3+,
-  pre-load your data into memory (`LoadTrainingByBatch = False`) or use TFDataset input (`Use_TFData = False`).
+  pre-load your data into memory (`LoadTrainingByBatch = False`) or use TFDataset input (`Use_TFData = True`).
 * A bug in TF 2.1 resets the optimizer state when continuing interrupted training. DeePaC will notice that and warn you, but to solve this, upgrade to TF 2.2+.
 
 ## Cite us
