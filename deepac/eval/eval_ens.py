@@ -107,7 +107,7 @@ def predict(evalconfig, x_test, paired=False, do_pred=True):
             model = load_model("{p}-e{ne:03d}.h5".format(p=evalconfig.run_prefixes[i], ne=evalconfig.epoch[i]),
                                custom_objects=get_custom_objects())
             # Predict class probabilities
-            y_preds.append(predict_array(model, x_test, filename))
+            y_preds.append(predict_array(model, x_test, filename)[0])
         else:
             y_preds.append(np.load(filename))
     y_pred = np.mean(y_preds, axis=0)
