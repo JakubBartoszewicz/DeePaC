@@ -68,7 +68,7 @@ You can then install DeePaC with `pip`:
 ```
 pip install deepac
 ```
-If you ancounter errors, make sure that libz-dev (a pysam dependency) is present on your system.
+If you encounter errors, make sure that libz-dev (a pysam dependency) is present on your system.
 
 If you want to install the plugins, use:
 
@@ -78,7 +78,7 @@ pip install deepacvir deepacstrain
 
 ### GPU support
 
-GPU support should now be enabled automatically in bioconda, docker and singularity installations.
+GPU support should now be enabled automatically in the bioconda installation.
 
 If you're using `pip`, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 
