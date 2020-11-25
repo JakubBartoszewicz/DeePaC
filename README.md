@@ -63,14 +63,6 @@ docker pull quay.io/biocontainers/deepac:0.13.3--py_0
 ```
 For docker containers no latest version is available, you always need to use the container tag.
 
-### Singularity installation
-
-You first need to be sure that singularity is installed in your system, then you can use the containers using the following command:
-```
-singularity run https://depot.galaxyproject.org/singularity/deepac:0.13.3--py_0
-```
-For docker containers no latest version is available, you always need to use the container tag.
-
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
