@@ -55,14 +55,6 @@ If you want to install the plugins as well, use:
 conda install deepacvir deepacstrain
 ```
 
-### Docker BioContainer installation (also recommended)
-
-You first need to be sure that docker is installed in your system, then you can install the containers using the following command:
-```
-docker pull quay.io/biocontainers/deepac:0.13.3--py_0
-```
-For docker containers no latest version is available, you always need to use the container tag.
-
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):

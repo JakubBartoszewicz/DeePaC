@@ -1,5 +1,5 @@
 import tensorflow as tf
-from deepac.predict import predict_fasta, predict_npy, filter_fasta
+from deepac.predict import predict_fasta, filter_fasta
 from deepac.nn_train import RCConfig, RCNet
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_ens import evaluate_ensemble
