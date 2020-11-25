@@ -68,7 +68,6 @@ You can then install DeePaC with `pip`:
 ```
 pip install deepac
 ```
-If you encounter errors, make sure that libz-dev (a pysam dependency) is present on your system.
 
 If you want to install the plugins, use:
 
@@ -266,6 +265,14 @@ The second sentence in section 2.2.3 of the bacterial DeePaC paper (<https://doi
 Published text: “All were initialized with He weight initialization (He et al, 2015) and trained…”
 
 Should be: “All were initialized with He weight initialization (He et al, 2015) or Glorot initialization (Glorot & Bengio, 2010) for recurrent and feedforward layers respectively and trained…
+
+## Known issues
+Unfortunately, the following issues are independent of the DeePaC codebase:
+* pip installation of pybedtools (a deepac dependency) requires libz-dev and will fail if it is not present on your system. To solve this, install libz-dev or use the bioconda installation.
+* A bug in TF 2.2 may cause training to hang when using Keras Sequence input (i.e. if your training config contains
+ `Use_TFData = False` and `LoadTrainingByBatch = True`). To solve this, upgrade to TF 2.3+,
+  pre-load your data into memory (`LoadTrainingByBatch = False`) or use TFDataset input (`Use_TFData = False`).
+* A bug in TF 2.1 resets the optimizer state when continuing interrupted training. DeePaC will notice that and warn you, but to solve this, upgrade to TF 2.2+.
 
 ## Cite us
 If you find DeePaC useful, please cite:
