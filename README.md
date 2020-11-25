@@ -26,40 +26,28 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 
 ## Installation
 
-### Recommended: set up an environment
+### With Bioconda (recommended)
+ [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
+ 
+You can install DeePaC with `bioconda`. Set up the [bioconda channel](
+<https://bioconda.github.io/user/install.html#set-up-channels>) first (channel ordering is important):
 
-We recomment setting up an isolated `conda` environment:
+```
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+```
+
+We recommend setting up an isolated `conda` environment:
 ```
 conda create -n my_env
 conda activate my_env
 ```
 
-or, alternatively, a `virtualenv`:
-```
-virtualenv --system-site-packages my_env
-source my_env/bin/activate
-```
-
-
-### With conda (recommended)
- [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
- 
-You can install DeePaC with `bioconda`. Set up the [bioconda channel](
-<https://bioconda.github.io/user/install.html#set-up-channels>) first, and then:
+and then:
 ```
 conda install deepac
 ```
-
-Note: the latest version of deepac is not available on bioconda. If you use the builtin models only, the older version 
-should be perfectly fine. If you want to use more advanced functionalities (custom models, interpretability suite etc.), install deepac with `pip`. You can conveniently install all the dependencies via conda:
-
-```
-conda install tensorflow-gpu # For GPU support; see below
-conda install deepac --only-deps
-conda install seaborn
-pip install deepac --no-deps
-```
-
 
 If you want to install the plugins as well, use:
 
@@ -67,9 +55,32 @@ If you want to install the plugins as well, use:
 conda install deepacvir deepacstrain
 ```
 
+### Docker BioContainer installation (also recommended)
+
+You first need to be sure that docker is installed in your system, then you can install the containers using the following command:
+```
+docker pull quay.io/biocontainers/deepac:0.13.3--py_0
+```
+For docker containers no latest version is available, you always need to use the container tag.
+
+### Singularity installation
+
+You first need to be sure that singularity is installed in your system, then you can use the containers using the following command:
+```
+singularity run https://depot.galaxyproject.org/singularity/deepac:0.13.3--py_0
+```
+For docker containers no latest version is available, you always need to use the container tag.
+
 ### With pip
 
-You can also install DeePaC with `pip`:
+We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
+```
+# use -p to use the desired python interpreter
+virtualenv -p /usr/bin/python3 my_env
+source my_env/bin/activate
+```
+
+You can then install DeePaC with `pip`:
 ```
 pip install deepac
 ```
@@ -82,19 +93,9 @@ pip install deepacvir deepacstrain
 
 ### GPU support
 
-To use GPUs, you need to install the GPU version of TensorFlow. In conda, install tensorflow-gpu before deepac:
-```
-conda remove tensorflow
-conda install tensorflow-gpu
-conda install deepac
-```
+GPU support should now be enabled automatically in bioconda, docker and singularity installations.
 
-If you're using `pip`, you need to install CUDA and CuDNN first (see TensorFlow installation guide for details). Then
-you can do the same as above:
-```
-pip uninstall tensorflow
-pip install tensorflow-gpu
-```
+If you're using `pip`, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 
 ### Optional: run tests
 Optionally, you can run explicit tests of your installation. Note that it may take some time on a CPU.
@@ -273,6 +274,13 @@ deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
 ## Supplementary data and scripts
 Datasets are available here: <https://doi.org/10.5281/zenodo.3678562> (bacteria) and here: <https://doi.org/10.5281/zenodo.3630803> (viruses).
 In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
+
+## Erratum
+The second sentence in section 2.2.3 of the bacterial DeePaC paper (<https://doi.org/10.1093/bioinformatics/btz541>) is partially incomplete.
+
+Published text: “All were initialized with He weight initialization (He et al, 2015) and trained…”
+
+Should be: “All were initialized with He weight initialization (He et al, 2015) or Glorot initialization (Glorot & Bengio, 2010) for recurrent and feedforward layers respectively and trained…
 
 ## Cite us
 If you find DeePaC useful, please cite:
