@@ -40,12 +40,16 @@ conda config --add channels conda-forge
 
 We recommend setting up an isolated `conda` environment:
 ```
-conda create -n my_env
+# python 3.6, 3.7 and 3.8 are supported
+conda create -n my_env python=3.8
 conda activate my_env
 ```
 
 and then:
 ```
+# For GPU support (recommended)
+conda install tensorflow-gpu deepac
+# Basic installation (CPU-only)
 conda install deepac
 ```
 
@@ -64,8 +68,16 @@ virtualenv -p /usr/bin/python3 my_env
 source my_env/bin/activate
 ```
 
-You can then install DeePaC with `pip`: 
+You can then install DeePaC with `pip`. For GPU support, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
+Then you can do the same as above:
 ```
+# For GPU support (recommended)
+pip install tensorflow-gpu deepac
+```
+
+Alternatively, if you don't need GPU support: 
+```
+# Basic installation (CPU-only)
 pip install deepac
 ```
 
@@ -74,12 +86,6 @@ If you want to install the plugins, use:
 ```
 pip install deepacvir deepacstrain
 ```
-
-### GPU support
-
-GPU support should now be enabled automatically in the bioconda installation.
-
-If you're using `pip`, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 
 ### Optional: run tests
 Optionally, you can run explicit tests of your installation. Note that it may take some time on a CPU.
