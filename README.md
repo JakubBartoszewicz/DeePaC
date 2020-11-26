@@ -72,7 +72,8 @@ You can then install DeePaC with `pip`. For GPU support, you need to install CUD
 Then you can do the same as above:
 ```
 # For GPU support (recommended)
-pip install tensorflow-gpu deepac
+pip install tensorflow-gpu
+pip install deepac
 ```
 
 Alternatively, if you don't need GPU support: 

@@ -1,0 +1,14 @@
+biopython==1.78
+matplotlib==3.3.3
+pandas==1.1.4
+psutil==5.7.3
+pybedtools==0.8.1
+pydot==1.4.1
+pysam==0.16.0.1
+scikit-learn==0.23.2
+scipy==1.5.4
+seaborn==0.11.0
+shap==0.36.0
+statsmodels==0.12.1
+termcolor==1.1.0
+weblogo==3.7.5
