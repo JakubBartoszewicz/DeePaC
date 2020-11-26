@@ -273,7 +273,9 @@ Unfortunately, the following issues are independent of the DeePaC codebase:
  `Use_TFData = False` and `LoadTrainingByBatch = True`). To solve this, use TF 2.1 or TF 2.3+,
   pre-load your data into memory (`LoadTrainingByBatch = False`) or use TFDataset input (`Use_TFData = True`).
 * A bug in TF 2.1 resets the optimizer state when continuing interrupted training. DeePaC will notice that and warn you, but to solve this, upgrade to TF 2.2+.
-* h5py>=3.0 is not compatible with TF 2.1 and will cause errors when loading Keras (and DeePaC) models. To solve it, install h5py<3.0.
+* h5py>=3.0 is not compatible with Tensorflow at the moment and will cause errors when loading Keras (and DeePaC) models (hence, deepac tests will fail as well). 
+Conda installation takes care of it automatically, but the pip Tensorflow installation does not. To solve it, use conda installation or install h5py<3.0. 
+This issue should be resolved in a future version of Tensorflow.
 
 ## Cite us
 If you find DeePaC useful, please cite:
