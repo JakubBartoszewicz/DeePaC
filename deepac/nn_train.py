@@ -33,7 +33,7 @@ from tensorflow.keras.models import load_model
 
 from deepac.utils import ReadSequence, CSVMemoryLogger, DatasetParser
 from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
-    add_rc_transformer_block
+    add_rc_transformer_block, scale_input_dim
 from functools import partial
 
 
@@ -159,6 +159,10 @@ class RCConfig:
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+            try:
+                self.input_scale = config['Architecture'].getint('Scale_Input_Dim')
+            except KeyError:
+                self.input_scale = 1
             try:
                 self.full_rc_att = config['Architecture'].getboolean('Full_RC_Attention')
                 self.full_rc_ffn = config['Architecture'].getboolean('Full_RC_FFN')
@@ -734,18 +738,18 @@ class RCNet:
         position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x = Masking()(inputs)
+        if self.config.input_scale > 1:
+            x = scale_input_dim(inputs, self.config.input_scale)
         else:
             x = inputs
+        if self.config.mask_zeros:
+            x = Masking()(x)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-        else:
-            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -780,8 +784,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
-                                                                              training=self.config.dropout_training_mode)
+            x = Dropout(self.config.recurrent_dropout,
+                        seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # First recurrent layer already added
             self._current_recurrent = 1
         else:
@@ -901,8 +905,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
-                                                                              training=self.config.dropout_training_mode)
+            x = Dropout(self.config.recurrent_dropout,
+                        seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Dense layers
         for i in range(0, self.config.n_dense):
@@ -937,18 +941,18 @@ class RCNet:
         position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x = Masking()(inputs)
+        if self.config.input_scale > 1:
+            x = scale_input_dim(inputs, self.config.input_scale)
         else:
             x = inputs
+        if self.config.mask_zeros:
+            x = Masking()(x)
         # The last recurrent layer should return the output for the last unit only.
         #  Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-        else:
-            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -1165,10 +1169,12 @@ class RCNet:
         position_embedding = None
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x_fwd = Masking()(inputs_fwd)
+        if self.config.input_scale > 1:
+            x_fwd = scale_input_dim(inputs_fwd, self.config.input_scale)
         else:
             x_fwd = inputs_fwd
+        if self.config.mask_zeros:
+            x_fwd = Masking()(x_fwd)
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
                             name="reverse_complement_input_{n}".format(n=self._current_recurrent))
         x_rc = revcomp_in(x_fwd)

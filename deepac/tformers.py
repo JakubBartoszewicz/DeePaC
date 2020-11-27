@@ -262,6 +262,15 @@ def add_siam_layernorm(inputs_fwd, inputs_rc, current_ln):
     return x_fwd, x_rc
 
 
+def scale_input_dim(inputs, scale):
+    out_shape = [inputs.shape[1], inputs.shape[2] * scale]
+    repeat = Lambda(lambda x: tf.repeat(input=x, repeats=scale, axis=-1), output_shape=out_shape,
+                    name="repeat_input_channels")
+    out = repeat(inputs)
+    out = Reshape(out_shape)(out)
+    return out
+
+
 def get_position_encoding(length, embed_dim, rc_folds=1, dtype='float32'):
     if embed_dim % 2 != 0:
         raise ValueError("Channel dimension of the input embedding for the transformer "
