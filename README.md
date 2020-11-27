@@ -94,7 +94,7 @@ docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszewicz/
 docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
 ```
 
-The image ships the main `deepac` package along with `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
 
 ### With pip
 
