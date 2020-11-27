@@ -26,6 +26,9 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 
 ## Installation
 
+We recommend using Bioconda (based on the `conda` package manager) or custom Docker images based on official Tensorflow images.
+Alternatively, a `pip` installation is possible as well.
+
 ### With Bioconda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
  
@@ -59,6 +62,38 @@ If you want to install the plugins as well, use:
 conda install deepacvir deepacstrain
 ```
 
+### With Docker (also recommended)
+
+Requirements: install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
+For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+See [TF Docker installation guide](https://www.tensorflow.org/install/docker) and the 
+[NVIDIA Docker support installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) 
+for details.
+
+You can then pull the desired image:
+```
+# Basic installation - CPU only
+docker pull jbartoszewicz/deepac:0.13.3
+
+# For GPU support
+docker pull jbartoszewicz/deepac:0.13.3-gpu
+```
+
+And run it:
+```
+# Basic installation - CPU only
+docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac --help
+docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac test -q
+
+# With GPU support
+docker run -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
+
+# If you want to use the shell inside the container
+docker run -it -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
+```
+
+The image ships the main `deepac` package along with `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
@@ -72,7 +107,8 @@ You can then install DeePaC with `pip`. For GPU support, you need to install CUD
 Then you can do the same as above:
 ```
 # For GPU support (recommended)
-pip install tensorflow-gpu deepac
+pip install tensorflow-gpu
+pip install deepac
 ```
 
 Alternatively, if you don't need GPU support: 
