@@ -4,8 +4,7 @@ COPY requirements.txt .
 
 RUN apt-get update && apt-get install -y \
     bedtools \
-    ghostscript \
-    libz-dev
+    ghostscript
 
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
