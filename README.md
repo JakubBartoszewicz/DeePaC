@@ -95,6 +95,8 @@ docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszew
 ```
 
 The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
+ consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
 
 ### With pip
 
