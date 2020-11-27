@@ -82,8 +82,8 @@ docker pull jbartoszewicz/deepac:0.13.3-gpu
 And run it:
 ```
 # Basic installation - CPU only
-docker run -v "$(pwd):/deepac" -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac --help
-docker run -v "$(pwd):/deepac" -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac test -q
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac --help
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac test -q
 
 # With GPU support
 docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
