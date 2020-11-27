@@ -26,6 +26,9 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 
 ## Installation
 
+We recommend using Bioconda (based on the `conda` package manager) or custom Docker images based on official Tensorflow images.
+Alternatively, a `pip` installation is possible as well.
+
 ### With Bioconda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
  
@@ -40,12 +43,16 @@ conda config --add channels conda-forge
 
 We recommend setting up an isolated `conda` environment:
 ```
-conda create -n my_env
+# python 3.6, 3.7 and 3.8 are supported
+conda create -n my_env python=3.8
 conda activate my_env
 ```
 
 and then:
 ```
+# For GPU support (recommended)
+conda install tensorflow-gpu deepac
+# Basic installation (CPU-only)
 conda install deepac
 ```
 
@@ -54,6 +61,38 @@ If you want to install the plugins as well, use:
 ```
 conda install deepacvir deepacstrain
 ```
+
+### With Docker (also recommended)
+
+Requirements: install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
+For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+See [TF Docker installation guide](https://www.tensorflow.org/install/docker) and the 
+[NVIDIA Docker support installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) 
+for details.
+
+You can then pull the desired image:
+```
+# Basic installation - CPU only
+docker pull jbartoszewicz/deepac:0.13.3
+
+# For GPU support
+docker pull jbartoszewicz/deepac:0.13.3-gpu
+```
+
+And run it:
+```
+# Basic installation - CPU only
+docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac --help
+docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac test -q
+
+# With GPU support
+docker run -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
+
+# If you want to use the shell inside the container
+docker run -it -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
+```
+
+The image ships the main `deepac` package along with `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
 
 ### With pip
 
@@ -64,8 +103,17 @@ virtualenv -p /usr/bin/python3 my_env
 source my_env/bin/activate
 ```
 
-You can then install DeePaC with `pip`: 
+You can then install DeePaC with `pip`. For GPU support, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
+Then you can do the same as above:
 ```
+# For GPU support (recommended)
+pip install tensorflow-gpu
+pip install deepac
+```
+
+Alternatively, if you don't need GPU support: 
+```
+# Basic installation (CPU-only)
 pip install deepac
 ```
 
@@ -74,12 +122,6 @@ If you want to install the plugins, use:
 ```
 pip install deepacvir deepacstrain
 ```
-
-### GPU support
-
-GPU support should now be enabled automatically in the bioconda installation.
-
-If you're using `pip`, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 
 ### Optional: run tests
 Optionally, you can run explicit tests of your installation. Note that it may take some time on a CPU.
@@ -273,6 +315,9 @@ Unfortunately, the following issues are independent of the DeePaC codebase:
  `Use_TFData = False` and `LoadTrainingByBatch = True`). To solve this, use TF 2.1 or TF 2.3+,
   pre-load your data into memory (`LoadTrainingByBatch = False`) or use TFDataset input (`Use_TFData = True`).
 * A bug in TF 2.1 resets the optimizer state when continuing interrupted training. DeePaC will notice that and warn you, but to solve this, upgrade to TF 2.2+.
+* h5py>=3.0 is not compatible with Tensorflow at the moment and will cause errors when loading Keras (and DeePaC) models (hence, deepac tests will fail as well). 
+Conda installation takes care of it automatically, but the pip Tensorflow installation does not. To solve it, use conda installation or install h5py<3.0. 
+This issue should be resolved in a future version of Tensorflow.
 
 ## Cite us
 If you find DeePaC useful, please cite:
