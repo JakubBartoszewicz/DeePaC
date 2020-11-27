@@ -64,11 +64,13 @@ conda install deepacvir deepacstrain
 
 ### With Docker (also recommended)
 
-Requirements: install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
-For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+Requirements: 
+* install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
+* For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+
 See [TF Docker installation guide](https://www.tensorflow.org/install/docker) and the 
 [NVIDIA Docker support installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) 
-for details.
+for details. The guide below assumes you have Docker 19.03 or above.
 
 You can then pull the desired image:
 ```
