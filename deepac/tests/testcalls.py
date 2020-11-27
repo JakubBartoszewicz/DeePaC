@@ -12,6 +12,7 @@ from deepac.builtin_loading import BuiltinLoader
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
 from deepac.gwpa.tests import GWPATester
+from deepac.utils import set_mem_growth
 from multiprocessing import Process
 import configparser
 import os
@@ -73,6 +74,7 @@ class Tester:
         if not self.keep:
             self.run_datagen(npy=True,
                              tfrec=self.input_modes_dict["tfdata"])
+        set_mem_growth()
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")

@@ -244,7 +244,8 @@ class MainRunner:
         """Run tests."""
         if args.tpu is None:
             n_cpus = config_cpus(args.n_cpus)
-            n_gpus = config_gpus(args.gpus)
+            # Setting memory growth before preprocessing TFDatasets hangs the TFRecordWriter
+            n_gpus = config_gpus(args.gpus, set_memory_growth=False)
             scale = args.scale * max(1, n_gpus)
         else:
             n_cpus = multiprocessing.cpu_count()
