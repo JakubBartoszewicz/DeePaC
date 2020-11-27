@@ -82,14 +82,14 @@ docker pull jbartoszewicz/deepac:0.13.3-gpu
 And run it:
 ```
 # Basic installation - CPU only
-docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac --help
-docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac test -q
+docker run -v "$(pwd):/deepac" -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac --help
+docker run -v "$(pwd):/deepac" -u $(id -u):$(id -g) --rm jbartoszewicz/deepac:0.13.3 deepac test -q
 
 # With GPU support
-docker run -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
 
 # If you want to use the shell inside the container
-docker run -it -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
 ```
 
 The image ships the main `deepac` package along with `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
