@@ -88,7 +88,7 @@ docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac test -q
 # With GPU support
 docker run -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
 
-# If you want to use the shell insde the container
+# If you want to use the shell inside the container
 docker run -it -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
 ```
 
