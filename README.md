@@ -27,7 +27,7 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 ## Installation
 
 We recommend using Bioconda (based on the `conda` package manager) or custom Docker images based on official Tensorflow images.
-Alternatively, a `pip` installation is possible as well.
+Alternatively, a `pip` installation is possible as well. For installation on IBM Power Systems (e.g. AC992), see advanced usage guide below.
 
 ### With Bioconda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
@@ -301,6 +301,51 @@ deepac gwpa factiv -m model.h5 -t fragmented_genomes/sample1_fragmented_genomes.
 # Check for enrichment within annotated genomic features
 deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
 ```
+## Installation on IBM Power Systems
+
+### With conda & pip (experimental)
+First, add the IBM conda channel to install tensorflow (and cython):
+```
+conda config --add channels https://public.dhe.ibm.com/ibmdl/export/pub/software/server/ibm-ai/conda
+conda install tensorflow cython
+```
+
+Download [requirements.txt for IBM Power](https://gitlab.com/rki_bioinformatics/DeePaC/-/blob/master/dockerfiles/gpu/requirements.txt)
+and install with pip (requires libz-dev to be present on your machine:
+```
+pip install -r requirements.txt
+```
+
+Finally, install deepac:
+```
+pip install deepac --no-deps
+```
+Note that bedtools and ghostscript are required for the interpretability workflows (ask your admin to install them if this is necessary).
+You can train your models and run inference without them.
+
+### With Docker (experimental)
+
+Alternatively, you can use our Docker container, based on the official IBM Tensorflow image (see https://hub.docker.com/r/ibmcom/powerai/):
+```
+docker pull jbartoszewicz/deepac:0.13.3-ppc64le
+```
+
+Verify that everything worked. You have to accept the IBM license (see https://hub.docker.com/r/ibmcom/powerai/):
+```
+docker run --rm --env LICENSE=yes jbartoszewicz/deepac:0.13.3-ppc64le
+```
+
+To run the container as your user (and bind-mount your working directory), you have to activate the wmlce conda environment:
+```
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes jbartoszewicz/deepac:0.13.3-ppc64le bash -c "source /opt/anaconda/bin/activate && conda activate wmlce && deepac test -q"
+```
+Modify the last deepac command to run the desired deepac workflow.
+
+Alternatively, you can run in in interactive mode and set everything up yourself:
+```
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes jbartoszewicz/deepac:0.13.3-ppc64le bash
+```
+
 ## Supplementary data and scripts
 Datasets are available here: <https://doi.org/10.5281/zenodo.3678562> (bacteria) and here: <https://doi.org/10.5281/zenodo.3630803> (viruses).
 In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
