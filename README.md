@@ -98,6 +98,7 @@ The image ships the main `deepac` package along with the `deepac-vir` and `deepa
 For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
  consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
 
+The `jbartoszewicz/deepac:latest` corresponds to the latest version of the CPU build. We recommend using explicit version tags instead.
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
