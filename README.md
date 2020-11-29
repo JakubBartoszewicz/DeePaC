@@ -27,7 +27,7 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 ## Installation
 
 We recommend using Bioconda (based on the `conda` package manager) or custom Docker images based on official Tensorflow images.
-Alternatively, a `pip` installation is possible as well.
+Alternatively, a `pip` installation is possible as well. For installation on IBM Power Systems (e.g. AC992), see separate [installation instructions (experimental)](https://gitlab.com/rki_bioinformatics/DeePaC/-/blob/master/dockerfiles/ppc64le/README.md).
 
 ### With Bioconda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
@@ -98,6 +98,7 @@ The image ships the main `deepac` package along with the `deepac-vir` and `deepa
 For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
  consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
 
+The `jbartoszewicz/deepac:latest` corresponds to the latest version of the CPU build. We recommend using explicit version tags instead.
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
@@ -301,6 +302,7 @@ deepac gwpa factiv -m model.h5 -t fragmented_genomes/sample1_fragmented_genomes.
 # Check for enrichment within annotated genomic features
 deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
 ```
+
 ## Supplementary data and scripts
 Datasets are available here: <https://doi.org/10.5281/zenodo.3678562> (bacteria) and here: <https://doi.org/10.5281/zenodo.3630803> (viruses).
 In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
