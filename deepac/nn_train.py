@@ -926,11 +926,18 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x,
                                                                           training=self.config.dropout_training_mode)
 
-        # Output layer for binary classification
-        x = Dense(1,
-                  kernel_initializer=self.config.initializers["out"],
-                  kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+        if self.config.n_classes == 2:
+            # Output layer for binary classification
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            # Output layer for binary classification
+            x = Dense(self.config.n_classes,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1154,12 +1161,24 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = self._add_rc_merge_dense(x, 1)
+            if self.config.n_classes == 2:
+                x = self._add_rc_merge_dense(x, 1)
+            else:
+                x = self._add_rc_merge_dense(x, self.config.n_classes)
         else:
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+            if self.config.n_classes == 2:
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1403,8 +1422,11 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            # Output layer for binary classification
-            x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            else:
+                x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.n_classes)
         else:
             # Dense layers
             x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
@@ -1424,11 +1446,20 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout,
                             seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-            # Output layer for binary classification
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs_fwd, x)
@@ -1437,7 +1468,11 @@ class RCNet:
         """Compile model and save model summaries"""
         if float(tf.__version__[:3]) < 2.2 or self.config.epoch_start == 0:
             print("Compiling...")
-            self.model.compile(loss='binary_crossentropy',
+            if self.config.n_classes == 2:
+                loss = 'binary_crossentropy'
+            else:
+                loss = 'sparse_categorical_crossentropy'
+            self.model.compile(loss=loss,
                                optimizer=self.config.optimizer,
                                metrics=['accuracy'])
 
