@@ -127,6 +127,12 @@ class RCConfig:
             self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
             # Define the network architecture
+            try:
+                self.n_classes = config['Architecture'].getint('N_Classes')
+            except KeyError:
+                self.n_classes = 2
+            if self.n_classes < 2:
+                raise ValueError("Number of classes must be greater or equal to 2")
             self.rc_mode = config['Architecture']['RC_Mode']
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
