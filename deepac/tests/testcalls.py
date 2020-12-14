@@ -55,7 +55,12 @@ class Tester:
 
     def run_datagen(self, npy=True, tfrec=True):
         print("TEST: Generating data...")
-        datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
+        if self.do_large:
+            datagen.generate_multiclass_sample_data(n_train=2048 * self.scale, n_val=2048 * self.scale)
+            print("TEST: Preprocessing multiclass data...")
+            self.test_preproc(npy, tfrec, multiclass=True)
+        else:
+            datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
         print("TEST: Preprocessing data...")
         self.test_preproc(npy, tfrec)
 
@@ -129,41 +134,70 @@ class Tester:
 
         print("TEST: OK")
 
-    def test_preproc(self, npy=True, tfrec=True):
+    def test_preproc(self, npy=True, tfrec=True, multiclass=False):
         """Test preprocessing."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train.ini"))
+        if multiclass:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train-multi.ini"))
+        else:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train.ini"))
         if npy:
             config['Options']['Use_TFData'] = "False"
             preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_data.npy"))),\
+                    "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_labels.npy"))),\
+                    "Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))),\
+                    "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
             config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
-                                                "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
-                "TFData Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_data",
+                                                    "sample_train_multi_data_0-{}.tfrec".format(256*self.scale-1)))),\
+                    "TFData Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
+                                                    "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
+                    "TFData Preprocessing failed."
 
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
+        if multiclass:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val-multi.ini"))
+        else:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
         if npy:
             config['Options']['Use_TFData'] = "False"
             preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data.npy"))),\
+                    "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_labels.npy"))),\
+                    "Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
             config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
-                                                "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
-                "TFData Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data",
+                                                    "sample_val_multi_data_0-{}.tfrec".format(256*self.scale-1)))),\
+                    "TFData Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
+                                                    "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
+                    "TFData Preprocessing failed."
 
     def test_train(self, quick=False, epoch_start=0, epoch_end=2):
         """Test training."""

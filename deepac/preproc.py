@@ -46,6 +46,12 @@ def preproc(config):
     # Set input and output paths
     neg_path = config['InputPaths']['Fasta_Class_0']
     pos_path = config['InputPaths']['Fasta_Class_1']
+    try:
+        multi_paths = config['InputPaths']['Fasta_Class_Multi'].split(',')
+        if multi_paths == ["none"]:
+            multi_paths = []
+    except KeyError:
+        multi_paths = []
     out_data_path = config['OutputPaths']['OutData']
     out_labels_path = config['OutputPaths']['OutLabels']
 
@@ -83,7 +89,7 @@ def preproc(config):
         # Count negative samples
         n_negative = x_train_neg.shape[0]
     else:
-        x_train_neg = np.zeros((0, read_length, 4),dtype=np.datatype)
+        x_train_neg = np.zeros((0, read_length, 4), dtype=np.datatype)
         n_negative = 0
 
     if pos_path != "none":
@@ -102,12 +108,47 @@ def preproc(config):
         # Count positive samples
         n_positive = x_train_pos.shape[0]
     else:
-        x_train_pos = np.zeros((0, read_length, 4),dtype=np.datatype)
+        x_train_pos = np.zeros((0, read_length, 4), dtype=np.datatype)
         n_positive = 0
+
+    x_train_multi = []
+    n_multi = []
+    if len(multi_paths) > 0:
+        for class_path in multi_paths:
+            if class_path != "none":
+                print("Preprocessing {}...".format(class_path))
+                with open(class_path) as input_handle:
+                    # Parse fasta, tokenize in parallel & concatenate to negative data
+                    if max_cores > 1:
+                        with Pool(processes=max_cores) as p:
+                            x_train_class = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                                     read_length=read_length),
+                                                             read_fasta(input_handle)),
+                                                       dtype=datatype)
+                    else:
+                        x_train_class = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                                    read_length=read_length),
+                                                            read_fasta(input_handle))),
+                                                   dtype=datatype)
+                # Count positive samples
+                n_class = x_train_class.shape[0]
+            else:
+                x_train_class = np.zeros((0, read_length, 4), dtype=np.datatype)
+                n_class = 0
+            x_train_multi.append(x_train_class)
+            n_multi.append(n_class)
+
     # Concatenate
     x_train = np.concatenate((x_train_neg, x_train_pos))
+    if len(x_train_multi) > 0:
+        x_train_multi = np.concatenate(x_train_multi)
+        x_train = np.concatenate((x_train, x_train_multi))
     # Add labels
     y_train = np.concatenate((np.repeat(0, n_negative).astype(datatype), np.repeat(1, n_positive).astype(datatype)))
+    if len(n_multi) > 0:
+        y_train_multi = np.concatenate([np.repeat(2+i, n_multi[i]).astype(datatype) for i in range(len(n_multi))])
+        y_train = np.concatenate((y_train, y_train_multi))
+
     # All sequences must have the same length. Then x_train is an array and the view below can be created
     # Note: creating a view instead of reversing element-wise saves a lot of memory
 
@@ -143,7 +184,7 @@ def preproc(config):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
-        n_all = n_negative + n_positive
+        n_all = n_negative + n_positive + np.sum(n_multi)
         slice_size = math.ceil(n_all/n_files)
         for i in range(n_files):
             start = i * slice_size

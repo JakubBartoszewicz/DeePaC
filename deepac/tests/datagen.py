@@ -28,19 +28,28 @@ def generate_reads(n, filename, gc=0.5, length=250, append=False, header=None):
             SeqIO.write(reads, output_handle, "fasta")
 
 
-def generate_sample_data(gc_pos=0.7, gc_neg=0.3, n_train=1024, n_val=1024):
+def generate_sample_data(gc_neg=0.3, gc_pos=0.7, n_train=1024, n_val=1024):
     """Generate a sample random dataset."""
-    pos_train = np.ceil(n_train/2).astype(int)
-    neg_train = n_train - pos_train
-    pos_val = np.ceil(n_val/2).astype(int)
-    neg_val = n_val - pos_val
+    generate_multiclass_sample_data(gc_per_class=(gc_neg, gc_pos), n_train=n_train, n_val=n_val)
+
+
+def generate_multiclass_sample_data(gc_per_class=(0.3, 0.7, 0.1, 0.9), n_train=1024, n_val=1024):
+    """Generate a sample multiclass random dataset."""
+    n_classes = len(gc_per_class)
 
     if not os.path.exists("deepac-tests"):
         os.makedirs("deepac-tests")
 
-    generate_reads(n=neg_train, filename=os.path.join("deepac-tests", "sample-train-neg.fasta"), gc=gc_neg)
-    generate_reads(n=pos_train, filename=os.path.join("deepac-tests", "sample-train-pos.fasta"), gc=gc_pos)
-    generate_reads(n=neg_val, filename=os.path.join("deepac-tests", "sample-val-neg.fasta"), gc=gc_neg)
-    generate_reads(n=pos_val, filename=os.path.join("deepac-tests", "sample-val-pos.fasta"), gc=gc_pos)
-    generate_reads(n=neg_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_neg)
-    generate_reads(n=pos_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_pos, append=True)
+    train_left = n_train
+    val_left = n_val
+    for i in range(n_classes):
+        class_train = min(np.ceil(n_train/n_classes).astype(int), train_left)
+        train_left = train_left - class_train
+        class_val = min(np.ceil(n_val/n_classes).astype(int), val_left)
+        val_left = val_left - class_val
+        generate_reads(n=class_train, filename=os.path.join("deepac-tests", "sample-train-{}.fasta".format(i)),
+                       gc=gc_per_class[i])
+        generate_reads(n=class_val, filename=os.path.join("deepac-tests", "sample-val-{}.fasta".format(i)),
+                       gc=gc_per_class[i])
+        generate_reads(n=class_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_per_class[i],
+                       append=True)
