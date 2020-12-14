@@ -160,19 +160,19 @@ class RCConfig:
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
             try:
-                self.input_scale = config['Architecture'].getint('Scale_Input_Dim')
+                self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim')
             except KeyError:
                 self.input_scale = 1
             try:
-                self.full_rc_att = config['Architecture'].getboolean('Full_RC_Attention')
-                self.full_rc_ffn = config['Architecture'].getboolean('Full_RC_FFN')
-                self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
-                self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
-                self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
-                self.tformer_edim = [int(u) for u in config['Architecture']['Tformer_EDim'].split(',')]
-                self.tformer_perf_dim = [int(u) for u in config['Architecture']['Tformer_Performer_Dim'].split(',')]
-                self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
-                self.tformer_keep_edim = config['Architecture'].getboolean('Tformer_Keep_Edim')
+                self.full_rc_att = config['ArchitectureExtras'].getboolean('Full_RC_Attention')
+                self.full_rc_ffn = config['ArchitectureExtras'].getboolean('Full_RC_FFN')
+                self.n_tformer = config['ArchitectureExtras'].getint('Tformer_Blocks')
+                self.tformer_heads = [int(u) for u in config['ArchitectureExtras']['Tformer_Heads'].split(',')]
+                self.tformer_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Dim'].split(',')]
+                self.tformer_edim = [int(u) for u in config['ArchitectureExtras']['Tformer_EDim'].split(',')]
+                self.tformer_perf_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Performer_Dim'].split(',')]
+                self.tformer_dropout = config['ArchitectureExtras'].getfloat('Tformer_Dropout')
+                self.tformer_keep_edim = config['ArchitectureExtras'].getboolean('Tformer_Keep_Edim')
             except KeyError:
                 self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
