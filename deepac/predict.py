@@ -56,12 +56,14 @@ def predict_array(model, x_data, output, rc=False, replicates=1):
     if replicates > 1:
         y_preds = []
         for i in tqdm(range(replicates)):
-            y_preds.append(np.ndarray.flatten(model.predict(x_data)))
+            y_pred_raw = model.predict(x_data)
+            y_preds.append(np.ndarray.flatten(y_pred_raw))
         y_preds = np.asarray(y_preds)
         y_pred = y_preds.mean(axis=0)
         y_std = y_preds.std(axis=0)
     else:
-        y_pred = np.ndarray.flatten(model.predict(x_data))
+        y_pred_raw = model.predict(x_data)
+        y_pred = np.ndarray.flatten(y_pred_raw)
         y_std = None
 
     end = time.time()

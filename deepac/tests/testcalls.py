@@ -383,11 +383,14 @@ class Tester:
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
                                            custom_objects=get_custom_objects())
         print(model.summary())
-        compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                   os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
+        val_data = "sample_val_multi" if self.do_large else "sample_val"
+        compare_rc(model, os.path.join("deepac-tests", "{}_data.npy".format(val_data)),
+                   os.path.join("deepac-tests", "deepac-test-logs",
+                                "deepac-test-e002-predictions-{}.npy".format(val_data)),
                    replicates=1)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
+                                            "deepac-test-e002-predictions-{}.npy".format(val_data)))),\
+            "Prediction failed."
 
         if not quick:
             print("TEST: Predicting (rapid)...")
@@ -412,6 +415,9 @@ class Tester:
         """Test evaluating."""
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval-test.ini"))
+        if self.do_large:
+            config['Data']['DataSet'] = 'sample_val_multi'
+            config['Data']['PairedSet'] = 'sample_val_multi'
         evaluate_reads(config)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-metrics.csv"))), "Evaluation failed."
@@ -422,6 +428,9 @@ class Tester:
 
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
+        if self.do_large:
+            config['Data']['DataSet'] = 'sample_val_multi'
+            config['Data']['PairedSet'] = 'sample_val_multi'
         evaluate_ensemble(config)
         assert (os.path.isfile(os.path.join("deepac-tests",
                                             "ens01-metrics.csv"))), "Evaluation failed."
