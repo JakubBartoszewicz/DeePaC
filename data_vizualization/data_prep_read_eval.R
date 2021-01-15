@@ -4,13 +4,13 @@ library(tidyverse)
 
 
 # files deepac (these files need to be there everything else is optional)
-files_deepac <- list.files(path = c("/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/DeePaC/results"),
+files_deepac <- list.files(path = c("results-rds/single"),
                            pattern = ".csv",full.names = TRUE)
 # deepac ensemble classifier data
 files_ens <- list.files(path = "/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/DeePaC/results/ensemble",
                         pattern = ".csv",full.names = TRUE)
 # deepac files asynchronous paired reads
-files_deepac_paired_as <- list.files("/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/DeePaC/results/paired_asynchron/",
+files_deepac_paired_as <- list.files("results-rds/asynch",
                                      pattern = ".csv",full.names = T,recursive = T) 
 
 # paprbag data
@@ -22,7 +22,7 @@ files_blast <- list.files(path = "/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluat
                           pattern = ".csv",full.names = T,recursive = T)
 
 # files have been formatted by hand/using a script (hilive parser)
-hilive_files <- list.files("/home/uli/Dropbox/HPI_RKI/DeePaC/model_evaluation_subreads/HiLive/",
+hilive_files <- list.files("results-rds/hilive",
                            pattern = ".csv",full.names = T,recursive = T)
 
 # knn files
@@ -138,7 +138,7 @@ read_eval_data <- read_eval_data%>%
   rowwise()%>%
   mutate(trained_on = paste(unlist(str_extract_all(training,"\\d+-*\\d*bp")),collapse = "+"),
          subread_pos = ifelse(str_detect(training,"last"),"end","start"),
-         type = paste(unlist(str_extract_all(training,"cnn|lstm")),collapse = "+"))
+         type = paste(unlist(str_extract_all(training,"cnn|lstm|res18")),collapse = "+"))
 
 
 # paprbag-----

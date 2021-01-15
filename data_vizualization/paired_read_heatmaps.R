@@ -109,16 +109,12 @@ add_line_heatmap <- function(heatmap,data,metric,threshold,color,linetype,name){
   return(heatmap)
 }
 
-read_eval_data <- readRDS(file = "read_eval_data.rds")
+read_eval_data <- readRDS(file = "read_eval_data_merged.rds")
 
-trainings <- c("lstm_250bp_d02_img",
-               "lstm_25-250bp_d02_img-e009",
-               "lstm_250bp_d02_vhdb-e013_all",
-               "lstm_150bp_d025_vhdb_all-e005",
-               "cnn_250bp_d025_img",
-               "cnn_150bp_d02_img-e003",
+trainings <- c("cnn_250bp_d025_img",
+               "res18-25-250bp-img-d25-corr-e021.h5",
                "cnn_250bp_d025_vhdb_all-e011",
-               "cnn_25-250bp_d025_vhdb_all-e010")
+               "res18-25-250bp-vhdb-d25-e026.h5")
 
 metric <- "acc"
 for(train in trainings){
@@ -127,7 +123,7 @@ for(train in trainings){
            set %in% c("test_1_test_2","all_test_1_all_test_2"))%>%
     mutate_if(is.numeric, "round", digits = 3)
   
-  heatmap <- plot_heatmap(read_eval_data_plot,metric,c(50,90))
+  heatmap <- plot_heatmap(read_eval_data_plot,metric,c(50,91))
   
   heatmap <- add_line_heatmap(heatmap = heatmap,threshold = 0.8,data = read_eval_data_plot,
                                color = "black",linetype = "solid",name = "80%",metric = metric)
@@ -144,7 +140,7 @@ for(train in trainings){
   heatmap <- add_line_heatmap(heatmap = heatmap,threshold = baseline,data = read_eval_data_plot,
                                color = c("black","red"),linetype = c("solid","dashed"),name = "baseline",metric = metric)
   
-  ggsave(filename = paste0("plots/", train, "_",metric,".jpg"),
+  ggsave(filename = paste0("plots/", train, "_",metric,".png"),
          plot = heatmap,width = 5, height = 5)
 
 } 
