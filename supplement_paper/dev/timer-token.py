@@ -1,9 +1,9 @@
-from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.text import Tokenizer
 from Bio import SeqIO
 import numpy as np
 import time
-import tensorflow.compat.v1 as tf
-import tensorflow.compat.v1.keras.backend as K
+import tensorflow as tf
+import tensorflow.keras.backend as K
 
 config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1, \
                         allow_soft_placement=True, device_count = {'CPU': 1})

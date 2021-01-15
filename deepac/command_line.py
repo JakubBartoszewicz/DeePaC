@@ -2,15 +2,16 @@
 A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
 
 """
-import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled-tests
+import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled tests
+import matplotlib.pyplot as plt # also to solve import ordering problems in bioconda mulled tests
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import random as rn
 import argparse
 import configparser
 import os
-import tensorflow.compat.v1.keras.backend as K
-from tensorflow.compat.v1.keras.models import load_model
+import shutil
+import multiprocessing
 
 from deepac.predict import predict_fasta, predict_npy, filter_fasta
 from deepac.nn_train import RCNet, RCConfig
@@ -21,9 +22,10 @@ from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
 from deepac.builtin_loading import BuiltinLoader
 from deepac.tests.testcalls import Tester
+from deepac.tests.rctest import compare_rc
 from deepac import __version__
 from deepac import __file__
-
+from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
 
@@ -32,9 +34,8 @@ def main():
     """Run DeePaC CLI."""
     seed = 0
     np.random.seed(seed)
-    tf.set_random_seed(seed)
+    tf.random.set_seed(seed)
     rn.seed(seed)
-    tf.disable_v2_behavior()
     modulepath = os.path.dirname(__file__)
     builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
@@ -50,7 +51,8 @@ def run_filter(args):
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision)
+    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision,
+                 pred_uncertainty=args.std)
 
 
 def run_preproc(args):
@@ -75,10 +77,53 @@ def run_evaluate(args):
 
 
 def run_convert(args):
-    """Convert a CuDNNLSTM to a CPU-compatible LSTM."""
+    """Rebuild the network using a modified configuration."""
     config = configparser.ConfigParser()
     config.read(args.config)
-    convert_cudnn(config, args.model, args.from_weights)
+    convert_cudnn(config, args.model, args.from_weights, args.init)
+
+
+def run_templates(args):
+    """Get config templates (in this directory)."""
+    modulepath = os.path.dirname(__file__)
+    extra_templates_path = os.path.join(modulepath, "builtin", "config_templates")
+    training_templates_path = os.path.join(modulepath, "builtin", "config")
+    shutil.copytree(training_templates_path, os.path.join(os.getcwd(), "deepac_training_configs"))
+    shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
+
+
+def global_setup(args):
+    tpu_resolver = None
+    if args.tpu:
+        tpu_resolver = config_tpus(args.tpu)
+    if args.no_eager:
+        print("Disabling eager mode...")
+        tf.compat.v1.disable_v2_behavior()
+    if args.debug_device:
+        tf.debugging.set_log_device_placement(True)
+    if args.force_cpu:
+        tf.config.set_visible_devices([], 'GPU')
+        args.gpus = None
+    default_verbosity = '3' if args.subparser == 'test' else '2'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf) if args.debug_tf is not None else default_verbosity
+
+    return tpu_resolver
+
+
+def add_global_parser(gparser):
+    gparser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
+    gparser.add_argument('--debug-no-eager', dest="no_eager", help="Disable eager mode.",
+                         default=False, action="store_true")
+    gparser.add_argument('--debug-tf', dest="debug_tf", help="Set tensorflow debug info verbosity level. "
+                                                             "0 = max, 3 = min. Default: 2 (errors);"
+                                                             " 3 for tests (muted)", type=int)
+    gparser.add_argument('--debug-device', dest="debug_device", help="Enable verbose device placement information.",
+                         default=False, action="store_true")
+    gparser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
+                         default=False, action="store_true")
+    gparser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+
+    return gparser
 
 
 class MainRunner:
@@ -86,14 +131,17 @@ class MainRunner:
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
+        self.tpu_resolver = None
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
-        print("Using {} GPUs.".format(args.n_gpus))
+        if args.tpu is None:
+            config_cpus(args.n_cpus)
+            config_gpus(args.gpus)
         if args.sensitive:
-            paprconfig = self.bloader.get_sensitive_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_sensitive_training_config()
         elif args.rapid:
-            paprconfig = self.bloader.get_rapid_training_config(args.n_cpus, args.n_gpus, d_pref=args.d_pref)
+            paprconfig = self.bloader.get_rapid_training_config()
         else:
             config = configparser.ConfigParser()
             config.read(args.custom)
@@ -107,9 +155,12 @@ class MainRunner:
             paprconfig.x_val_path = args.val_data
         if args.val_labels:
             paprconfig.y_val_path = args.val_labels
+        if args.run_name:
+            paprconfig.runname = args.run_name
+            paprconfig.log_dir = os.path.join(paprconfig.log_superpath,
+                                              "{runname}-logs".format(runname=paprconfig.runname))
 
-        if K.backend() == 'tensorflow':
-            paprconfig.set_tf_session()
+        paprconfig.set_tpu_resolver(self.tpu_resolver)
         paprnet = RCNet(paprconfig)
         paprnet.load_data()
         paprnet.compile_model()
@@ -117,35 +168,83 @@ class MainRunner:
 
     def run_predict(self, args):
         """Predict pathogenic potentials from a fasta/npy file."""
-        print("Using {} GPUs.".format(args.n_gpus))
-        if args.n_cpus <= 0:
-            raise argparse.ArgumentTypeError("%s is an invalid number of cores" % args.n_cpus)
+        if args.tpu is None:
+            config_cpus(args.n_cpus)
+            config_gpus(args.gpus)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
         if args.sensitive:
-            model = self.bloader.load_sensitive_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_sensitive_model(training_mode=False, tpu_resolver=self.tpu_resolver)
         elif args.rapid:
-            model = self.bloader.load_rapid_model(args.n_cpus, args.n_gpus, d_pref=args.d_pref, training_mode=False)
+            model = self.bloader.load_rapid_model(training_mode=False, tpu_resolver=self.tpu_resolver)
         else:
-            model = load_model(args.custom)
+            if self.tpu_resolver is not None:
+                tpu_strategy = tf.distribute.experimental.TPUStrategy(self.tpu_resolver)
+                with tpu_strategy.scope():
+                    model = tf.keras.models.load_model(args.custom)
+            else:
+                model = tf.keras.models.load_model(args.custom)
 
-        if args.array:
-            predict_npy(model, args.input, args.output)
+        if args.rc_check:
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates,
+                       batch_size=args.batch_size)
+        elif args.array:
+            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size)
         else:
-            predict_fasta(model, args.input, args.output, args.n_cpus)
+            predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
+                          batch_size=args.batch_size)
+
+    def run_getmodels(self, args):
+        """Get built-in weights and rebuild built-in models."""
+        out_dir = "deepac_builtin_models"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
+        modulepath = os.path.dirname(__file__)
+        builtin_weights_path = os.path.join(modulepath, "builtin", "weights")
+        out_weights_path = os.path.join(out_dir, "weights")
+        if os.path.exists(out_weights_path):
+            for root, dirs, files in os.walk(out_weights_path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+        os.rmdir(out_weights_path)
+        shutil.copytree(builtin_weights_path, out_weights_path)
+
+        if args.sensitive:
+            model = self.bloader.load_sensitive_model(training_mode=False, tpu_resolver=self.tpu_resolver)
+            model.summary()
+            save_path = os.path.basename(self.builtin_weights["sensitive"])
+            model.save(os.path.join(out_dir, save_path))
+
+        if args.rapid:
+            model = self.bloader.load_rapid_model(training_mode=False, tpu_resolver=self.tpu_resolver)
+            model.summary()
+            save_path = os.path.basename(self.builtin_weights["rapid"])
+            model.save(os.path.join(out_dir, save_path))
 
     def run_tests(self, args):
         """Run tests."""
-        tester = Tester(args.n_cpus, args.n_gpus, self.builtin_configs, self.builtin_weights,
-                        args.explain, args.gwpa, args.all, args.quick, args.keep)
+        if args.tpu is None:
+            n_cpus = config_cpus(args.n_cpus)
+            n_gpus = config_gpus(args.gpus)
+            scale = args.scale * max(1, n_gpus)
+        else:
+            n_cpus = multiprocessing.cpu_count()
+            scale = args.scale
+        tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
+                        args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
+                        tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
+                        additivity_check=(not args.no_check), large=args.large)
         tester.run_tests()
 
     def parse(self):
         """Parse DeePaC CLI arguments."""
         parser = argparse.ArgumentParser(prog='deepac', description="Predicting pathogenic potentials of novel DNA "
                                                                     "with reverse-complement neural networks.")
-        parser.add_argument('-v', '--version', dest='version', action='store_true', help='Print version.')
+        parser = add_global_parser(parser)
         subparsers = parser.add_subparsers(help='DeePaC subcommands. See command --help for details.', dest='subparser')
 
         # create the parser for the "predict" command
@@ -154,15 +253,25 @@ class MainRunner:
         parser_predict.add_argument('-a', '--array', dest='array', action='store_true', help='Use .npy input instead.')
         predict_group = parser_predict.add_mutually_exclusive_group(required=True)
         predict_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
-                                   help='Use the sensitive LSTM model.')
+                                   help='Use the sensitive model.')
         predict_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
-        predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, already compiled CUSTOM'
-                                                                        ' model.')
+        predict_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied, '
+                                                                         'already compiled CUSTOM model.')
         parser_predict.add_argument('-o', '--output', help="Output file path [.npy].")
-        parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_predict.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
-        parser_predict.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
-                                    default="/device:GPU:")
+        parser_predict.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.",
+                                    type=int)
+        parser_predict.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                    help="GPU devices to use (comma-separated). Default: all")
+        parser_predict.add_argument('-R', '--rc-check', dest="rc_check", action='store_true',
+                                    help='Check RC-constraint compliance (requires .npy input).')
+        parser_predict.add_argument('-b', '--batch-size', dest="batch_size", default=512, type=int,
+                                    help='Batch size.')
+        parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
+                                    help='Plot kind for the RC-constraint compliance check.')
+        parser_predict.add_argument('--alpha', default=1.0, type=float,
+                                    help='Alpha value for the RC-constraint compliance check plot.')
+        parser_predict.add_argument('--replicates', default=1, type=int,
+                                    help='Number of replicates for MC uncertainty estimation.')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -173,26 +282,29 @@ class MainRunner:
         parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
         parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                    default=False, action="store_true")
+        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
+        parser_filter.add_argument('-s', '--std', dest="std",
+                                   help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
-        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
         parser_train = subparsers.add_parser('train', help='Train a new model.')
         train_group = parser_train.add_mutually_exclusive_group(required=True)
         train_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
-                                 help='Use the sensitive LSTM model.')
+                                 help='Use the sensitive model.')
         train_group.add_argument('-r', '--rapid', dest='rapid', action='store_true', help='Use the rapid CNN model.')
         train_group.add_argument('-c', '--custom', dest='custom', help='Use the user-supplied configuration file.')
-        parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_train.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=1, type=int)
-        parser_train.add_argument('-d', '--device-prefix', dest="d_pref", help="GPU name prefix.",
-                                  default="/device:GPU:")
+        parser_train.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
+        parser_train.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                  help="GPU devices to use (comma-separated). Default: all")
         parser_train.add_argument('-T', '--train-data', dest="train_data", help="Path to training data.")
         parser_train.add_argument('-t', '--train-labels', dest="train_labels", help="Path to training labels.")
         parser_train.add_argument('-V', '--val-data', dest="val_data", help="Path to validation data.")
         parser_train.add_argument('-v', '--val-labels', dest="val_labels", help="Path to validation labels.")
+        parser_train.add_argument('-R', '--run-name', dest="run_name", help="Run name "
+                                                                            "(default: based on chosen config).")
         parser_train.set_defaults(func=self.run_train)
 
         # create the parser for the "preproc" command
@@ -209,26 +321,47 @@ class MainRunner:
         parser_eval.set_defaults(func=run_evaluate)
 
         # create the parser for the "convert" command
-        parser_convert = subparsers.add_parser('convert', help='Convert a CuDNNLSTM to a CPU-compatible LSTM.')
+        parser_convert = subparsers.add_parser('convert', help='Convert and compile a model to an equivalent.')
         parser_convert.add_argument('config', help='Training config file.')
         parser_convert.add_argument('model', help='Saved model.')
-        parser_convert.add_argument('-w', '--weights', dest='from_weights', help="Use prepared weights instead of the "
-                                                                                 "model file.", action="store_true")
+        parser_convert.add_argument('-w', '--weights', dest='from_weights', action="store_true",
+                                    help="Use prepared weights instead of the model file.")
+        parser_convert.add_argument('-i', '--init', dest='init', action="store_true",
+                                    help="Initialize a random model from config.")
         parser_convert.set_defaults(func=run_convert)
 
+        # create the parser for the "getmodels" command
+        parser_getmodel = subparsers.add_parser('getmodels', help='Get built-in weights and rebuild built-in models.')
+        getmodel_group = parser_getmodel.add_argument_group()
+        getmodel_group.add_argument('-s', '--sensitive', dest='sensitive', action='store_true',
+                                    help='Rebuild the sensitive model.')
+        getmodel_group.add_argument('-r', '--rapid', dest='rapid', action='store_true',
+                                    help='Rebuild the rapid CNN model.')
+        parser_getmodel.set_defaults(func=self.run_getmodels)
+
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
-        parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", default=8, type=int)
-        parser_test.add_argument('-g', '--n-gpus', dest="n_gpus", help="Number of GPUs.", default=0, type=int)
+        parser_test.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores. Default: all.", type=int)
+        parser_test.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                                 help="GPU devices to use. Default: all")
         parser_test.add_argument('-x', '--explain', dest="explain", help="Test explain workflows.",
                                  default=False, action="store_true")
         parser_test.add_argument('-p', '--gwpa', dest="gwpa", help="Test gwpa workflows.",
                                  default=False, action="store_true")
         parser_test.add_argument('-a', '--all', help="Test all functions.",
                                  default=False, action="store_true")
-        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. when no GPU available).",
+        parser_test.add_argument('-q', '--quick', help="Don't test heavy models (e.g. on low-memory machines"
+                                                       " or when no GPU available).",
                                  default=False, action="store_true")
         parser_test.add_argument('-k', '--keep', help="Don't delete previous test output.",
                                  default=False, action="store_true")
+        parser_test.add_argument('-s', '--scale', help="Generate s*1024 reads for testing (Default: s=1).",
+                                 default=1, type=int)
+        parser_test.add_argument('-L', '--large', help="Test a larger, more complex custom model.",
+                                 default=False, action="store_true")
+        parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
+                                 help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
+        parser_test.add_argument("--no-check", dest="no_check", action="store_true",
+                                       help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')
@@ -239,7 +372,12 @@ class MainRunner:
         parser_gwpa = add_gwpa_parser(parser_gwpa)
         parser_gwpa.set_defaults(func=lambda a: parser_gwpa.print_help())
 
+        parser_templates = subparsers.add_parser('templates', help='Get config templates (in this directory).')
+        parser_templates.set_defaults(func=run_templates)
+
         args = parser.parse_args()
+
+        self.tpu_resolver = global_setup(args)
 
         if args.version:
             print(__version__)

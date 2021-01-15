@@ -1,8 +1,9 @@
 set.seed(0)
 library(stringr)
 
-date.postfix.img <- "_neukarya"
+date.postfix.img <- "_neukarya_species"
 random.best <- FALSE
+ambiguous.species <- TRUE
 
 # no of folds to generate
 k <- 9
@@ -16,11 +17,14 @@ k_download <- 1
 urls <- FALSE
 
 IMG.all <- readRDS(paste0("IMG_assemblies",date.postfix.img,".rds"))
+if (!ambiguous.species) {
+    IMG.all$Ambiguous <- FALSE
+}
 IMG.all$assembly_level <- factor(IMG.all$assembly_level,levels(IMG.all$assembly_level), ordered = TRUE)
 IMG.all$assembly_accession <- as.character(IMG.all$assembly_accession)
 
-Species_HP <- as.character(unique(IMG.all$Species[which(IMG.all$Pathogenic == TRUE)]))
-Species_NP <- as.character(unique(IMG.all$Species[which(IMG.all$Pathogenic == FALSE)]))
+Species_HP <- as.character(unique(IMG.all$Species[which(IMG.all$Pathogenic == TRUE & IMG.all$Ambiguous == FALSE)]))
+Species_NP <- as.character(unique(IMG.all$Species[which(IMG.all$Pathogenic == FALSE & IMG.all$Ambiguous == FALSE)]))
 Species <- c(Species_HP, Species_NP)
 
 ### tvt
@@ -80,7 +84,7 @@ SampleBestStrains <- function(){
     IMG.all$subset[IMG.all$assembly_accession %in% selected_assemblies] <- "selected"
 }
 
-if(!random.best){
+if(!random.best & !ambiguous.species){
     Labels_test <- c(rep(T,length(Species_HP_test)),rep(F,length(Species_NP_test)))
     IMG.all <- SampleStrains(Species_test, Labels_test, IMG.all, "Test")
 }
@@ -121,7 +125,7 @@ for (i in 1:k) {
     Species_HP_done <- c(Species_HP_done, Species_HP_validation)
     Species_NP_done <- c(Species_NP_done, Species_NP_validation)
     
-    if(!random.best & i==1){
+    if(!random.best & !ambiguous.species & i==1){
         Species_training <- c(Species_HP_training,Species_NP_training)
         Labels_training <- c(rep(T,length(Species_HP_training)),rep(F,length(Species_NP_training)))
         Species_validation <- c(Species_HP_validation,Species_NP_validation)
@@ -136,15 +140,23 @@ if(random.best){
     SampleBestStrains()
 }
 
+if (ambiguous.species) {
+    IMG.all$subset <- "selected"
+}
 
 IMG.all[, grep(pattern = "\\.orig", x = colnames(IMG.all))] <- NULL
 selected <- IMG.all[IMG.all$subset == "selected",]
 # only folds to download
 if(k>1 & k_download<k){
-    selected[,fold_names[(1+k_download):length(fold_names)]] <- NULL
+    for (fold_name in fold_names[(1+k_download):length(fold_names)]) {
+        selected[,fold_name] <- NULL
+    }
 }
 
 # Save data for backup
+if (!ambiguous.species) {
+    IMG.all$Ambiguous <- NULL
+}
 saveRDS(IMG.all, paste0("IMG_all_folds", date.postfix.img, ".rds"))
 saveRDS(selected, paste0("IMG_", k_download, "_folds", date.postfix.img, ".rds"))
 

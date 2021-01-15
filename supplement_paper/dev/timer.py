@@ -1,4 +1,4 @@
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import load_model
 import numpy as np
 import time
 

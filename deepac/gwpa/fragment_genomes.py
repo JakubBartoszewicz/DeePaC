@@ -1,10 +1,9 @@
 import os
 from Bio import SeqIO
-from Bio.Alphabet import IUPAC
 from Bio.SeqRecord import SeqRecord
 import math
 import numpy as np
-from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.text import Tokenizer
 
 
 def frag_genomes(args):
@@ -20,7 +19,7 @@ def frag_genomes(args):
             # load sequences
             instances = []
             with open(args.genomes_dir + "/" + file, "rU") as handle:
-                for record in SeqIO.parse(handle, "fasta", alphabet=IUPAC.ambiguous_dna):
+                for record in SeqIO.parse(handle, "fasta"):
                     instances.append(record)
 
             fragmented_genomes = []

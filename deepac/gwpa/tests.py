@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from tensorflow.compat.v1.keras.models import load_model
+from tensorflow.keras.models import load_model
 import pandas as pd
 from deepac.predict import predict_npy
 from deepac.tests.datagen import generate_reads
@@ -10,6 +10,7 @@ from deepac.gwpa.gene_ranking import gene_rank
 from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
+from deepac.gwpa.command_line import run_gff2genome
 
 
 class GWPATester:
@@ -18,10 +19,11 @@ class GWPATester:
 
     """
 
-    def __init__(self, n_cpus=8):
+    def __init__(self, n_cpus=8, additivity_check=False):
         self.n_cpus = n_cpus
-        self.model = os.path.join("deepac-tests", "deepac-test-logs", "nn-deepac-test-e002.h5")
+        self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5")
         self.outpath = os.path.join("deepac-tests", "gwpa")
+        self.additivity_check = additivity_check
         self.__gen_data()
 
     def __gen_data(self):
@@ -46,11 +48,6 @@ class GWPATester:
                        length=contigs[2], header="SAMPLE{i}3.1".format(i=s_id), append=True)
         generate_reads(1, os.path.join(self.outpath, "genome_fasta", "sample_genome{i}.fasta".format(i=s_id)),
                        gc=1.0 - gc, length=contigs[3], header="SAMPLE{i}4.1".format(i=s_id), append=True)
-
-        df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), contigs[0]], ["SAMPLE{i}2.1".format(i=s_id), contigs[1]],
-                           ["SAMPLE{i}3.1".format(i=s_id), contigs[2]], ["SAMPLE{i}4.1".format(i=s_id), contigs[3]]])
-        df.to_csv(os.path.join(self.outpath, "genome", "sample_genome{i}.genome".format(i=s_id)), sep="\t",
-                  header=False, index=False)
 
         df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), "Genbank", "region", "1", contigs[0], ".", "+", ".",
                             "ID=SAMPLE{i}1.1".format(i=s_id)],
@@ -110,7 +107,8 @@ class GWPATester:
         """Test nucleotide contribution map generation."""
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
-                         out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250)
+                         out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250,
+                         chunk_size=500, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
@@ -119,7 +117,8 @@ class GWPATester:
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          train_data=os.path.join("deepac-tests", "sample_train_data.npy"),
-                         out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250)
+                         out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250,
+                         chunk_size=100, gradient=False, no_check=(not self.additivity_check))
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph_gc",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
@@ -131,10 +130,10 @@ class GWPATester:
                          test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
                          test_fasta=os.path.join(self.outpath, "genome_frag",
                                                  "sample_genome2_fragmented_genomes.fasta"),
-                         out_dir=os.path.join(self.outpath, "factiv"))
+                         out_dir=os.path.join(self.outpath, "factiv"), chunk_size=500, inter_layer=1, inter_neuron=[1])
         filter_activations(args)
         assert (os.path.isfile(os.path.join(self.outpath, "factiv",
-                                            "sample_genome2_fragmented_genomes_filter_31.bed"))), \
+                                            "sample_genome2_fragmented_genomes_filter_1.bed"))), \
             "Factiv failed."
 
     def test_fenrichment(self):
@@ -142,7 +141,15 @@ class GWPATester:
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),
-                         motif_length=15, n_cpus=self.n_cpus)
+                         motif_length=15, n_cpus=self.n_cpus, extended=True)
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
             "Fenrichment failed."
+
+    def test_gff2genome(self):
+        """Test .genome file creation."""
+        args = Namespace(gff3_dir=os.path.join(self.outpath, "genome_gff3"),
+                         out_dir=os.path.join(self.outpath, "genome"))
+        run_gff2genome(args)
+        assert (len(os.listdir(os.path.join(self.outpath, "genome"))) > 0), \
+            "gff2genome failed."

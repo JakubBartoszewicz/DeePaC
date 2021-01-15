@@ -16,8 +16,8 @@ def get_weblogos(args):
     # for each convolutional filter
     for file in os.listdir(args.in_dir):
 
-        if bool(re.search("_motifs_filter_[0-9]+.*" + args.file_ext, file)) and os.stat(args.in_dir + "/" + file).st_size > 0:
-
+        if bool(re.search("_motifs_filter_[0-9]+.*" + args.file_ext, file)) and \
+                os.stat(args.in_dir + "/" + file).st_size > 0:
             c_filter = re.search("filter_[0-9]+", file).group()
             filter_index = c_filter.replace("filter_", "")
             print("Processing filter: " + filter_index)
@@ -28,7 +28,14 @@ def get_weblogos(args):
             if args.file_ext == ".fasta":
                 seqs = read_seq_data(fin)
                 prior = parse_prior(str(gc_content), seqs.alphabet)
-                data = LogoData.from_seqs(seqs, prior)
+                try:
+                    data = LogoData.from_seqs(seqs, prior)
+                except ValueError as err:
+                    print(err)
+                    continue
+                except RuntimeError as err:
+                    print(err)
+                    continue
 
             # load count matrix from transfac file
             elif args.file_ext == ".transfac":
@@ -40,15 +47,22 @@ def get_weblogos(args):
                 except ValueError as err:
                     print(err)
                     continue
+                except RuntimeError as err:
+                    print(err)
+                    continue
 
             # set logo options
             options = LogoOptions()
             options.logo_title = "filter " + filter_index
             options.color_scheme = classic
             options.stack_width = std_sizes["large"]
+            options.resolution = 300
 
             # save filter logo
             l_format = LogoFormat(data, options)
-            jpeg = jpeg_formatter(data, l_format)
-            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".jpeg"), 'wb') as out_file:
-                out_file.write(jpeg)
+            png = png_formatter(data, l_format)
+            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".png"), 'wb') as out_file:
+                out_file.write(png)
+            eps = eps_formatter(data, l_format)
+            with open(args.out_dir + "/weblogo_" + file.replace(args.file_ext, ".eps"), 'wb') as out_file:
+                out_file.write(eps)

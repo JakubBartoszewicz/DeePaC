@@ -18,51 +18,55 @@ def add_explain_parser(xparser):
 
     parser_maxact = explain_subparsers.add_parser('maxact', help='Get DeepBind-like max-activation scores.')
     parser_maxact.add_argument("-m", "--model", required=True, help="Model file (.h5)")
-    parser_maxact.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
-    parser_maxact.add_argument("-N", "--nonpatho_test", required=True,
+    parser_maxact.add_argument("-t", "--test-data", required=True, help="Test data (.npy)")
+    parser_maxact.add_argument("-N", "--nonpatho-test", required=True,
                                help="Nonpathogenic reads of the test data set (.fasta)")
-    parser_maxact.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of"
+    parser_maxact.add_argument("-P", "--patho-test", required=True, help="Pathogenic reads of"
                                                                          " the test data set (.fasta)")
-    parser_maxact.add_argument("-o", "--out_dir", default=".", help="Output directory")
-    parser_maxact.add_argument("-n", "--n_cpus", dest="n_cpus", default=1, type=int, help="Number of CPU cores")
+    parser_maxact.add_argument("-o", "--out-dir", default=".", help="Output directory")
+    parser_maxact.add_argument("-n", "--n-cpus", dest="n_cpus", type=int, help="Number of CPU cores. Default: all.")
     parser_maxact.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
                                help="Interpret elements of the LSTM output")
-    parser_maxact.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
+    parser_maxact.add_argument("-l", "--inter-layer", dest="inter_layer", default=1, type=int,
                                help="Perform calculations for this intermediate layer")
+    parser_maxact.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
+                                  help="Sequence chunk size. Decrease for lower memory usage.")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')
     parser_fcontribs.add_argument("-m", "--model", required=True, help="Model file (.h5)")
-    parser_fcontribs.add_argument("-b", "--w_norm", action="store_true",
+    parser_fcontribs.add_argument("-b", "--w-norm", dest="w_norm", action="store_true",
                                   help="Set flag if filter weight matrices should be mean-centered")
     parser_fcontribs.add_argument("-t", "--test_data", required=True, help="Test data (.npy)")
-    parser_fcontribs.add_argument("-N", "--nonpatho_test", required=True,
+    parser_fcontribs.add_argument("-N", "--nonpatho-test", required=True,
                                   help="Nonpathogenic reads of the test data set (.fasta)")
-    parser_fcontribs.add_argument("-P", "--patho_test", required=True, help="Pathogenic reads of the "
+    parser_fcontribs.add_argument("-P", "--patho-test", required=True, help="Pathogenic reads of the "
                                                                             "test data set (.fasta)")
-    parser_fcontribs.add_argument("-o", "--out_dir", default=".", help="Output directory")
-    parser_fcontribs.add_argument("-r", "--ref_mode", default="N", choices=['N', 'GC', 'own_ref_file'],
+    parser_fcontribs.add_argument("-o", "--out-dir", default=".", help="Output directory")
+    parser_fcontribs.add_argument("-r", "--ref-mode", default="N", choices=['N', 'GC', 'own_ref_file'],
                                   help="Modus to calculate reference sequences")
-    parser_fcontribs.add_argument("-a", "--train_data",
+    parser_fcontribs.add_argument("-a", "--train-data",
                                   help="Train data (.npy), necessary to calculate reference sequences"
                                        " if ref_mode is 'GC'")
-    parser_fcontribs.add_argument("-F", "--ref_seqs",
+    parser_fcontribs.add_argument("-F", "--ref-seqs",
                                   help="User provided reference sequences (.fasta) if ref_mode is 'own_ref_file'")
-    parser_fcontribs.add_argument("-i", "--inter_neuron", nargs='*', dest="inter_neuron", type=int,
+    parser_fcontribs.add_argument("-i", "--inter-neuron", nargs='*', dest="inter_neuron", type=int,
                                   help="Perform calculations for this intermediate neuron only")
-    parser_fcontribs.add_argument("-l", "--inter_layer", dest="inter_layer", default=1, type=int,
+    parser_fcontribs.add_argument("-l", "--inter-layer", dest="inter_layer", default=1, type=int,
                                   help="Perform calculations for this intermediate layer")
-    parser_fcontribs.add_argument("-c", "--seq_chunk", dest="chunk_size", default=500, type=int,
+    parser_fcontribs.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                   help="Sequence chunk size. Decrease for lower memory usage.")
     parser_fcontribs.add_argument("-A", "--all-occurrences", dest="all_occurrences", action="store_true",
                                   help="Extract contributions for all occurrences of a filter "
                                        "per read (Default: max only)")
     parser_fcontribs.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
                                   help="Interpret elements of the LSTM output")
+    parser_fcontribs.add_argument("--no-check", dest="no_check", action="store_true",
+                                  help="Disable additivity check.")
     partial_group = parser_fcontribs.add_mutually_exclusive_group(required=False)
     partial_group.add_argument("-p", "--partial", dest="partial", action="store_true",
                                help="Calculate partial nucleotide contributions per filter.")
-    partial_group.add_argument("-e", "--easy_partial", dest="easy_partial", action="store_true",
+    partial_group.add_argument("-e", "--easy-partial", dest="easy_partial", action="store_true",
                                help="Calculate easy partial nucleotide contributions per filter. "
                                     "Works for the first convolutional layer only; disables all-occurences mode.")
     parser_fcontribs.set_defaults(func=run_fcontribs)
@@ -72,60 +76,63 @@ def add_explain_parser(xparser):
                                                                               "rel_pred_class"],
                                  help="Use original filter scores or normalize scores relative to "
                                       "true or predicted classes.")
-    parser_franking.add_argument("-f", "--scores_dir", required=True,
+    parser_franking.add_argument("-f", "--scores-dir", required=True,
                                  help="Directory containing filter contribution scores (.csv)")
-    parser_franking.add_argument("-y", "--true_label", required=True, help="File with true read labels (.npy)")
-    parser_franking.add_argument("-p", "--pred_label", required=True, help="File with predicted read labels (.npy)")
-    parser_franking.add_argument("-o", "--out_dir", required=True, help="Output directory")
+    parser_franking.add_argument("-y", "--true-label", required=True, help="File with true read labels (.npy)")
+    parser_franking.add_argument("-p", "--pred-label", required=True, help="File with predicted read labels (.npy)")
+    parser_franking.add_argument("-o", "--out-dir", required=True, help="Output directory")
     parser_franking.set_defaults(func=run_franking)
 
     parser_fa2transfac = explain_subparsers.add_parser('fa2transfac', help='Calculate transfac from fasta files.')
-    parser_fa2transfac.add_argument("-i", "--in_dir", required=True, help="Directory containing motifs per filter "
+    parser_fa2transfac.add_argument("-i", "--in-dir", required=True, help="Directory containing motifs per filter "
                                                                           "(.fasta)")
-    parser_fa2transfac.add_argument("-o", "--out_dir", required=True, help="Output directory")
+    parser_fa2transfac.add_argument("-o", "--out-dir", required=True, help="Output directory")
     parser_fa2transfac.add_argument("-w", "--weighting", default=False, action="store_true",
                                     help="Weight sequences by their DeepLIFT score")
-    parser_fa2transfac.add_argument("-d", "--weight_dir",
+    parser_fa2transfac.add_argument("-W", "--weight-dir",
                                     help="Directory containing the DeepLIFT scores per filter "
                                          "(only required if --weighting is chosen)")
     parser_fa2transfac.set_defaults(func=run_fa2transfac)
 
     parser_weblogos = explain_subparsers.add_parser('weblogos', help='Get sequence logos.')
-    parser_weblogos.add_argument("-i", "--in_dir", required=True, help="Directory containing motifs per filter")
-    parser_weblogos.add_argument("-f", "--file_ext", default=".transfac", choices=['.fasta', '.transfac'],
+    parser_weblogos.add_argument("-i", "--in-dir", required=True, help="Directory containing motifs per filter")
+    parser_weblogos.add_argument("-f", "--file-ext", default=".transfac", choices=['.fasta', '.transfac'],
                                  help="Extension of file format of input files (.fasta or .transfac)")
-    parser_weblogos.add_argument("-t", "--train_data",
+    parser_weblogos.add_argument("-t", "--train-data",
                                  help="Training data set (.npy) to compute GC-content. N-padding lowers GC!")
-    parser_weblogos.add_argument("-o", "--out_dir", required=True, help="Output directory")
+    parser_weblogos.add_argument("-o", "--out-dir", required=True, help="Output directory")
     parser_weblogos.set_defaults(func=run_weblogos)
 
     parser_xlogos = explain_subparsers.add_parser('xlogos', help='Get extended sequence logos.')
-    parser_xlogos.add_argument("-f", "--fasta_dir", required=True, help="Directory containing motifs "
+    parser_xlogos.add_argument("-i", "--fasta-dir", required=True, help="Directory containing motifs "
                                                                         "per filter (.fasta)")
-    parser_xlogos.add_argument("-s", "--scores_dir", required=True,
+    parser_xlogos.add_argument("-s", "--scores-dir", required=True,
                                help="Directory containing nucleotide scores per filter (.csv)")
-    parser_xlogos.add_argument("-l", "--logo_dir",
+    parser_xlogos.add_argument("-I", "--logo-dir",
                                help="Directory containing motifs in weighted transfac format (only required if "
                                     "weighted weblogos should be created)")
-    parser_xlogos.add_argument("-t", "--train_data", help="Training data set to compute GC-content")
-    parser_xlogos.add_argument("-o", "--out_dir", required=True, help="Output directory")
+    parser_xlogos.add_argument("-G", "--gain", default=250 * 512, type=int,
+                               help="Color saturation gain. Weblogo colors reach saturation when the average nt "
+                                    "score=1/gain. Default: 128000. Recommended: input length * number of filters.")
+    parser_xlogos.add_argument("-t", "--train-data", help="Training data set to compute GC-content")
+    parser_xlogos.add_argument("-o", "--out-dir", required=True, help="Output directory")
     parser_xlogos.set_defaults(func=run_xlogos)
 
     parser_transfac2ic = explain_subparsers.add_parser('transfac2IC', help='Calculate information content '
                                                                            'from transfac files.')
-    parser_transfac2ic.add_argument("-i", "--in_file", required=True, help="File containing all filter motifs "
+    parser_transfac2ic.add_argument("-i", "--in-file", required=True, help="File containing all filter motifs "
                                                                            "in transfac format")
     parser_transfac2ic.add_argument("-t", "--train", required=True, help="Training data set (.npy) to normalize "
                                                                          "for GC-content")
-    parser_transfac2ic.add_argument("-o", "--out_file", default=True, help="Name of the output file")
+    parser_transfac2ic.add_argument("-o", "--out-file", default=True, help="Name of the output file")
     parser_transfac2ic.set_defaults(func=run_transfac2ic)
 
     parser_mcompare = explain_subparsers.add_parser('mcompare', help='Compare motifs.')
-    parser_mcompare.add_argument("-q", "--in_file1", required=True, help="File containing all filter motifs "
+    parser_mcompare.add_argument("-q", "--in-file1", required=True, help="File containing all filter motifs "
                                                                          "in transfac format")
-    parser_mcompare.add_argument("-t", "--in_file2", required=True, help="File containing all filter motifs "
+    parser_mcompare.add_argument("-t", "--in-file2", required=True, help="File containing all filter motifs "
                                                                          "in transfac format")
-    parser_mcompare.add_argument("-a", "--train_data",
+    parser_mcompare.add_argument("-a", "--train-data",
                                  help="Training data (.npy), necessary to calculate background GC content")
     parser_mcompare.add_argument("-e", "--extensively", action="store_true", help="Compare every motif from "
                                                                                   "--in_file1 with "
@@ -134,10 +141,10 @@ def add_explain_parser(xparser):
                                                                                   "with the same ID")
     parser_mcompare.add_argument("-r", "--rc", action="store_true", help="Consider RC-complement of a motif")
     parser_mcompare.add_argument("-s", "--shift", action="store_true", help="Shift motifs to find best alignment")
-    parser_mcompare.add_argument("-m", "--min_overlap", type=int, default=5, help="Minimal overlap between two motifs "
+    parser_mcompare.add_argument("-m", "--min-overlap", type=int, default=5, help="Minimal overlap between two motifs "
                                                                                   "if motifs are shifted to find the "
                                                                                   "best alignment (--shift)")
-    parser_mcompare.add_argument("-o", "--out_dir", default=".", help="Output directory")
+    parser_mcompare.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_mcompare.set_defaults(func=run_mcompare)
 
     return xparser

@@ -1,7 +1,6 @@
 import os
 import re
 from Bio import SeqIO
-from Bio.Alphabet import IUPAC
 from Bio.motifs import transfac		
 from Bio.motifs.__init__ import Instances
 from Bio.motifs import matrix
@@ -27,6 +26,8 @@ def fa2transfac(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    ambiguous_dna = 'GATCRYWSMKHBVDN'
+
     # for each convolutional filter
     for file in os.listdir(args.in_dir):
 
@@ -38,11 +39,18 @@ def fa2transfac(args):
             # load sequences from fasta file
             instances = []
             with open(args.in_dir + "/" + file, "rU") as handle:
-                for record in SeqIO.parse(handle, "fasta", alphabet=IUPAC.ambiguous_dna):
+                for record in SeqIO.parse(handle, "fasta"):
+                    try:
+                        # Received an old-style alphabet
+                        if record.seq.alphabet is not None:
+                            record.seq.alphabet = ambiguous_dna
+                    except AttributeError:
+                        pass
                     instances.append(record.seq)
 
             # build motif from sequences
-            m = transfac.Motif(instances=Instances(instances, IUPAC.ambiguous_dna), alphabet=IUPAC.ambiguous_dna)
+            instances = Instances(instances, alphabet=ambiguous_dna)
+            m = transfac.Motif(instances=instances, alphabet=ambiguous_dna)
             m["ID"] = c_filter
 
             # weight sequences according to their DeepLIFT score
@@ -76,7 +84,7 @@ def fa2transfac(args):
                     args.out_dir + "/" +
                     file.replace(".fasta", str("_seq_weighting" if args.weighting else "") + ".transfac"), "w")\
                     as out_file:
-                out_file.write(m.format("transfac"))
+                out_file.write(format(m, "transfac"))
 
             m.alphabet = "ACGT"
             m.counts = matrix.FrequencyPositionMatrix("ACGT", m.counts)
@@ -85,4 +93,4 @@ def fa2transfac(args):
                     args.out_dir + "/" +
                     file.replace(".fasta", str("_seq_weighting" if args.weighting else "") + "_acgt.transfac"), "w")\
                     as out_file:
-                out_file.write(m.format("transfac"))
+                out_file.write(format(m, "transfac"))

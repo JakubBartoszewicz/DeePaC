@@ -1,7 +1,7 @@
 import re
 import os
 import numpy as np
-from tensorflow.compat.v1.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.text import Tokenizer
 from Bio import SeqIO
 import pandas as pd
 from collections import OrderedDict
@@ -87,7 +87,17 @@ def genome_map(args):
                         score_interval = score
 
                     elif start == strain_len - 1 and score == score_interval:
+                        end_interval = start + 1
+                        df.loc[c] = [seq_name, start_interval, end_interval, score_interval]
+                        c += 1
+
+                    elif start == strain_len - 1 and score != score_interval:
                         end_interval = start
+                        df.loc[c] = [seq_name, start_interval, end_interval, score_interval]
+                        c += 1
+                        start_interval = start
+                        score_interval = score
+                        end_interval = start + 1
                         df.loc[c] = [seq_name, start_interval, end_interval, score_interval]
                         c += 1
 
