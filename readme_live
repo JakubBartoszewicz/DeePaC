@@ -1,0 +1,56 @@
+# workflow or how to use the scripts
+
+1) use python_scripts/subreads_from_npa.py to create subreads to train or eval deepac
+2) run predictions using a simple bash script like model_evaluation_subreads/DeePaC/predictions.sh
+3) using the predictions to run different deepac eval scenarios (found in the model_evaluation_subreads folder)
+    3.1) runEval.sh 
+        evaluates deepacs performance on single reads
+        args:  
+            path to folder holding predictions 
+            test set name
+        output: 
+            csv file named after the folder holding the predictions (use model name)       
+    3.2) runEval_ens.sh
+        evaluates deepacs performance on single reads by averaging the predictions from different models
+        args: 
+            path to folder holding predictions 
+            path to folder holding predictions 
+            test set name
+        output: 
+            csv file named after the concatinated folder names
+    3.3) runEval_paired_asynchron.sh
+        evaluates deepacs performance on paired reads by averaging the predictions
+        checks all possible prediction combinations
+        args: 
+            path to folder holding predictions 
+            test set name
+            test set name
+        output: 
+            csv file named after the folder name
+    3.4) runEval_paired_synchron.sh  
+        evaluates deepacs performance on paired reads by averaging the predictions
+        checks only same read-length predictions
+        args: 
+            path to folder holding predictions 
+            test set name
+            test set name
+        output: 
+            csv file named after the folder name
+    3.5) runEval_ens_paired_asynchron.sh
+        evaluates deepacs performance on paired reads by averaging the predictions from different models
+        args: 
+            path to folder holding predictions 
+            path to folder holding predictions 
+            test set name
+            test set name
+        output: 
+            csv file named after the concatinated folder name
+    3.6) test_all_ens_classifiers.sh
+        script to check all possible combinations of ensemble classifiers containing two models
+        path to prediction folders needs to specified within the script
+    3.7) test_multiple_data_sets.sh
+        example script to run any of the runEval scripts on multiple datasets 
+4) plotting of the scripts uses a couple of Rscripts (data_vizualization folder)
+    these scripts are commented
+    the first script to run is data_prep_read_eval to combine the eval results into one dataframe
+

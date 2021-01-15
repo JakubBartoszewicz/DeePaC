@@ -187,11 +187,13 @@ class MainRunner:
                 model = tf.keras.models.load_model(args.custom)
 
         if args.rc_check:
-            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates)
+            compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates,
+                       batch_size=args.batch_size)
         elif args.array:
-            predict_npy(model, args.input, args.output, replicates=args.replicates)
+            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size)
         else:
-            predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates)
+            predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
+                          batch_size=args.batch_size)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -262,6 +264,8 @@ class MainRunner:
                                     help="GPU devices to use (comma-separated). Default: all")
         parser_predict.add_argument('-R', '--rc-check', dest="rc_check", action='store_true',
                                     help='Check RC-constraint compliance (requires .npy input).')
+        parser_predict.add_argument('-b', '--batch-size', dest="batch_size", default=512, type=int,
+                                    help='Batch size.')
         parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
                                     help='Plot kind for the RC-constraint compliance check.')
         parser_predict.add_argument('--alpha', default=1.0, type=float,
