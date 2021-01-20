@@ -19,11 +19,11 @@ plot_heatmap <- function(data,metric,limits_scale){
               mapping = aes(subread_length, 
                             subread_length_2, 
                             fill = 100*get(metric))) +
-    scale_fill_gradientn(colours = c("darkred","red" ,"yellow","green","darkgreen"),
+    scale_fill_gradientn(colours = c("red3","red" ,"yellow","green","darkgreen"),
                          values = c(0,0.25,.50,.75,1),
                          limits = limits_scale,
                          name = metric
-    ) + xlab("read length 1 [bp]") + ylab("read length 2 [bp]") +
+    ) + xlab("length read 1 [bp]") + ylab("length read 2 [bp]") +
     geom_text(data = data,
               aes(subread_length,
                   subread_length_2,
