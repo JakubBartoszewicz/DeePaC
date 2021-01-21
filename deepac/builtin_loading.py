@@ -39,12 +39,9 @@ class RemoteLoader:
                 for w in model_dict.keys():
                     model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
                     save_path = os.path.basename(w)
-                    model.save(os.path.join(out_dir, save_path))
+                    model.save(os.path.join(out_dir, "latest_compiled_models", save_path))
         else:
             print('HTTP error: {}'.format(r.status_code))
-
-
-
 
 
 class BuiltinLoader:
