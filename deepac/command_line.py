@@ -20,7 +20,7 @@ from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_species import evaluate_species
 from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
-from deepac.builtin_loading import BuiltinLoader
+from deepac.builtin_loading import BuiltinLoader, RemoteLoader
 from deepac.tests.testcalls import Tester
 from deepac.tests.rctest import compare_rc
 from deepac import __version__
@@ -41,6 +41,7 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
     builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
+    remote_repo_url = "http://zenodo.com/mock"
     runner = MainRunner(builtin_configs, builtin_weights)
     runner.parse()
 
@@ -127,10 +128,11 @@ def add_global_parser(gparser):
 
 
 class MainRunner:
-    def __init__(self, builtin_configs=None, builtin_weights=None):
+    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_url=None):
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
+        self.rloader = RemoteLoader(remote_repo_url)
         self.tpu_resolver = None
 
     def run_train(self, args):
@@ -224,6 +226,9 @@ class MainRunner:
             model.summary()
             save_path = os.path.basename(self.builtin_weights["rapid"])
             model.save(os.path.join(out_dir, save_path))
+
+        if args.fetch:
+            self.rloader.fetch_models(out_dir)
 
     def run_tests(self, args):
         """Run tests."""
@@ -337,6 +342,8 @@ class MainRunner:
                                     help='Rebuild the sensitive model.')
         getmodel_group.add_argument('-r', '--rapid', dest='rapid', action='store_true',
                                     help='Rebuild the rapid CNN model.')
+        getmodel_group.add_argument('-f', '--fetch', dest='fetch', action='store_true',
+                                    help='Fetch the latest models and configs from the online repository.')
         parser_getmodel.set_defaults(func=self.run_getmodels)
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
