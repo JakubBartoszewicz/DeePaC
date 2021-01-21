@@ -18,7 +18,7 @@ class RemoteLoader:
         else:
             self.remote_repo_url = remote_repo_url
 
-    def fetch_models(self, out_dir, do_compile, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
+    def fetch_models(self, out_dir, do_compile=True, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
                      tpu_resolver=None, timeout=15.):
         fetch_dir = os.path.join(out_dir, "latest_weights_configs")
         if not os.path.exists(fetch_dir):
