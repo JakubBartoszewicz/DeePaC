@@ -53,7 +53,7 @@ class RemoteLoader:
             else:
                 print('Downloading finished.')
                 if do_compile:
-                    print('Compiling downloaded models...')
+                    print('Building downloaded models...')
                     for w in model_dict.keys():
                         model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
                         model.summary()
