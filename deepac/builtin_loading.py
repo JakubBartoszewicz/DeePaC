@@ -12,12 +12,12 @@ import wget
 class RemoteLoader:
     def __init__(self, remote_repo_url):
         if remote_repo_url is None:
-            self.remote_repo_url = "https://doi.org/10.5281/zenodo.4312525"
+            self.remote_repo_url = "https://doi.org/10.5281/zenodo.4456008"
         else:
             self.remote_repo_url = remote_repo_url
 
-    def fetch_models(self, out_dir, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False, tpu_resolver=None,
-                     timeout=15.):
+    def fetch_models(self, out_dir, compile, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
+                     tpu_resolver=None, timeout=15.):
         r = requests.get(self.remote_repo_url, timeout=timeout)
         model_dict = {}
         if r.ok:
@@ -35,11 +35,12 @@ class RemoteLoader:
                     pre, ext = os.path.splitext(filename)
                     model_dict[filename] = pre + ".ini"
             else:
-                print('Downloading finished. Compiling models...')
-                for w in model_dict.keys():
-                    model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
-                    save_path = os.path.basename(w)
-                    model.save(os.path.join(out_dir, "latest_compiled_models", save_path))
+                print('Downloading finished.')
+                if compile:
+                    for w in model_dict.keys():
+                        model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
+                        save_path = os.path.basename(w)
+                        model.save(os.path.join(out_dir, "latest_compiled_models", save_path))
         else:
             print('HTTP error: {}'.format(r.status_code))
 
