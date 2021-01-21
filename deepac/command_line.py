@@ -41,7 +41,7 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
     builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
-    remote_repo_url = "https://doi.org/10.5281/zenodo.4456008"
+    remote_repo_url = "https://zenodo.org/api/records/4456008"
     runner = MainRunner(builtin_configs, builtin_weights, remote_repo_url)
     runner.parse()
 
@@ -212,7 +212,7 @@ class MainRunner:
                     os.remove(os.path.join(root, name))
                 for name in dirs:
                     os.rmdir(os.path.join(root, name))
-        os.rmdir(out_weights_path)
+            os.rmdir(out_weights_path)
         shutil.copytree(builtin_weights_path, out_weights_path)
 
         if args.sensitive:

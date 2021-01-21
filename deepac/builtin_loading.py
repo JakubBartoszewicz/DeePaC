@@ -4,43 +4,61 @@ import os
 from deepac import __file__
 from deepac.utils import config_gpus, config_cpus
 import tensorflow as tf
+from urllib.parse import urlparse
 import requests
 import json
 import wget
+import hashlib
 
 
 class RemoteLoader:
     def __init__(self, remote_repo_url):
         if remote_repo_url is None:
-            self.remote_repo_url = "https://doi.org/10.5281/zenodo.4456008"
+            self.remote_repo_url = "https://zenodo.org/api/records/4456008"
         else:
             self.remote_repo_url = remote_repo_url
 
-    def fetch_models(self, out_dir, compile, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
+    def fetch_models(self, out_dir, do_compile, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
                      tpu_resolver=None, timeout=15.):
+        fetch_dir = os.path.join(out_dir, "latest_weights_configs")
+        if not os.path.exists(fetch_dir):
+            os.mkdir(fetch_dir)
+
         r = requests.get(self.remote_repo_url, timeout=timeout)
         model_dict = {}
+
         if r.ok:
             js = json.loads(r.text)
             files = js['files']
-
             for f in files:
                 link = f['links']['self']
-                size = f['size'] / 2 ** 20
-                print()
-                print(f'Link: {link}   size: {size:.1f} MB')
+                size = f['size'] / 2 ** 10
+                filename = os.path.basename(urlparse(link).path)
 
-                filename = wget.download(link, out=os.path.join(out_dir, "latest_weights_configs"))
+                remote_md5 = get_checksum_md5(f['checksum'])
+                local_md5 = get_file_md5(os.path.join(fetch_dir, filename))
+
+                if remote_md5 == local_md5:
+                    print(f'Found: {filename} size: {get_human_readable_size(size)}')
+                else:
+                    if os.path.exists(os.path.join(fetch_dir, filename)):
+                        print(f'Found: {filename} (incorrect md5 checksum). Deleting...')
+                        os.remove(os.path.join(fetch_dir, filename))
+                    print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
+                    wget.download(link, out=os.path.join(fetch_dir, filename))
+
                 if filename.lower().endswith(".h5"):
                     pre, ext = os.path.splitext(filename)
-                    model_dict[filename] = pre + ".ini"
+                    model_dict[os.path.join(fetch_dir, filename)] = os.path.join(fetch_dir, pre + ".ini")
             else:
                 print('Downloading finished.')
-                if compile:
+                if do_compile:
+                    print('Compiling downloaded models...')
                     for w in model_dict.keys():
                         model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
+                        model.summary()
                         save_path = os.path.basename(w)
-                        model.save(os.path.join(out_dir, "latest_compiled_models", save_path))
+                        model.save(os.path.join(out_dir, save_path))
         else:
             print('HTTP error: {}'.format(r.status_code))
 
@@ -119,3 +137,23 @@ def load_model(config_path, weights_path, n_cpus=None, n_gpus=None, log_path="lo
     paprnet.model.load_weights(weights_path)
 
     return paprnet.model
+
+
+def get_file_md5(filename):
+    if not os.path.exists(filename):
+        return "not found"
+    with open(filename, 'rb') as f:
+        data = f.read()
+        return hashlib.md5(data).hexdigest()
+
+
+def get_checksum_md5(checksum):
+    return checksum.split(':')[-1]
+
+
+def get_human_readable_size(size):
+    if size > 1024.0:
+        size = size / 2 ** 10
+        return f'{size:.1f} MB'
+    else:
+        return f'{size:.1f} kB'
