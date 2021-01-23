@@ -46,6 +46,7 @@ class RemoteLoader:
                         os.remove(os.path.join(fetch_dir, filename))
                     print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
                     wget.download(link, out=os.path.join(fetch_dir, filename))
+                    print()
 
                 if filename.lower().endswith(".h5"):
                     pre, ext = os.path.splitext(filename)
