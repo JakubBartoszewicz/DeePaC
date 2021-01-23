@@ -62,22 +62,26 @@ plot_metric_vs_seqc <- function(data,metric,ylab,ylim){
 trainings_plot_img <- c("res18-25-250bp-img-d25-corr-e021.h5",
                         "img-res",
                         "cnn_250bp_d025_img","lstm_250bp_d02_img",
-                        "PaPrBaG DNA_25-250","Blast_TestB" )
+                        "PaPrBaG DNA_25-250","Blast_TestB",
+                         "img-hilive")
 
 labels_plot_img <- c("ResNet (ours)",
                      "HiLive2+ResNet (ours)",
                      "DeePaC (CNN)", "DeePaC (LSTM)",
-                     "PaPrBaG", "BLAST")
+                     "PaPrBaG", "BLAST",
+                      "Hilive2")
 
 read_eval_data_plot <- read_eval_data%>%
-  filter(training %in% trainings_plot_img)%>%
+  filter(training %in% trainings_plot_img[1:6])%>%
   mutate(training = factor(training,levels = trainings_plot_img,labels = labels_plot_img))
 
 acc_img_zoom <- plot_metric_vs_seqc("read_eval_data_plot","acc","accuracy",c(0.5,0.91))
 acc_img_zoom
 
 # latex table
-read_eval_data_figure <- read_eval_data_plot%>%
+read_eval_data_figure <- read_eval_data%>%
+  filter(training %in% trainings_plot_img)%>%
+  mutate(training = factor(training,levels = trainings_plot_img,labels = labels_plot_img))%>%
   select(acc,precision,recall,training)%>%
   group_by(training)%>%
   summarise_if(is.numeric,function(x){round(mean(x)*100,3) })
@@ -87,7 +91,7 @@ xtable(read_eval_data_figure,digits = 1)
 trainings_plot_vhdb <- c("res18-25-250bp-vhdb-d25-e026.h5",
                          "vhdb-res",
                          "cnn_150bp_d025_vhdb_all-e014",
-                         #"cnn_250bp_d025_vhdb_all-e011",
+                         "cnn_250bp_d025_vhdb_all-e011",
                          "lstm_250bp_d02_vhdb_all-e013",
                          "knn_vhdb","Blast_TestV",
                          "vhdb-hilive")
@@ -95,20 +99,29 @@ trainings_plot_vhdb <- c("res18-25-250bp-vhdb-d25-e026.h5",
 labels_plot_vhdb <- c("ResNet (ours)",
                       "HiLive2+ResNet (ours)",
                       "DeePaC (CNN-150)",
-                      #"DeePaC (CNN)",
+                      "DeePaC (CNN)",
                       "DeePaC (LSTM)",
                       "kNN", "BLAST",
                       "Hilive2")
 
 read_eval_data_plot <- read_eval_data%>%
-  filter(training %in% trainings_plot_vhdb[1:6])%>%
+  filter(training %in% trainings_plot_vhdb[c(1:3, 5:7)])%>%
   mutate(training = factor(training,levels = trainings_plot_vhdb,labels = labels_plot_vhdb))
 
 acc_vhdb_zoom <- plot_metric_vs_seqc("read_eval_data_plot","acc","accuracy",c(0.5,0.91))
 acc_vhdb_zoom
 
+# latex table
+read_eval_data_figure <- read_eval_data%>%
+  filter(training %in% trainings_plot_vhdb)%>%
+  mutate(training = factor(training,levels = trainings_plot_vhdb,labels = labels_plot_vhdb))%>%
+  select(acc,precision,recall,training)%>%
+  group_by(training)%>%
+  summarise_if(is.numeric,function(x){round(mean(x)*100,3) })
+xtable(read_eval_data_figure,digits = 1)
+
 read_eval_data_plot <- read_eval_data%>%
-  filter(training %in% trainings_plot_vhdb[c(1:2,7)])%>%
+  filter(training %in% trainings_plot_vhdb[c(1:2,8)])%>%
   mutate(training = factor(training,levels = trainings_plot_vhdb,labels = labels_plot_vhdb))
 
 colors = brewer.pal(n=10,"Paired")

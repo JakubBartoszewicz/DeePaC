@@ -20,7 +20,7 @@ from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_species import evaluate_species
 from deepac.eval.eval_ens import evaluate_ensemble
 from deepac.convert import convert_cudnn
-from deepac.builtin_loading import BuiltinLoader
+from deepac.builtin_loading import BuiltinLoader, RemoteLoader
 from deepac.tests.testcalls import Tester
 from deepac.tests.rctest import compare_rc
 from deepac import __version__
@@ -41,7 +41,8 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
     builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
-    runner = MainRunner(builtin_configs, builtin_weights)
+    remote_repo_url = "https://zenodo.org/api/records/4456008"
+    runner = MainRunner(builtin_configs, builtin_weights, remote_repo_url)
     runner.parse()
 
 
@@ -127,10 +128,11 @@ def add_global_parser(gparser):
 
 
 class MainRunner:
-    def __init__(self, builtin_configs=None, builtin_weights=None):
+    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_url=None):
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
+        self.rloader = RemoteLoader(remote_repo_url)
         self.tpu_resolver = None
 
     def run_train(self, args):
@@ -210,7 +212,7 @@ class MainRunner:
                     os.remove(os.path.join(root, name))
                 for name in dirs:
                     os.rmdir(os.path.join(root, name))
-        os.rmdir(out_weights_path)
+            os.rmdir(out_weights_path)
         shutil.copytree(builtin_weights_path, out_weights_path)
 
         if args.sensitive:
@@ -224,6 +226,9 @@ class MainRunner:
             model.summary()
             save_path = os.path.basename(self.builtin_weights["rapid"])
             model.save(os.path.join(out_dir, save_path))
+
+        if args.download_only or args.fetch_compile:
+            self.rloader.fetch_models(out_dir, args.fetch_compile)
 
     def run_tests(self, args):
         """Run tests."""
@@ -337,6 +342,12 @@ class MainRunner:
                                     help='Rebuild the sensitive model.')
         getmodel_group.add_argument('-r', '--rapid', dest='rapid', action='store_true',
                                     help='Rebuild the rapid CNN model.')
+
+        fetch_group = getmodel_group.add_mutually_exclusive_group(required=False)
+        fetch_group.add_argument('-f', '--fetch', dest='fetch_compile', action='store_true',
+                                 help='Fetch and compile the latest models and configs from the online repository.')
+        fetch_group.add_argument('--download-only', dest='download_only', action='store_true',
+                                 help='Fetch weights and config files but do not compile the models.')
         parser_getmodel.set_defaults(func=self.run_getmodels)
 
         parser_test = subparsers.add_parser('test', help='Run additional tests.')
@@ -361,7 +372,7 @@ class MainRunner:
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",
-                                       help="Disable additivity check.")
+                                 help="Disable additivity check.")
         parser_test.set_defaults(func=self.run_tests)
 
         parser_explain = subparsers.add_parser('explain', help='Run filter visualization workflows.')

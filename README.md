@@ -56,6 +56,11 @@ conda install tensorflow-gpu deepac
 conda install deepac
 ```
 
+Recommended: download and compile the latest deepac-live custom models:
+```
+deepac getmodels --fetch
+```
+
 If you want to install the plugins as well, use:
 
 ```
@@ -120,6 +125,11 @@ Alternatively, if you don't need GPU support:
 ```
 # Basic installation (CPU-only)
 pip install deepac
+```
+
+Recommended: download and compile the latest deepac-live custom models:
+```
+deepac getmodels --fetch
 ```
 
 If you want to install the plugins, use:
