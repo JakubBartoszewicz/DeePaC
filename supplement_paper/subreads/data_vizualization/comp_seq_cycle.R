@@ -15,7 +15,7 @@ read_eval_data <- read_eval_data%>%
   # keep only data where we have single and paired pred
   filter(n() == 20)%>%
   mutate(seq_cycle = ifelse(!is.na(subread_length_2),
-                            as.integer(as.character(subread_length)) + as.integer(as.character(subread_length_2)) + 9,
+                            as.integer(as.character(subread_length)) + as.integer(as.character(subread_length_2)) + 8,
                             as.integer(as.character(subread_length))))%>%
   mutate(seq_cycle = factor(x = seq_cycle,levels = sort(unique(seq_cycle))),
          pred_type = factor(pred_type,levels = c("single_read","paired_read"),ordered = T))%>%
@@ -132,6 +132,24 @@ ppv_vhdb_zoom
 
 
 # aureus plots ----
+
+# filter data
+read_eval_data <- readRDS("read_eval_data_merged.rds")
+
+read_eval_data <- read_eval_data%>%
+  filter(subread_length != "avg")%>%
+  filter(set  %in% c("test_1","all_test_1") |
+           (set %in% c("test_1_test_2","all_test_1_all_test_2") & subread_length == 250))%>%
+  group_by(training)%>%
+  # keep only data where we have single and paired pred
+  filter(n() == 20)%>%
+  mutate(seq_cycle = ifelse(!is.na(subread_length_2),
+                            as.integer(as.character(subread_length)) + as.integer(as.character(subread_length_2)) + 9,
+                            as.integer(as.character(subread_length))))%>%
+  mutate(seq_cycle = factor(x = seq_cycle,levels = sort(unique(seq_cycle))),
+         pred_type = factor(pred_type,levels = c("single_read","paired_read"),ordered = T))%>%
+  ungroup()
+
 trainings_plot_aureus <- c("aureus-res",
                            "aureus-hilive" )
 
