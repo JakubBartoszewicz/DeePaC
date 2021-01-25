@@ -56,7 +56,7 @@ conda install tensorflow-gpu deepac
 conda install deepac
 ```
 
-Optional: download and compile the latest deepac-live custom models:
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
 deepac getmodels --fetch
 ```
@@ -101,7 +101,7 @@ docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/de
 
 The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
 
-Optional: download and compile the latest deepac-live custom models:
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
 docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5 deepac --fetch
 ```
@@ -127,7 +127,7 @@ Then you can do the same as above:
 pip install deepac
 ```
 
-Optional: download and compile the latest deepac-live custom models:
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
 deepac getmodels --fetch
 ```
