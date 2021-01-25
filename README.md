@@ -110,6 +110,7 @@ For more information about the usage of the NVIDIA container toolkit (e.g. selec
  consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
 
 The `dacshpi/deepac:latest` corresponds to the latest version of the CPU build. We recommend using explicit version tags instead.
+
 ### With pip
 
 We recommend setting up an isolated `conda` environment (see above). Alternatively, you can use a `virtualenv` virtual environment (note that deepac requires python 3):
@@ -121,15 +122,8 @@ source my_env/bin/activate
 
 You can then install DeePaC with `pip`. For GPU support, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 Then you can do the same as above:
-```
-# For GPU support (recommended)
-pip install tensorflow-gpu
-pip install deepac
-```
 
-Alternatively, if you don't need GPU support: 
 ```
-# Basic installation (CPU-only)
 pip install deepac
 ```
 
@@ -340,6 +334,7 @@ Unfortunately, the following issues are independent of the DeePaC codebase:
 * h5py>=3.0 is not compatible with Tensorflow at the moment and will cause errors when loading Keras (and DeePaC) models (hence, deepac tests will fail as well). 
 Conda installation takes care of it automatically, but the pip Tensorflow installation does not. To solve it, use conda installation or install h5py<3.0. 
 This issue should be resolved in a future version of Tensorflow.
+* shap 0.38 requires IPython but the pip installer does not install it. Manual installation solves the problem.
 
 ## Cite us
 If you find DeePaC useful, please cite:
