@@ -26,21 +26,21 @@ Alternatively, if you are allowed to use the official [IBM PowerAI containers](h
 you can use this convenience [Dockerfile](https://gitlab.com/rki_bioinformatics/DeePaC/-/blob/master/dockerfiles/ppc64le/Dockerfile), based on the IBM Tensorflow image to build your own DeePaC container. 
 
 ```
-docker build -t deepac:0.13.3-ppc64le .
+docker build -t deepac:0.13.5-ppc64le .
 ```
 
 Verify that everything worked. You have to accept the [license](https://github.com/IBM/powerai/tree/master/containers/1.7.0) at every run:
 ```
-docker run --rm --env LICENSE=yes deepac:0.13.3-ppc64le
+docker run --rm --env LICENSE=yes deepac:0.13.5-ppc64le
 ```
 
 To run the container as your user (and bind-mount your working directory), you have to activate the wmlce conda environment:
 ```
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes deepac:0.13.3-ppc64le bash -c "source /opt/anaconda/bin/activate && conda activate wmlce && deepac test -q"
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes deepac:0.13.5-ppc64le bash -c "source /opt/anaconda/bin/activate && conda activate wmlce && deepac test -q"
 ```
 Modify the last deepac command to run the desired deepac workflow.
 
 Alternatively, you can run in in interactive mode and set everything up yourself:
 ```
-docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes deepac:0.13.3-ppc64le bash
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --env LICENSE=yes deepac:0.13.5-ppc64le bash
 ```

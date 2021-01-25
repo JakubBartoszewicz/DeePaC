@@ -56,7 +56,7 @@ conda install tensorflow-gpu deepac
 conda install deepac
 ```
 
-Recommended: download and compile the latest deepac-live custom models:
+Optional: download and compile the latest deepac-live custom models:
 ```
 deepac getmodels --fetch
 ```
@@ -80,26 +80,32 @@ for details. The guide below assumes you have Docker 19.03 or above.
 You can then pull the desired image:
 ```
 # Basic installation - CPU only
-docker pull dacshpi/deepac:0.13.3
+docker pull dacshpi/deepac:0.13.5
 
 # For GPU support
-docker pull dacshpi/deepac:0.13.3-gpu
+docker pull dacshpi/deepac:0.13.5-gpu
 ```
 
 And run it:
 ```
 # Basic installation - CPU only
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.3 deepac --help
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.3 deepac test -q
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac --help
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac test -q
 
 # With GPU support
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.3-gpu deepac test
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu deepac test
 
 # If you want to use the shell inside the container
-docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.3-gpu bash
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu bash
 ```
 
 The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+
+Optional: download and compile the latest deepac-live custom models:
+```
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5 deepac --fetch
+```
+
 For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
  consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
 
@@ -127,7 +133,7 @@ Alternatively, if you don't need GPU support:
 pip install deepac
 ```
 
-Recommended: download and compile the latest deepac-live custom models:
+Optional: download and compile the latest deepac-live custom models:
 ```
 deepac getmodels --fetch
 ```
