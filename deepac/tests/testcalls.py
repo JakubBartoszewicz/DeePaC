@@ -41,7 +41,7 @@ class Tester:
         self.tpu_resolver = tpu_resolver
         self.additivity_check = additivity_check
         self.do_large = large
-        self.multiclass = False
+        self.multiclass = True
         self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
@@ -86,13 +86,13 @@ class Tester:
         print("TEST: Predicting...")
         self.test_pred(quick)
         print("TEST: Evaluating...")
-        self.test_eval()
+        #self.test_eval()
         print("TEST: Converting...")
         self.test_convert()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
         print("TEST: Filtering...")
-        self.test_filter()
+        #self.test_filter()
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus, self.additivity_check)

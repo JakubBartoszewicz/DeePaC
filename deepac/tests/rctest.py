@@ -64,9 +64,10 @@ def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1
         motif_length = get_rf_size(model, conv_layer_idx, verbose=True)
         print("Receptive field size: {}".format(motif_length))
 
-    fwd, rc = pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc, replicates=replicates,
-                          batch_size=batch_size)
+    fwd_raw, rc_raw = pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc, replicates=replicates,
+                                  batch_size=batch_size)
 
+    fwd, rc = fwd_raw.flatten(), rc_raw.flatten()
     print(scipy.stats.ks_2samp(fwd, rc))
     print(scipy.stats.spearmanr(fwd, rc))
     diff = np.abs(fwd - rc)
