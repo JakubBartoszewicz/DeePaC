@@ -41,6 +41,7 @@ class Tester:
         self.tpu_resolver = tpu_resolver
         self.additivity_check = additivity_check
         self.do_large = large
+        self.multiclass = False
         self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
@@ -55,10 +56,10 @@ class Tester:
 
     def run_datagen(self, npy=True, tfrec=True):
         print("TEST: Generating data...")
-        if self.do_large:
+        if self.multiclass:
             datagen.generate_multiclass_sample_data(n_train=2048 * self.scale, n_val=2048 * self.scale)
             print("TEST: Preprocessing multiclass data...")
-            self.test_preproc(npy, tfrec, multiclass=True)
+            self.test_preproc(npy, tfrec, multiclass=self.multiclass)
         else:
             datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
         print("TEST: Preprocessing data...")
@@ -383,7 +384,7 @@ class Tester:
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
                                            custom_objects=get_custom_objects())
         print(model.summary())
-        val_data = "sample_val_multi" if self.do_large else "sample_val"
+        val_data = "sample_val_multi" if self.multiclass else "sample_val"
         compare_rc(model, os.path.join("deepac-tests", "{}_data.npy".format(val_data)),
                    os.path.join("deepac-tests", "deepac-test-logs",
                                 "deepac-test-e002-predictions-{}.npy".format(val_data)),
@@ -415,7 +416,7 @@ class Tester:
         """Test evaluating."""
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval-test.ini"))
-        if self.do_large:
+        if self.multiclass:
             config['Data']['DataSet'] = 'sample_val_multi'
             config['Data']['PairedSet'] = 'sample_val_multi'
         evaluate_reads(config)
@@ -428,7 +429,7 @@ class Tester:
 
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
-        if self.do_large:
+        if self.multiclass:
             config['Data']['DataSet'] = 'sample_val_multi'
             config['Data']['PairedSet'] = 'sample_val_multi'
         evaluate_ensemble(config)
