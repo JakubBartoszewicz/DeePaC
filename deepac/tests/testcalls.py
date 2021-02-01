@@ -1,5 +1,5 @@
 import tensorflow as tf
-from deepac.predict import predict_fasta, filter_fasta
+from deepac.predict import predict_fasta, filter_fasta, filter_paired_fasta
 from deepac.nn_train import RCConfig, RCNet
 from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
@@ -41,7 +41,7 @@ class Tester:
         self.tpu_resolver = tpu_resolver
         self.additivity_check = additivity_check
         self.do_large = large
-        self.multiclass = True
+        self.multiclass = False
         self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
@@ -86,13 +86,13 @@ class Tester:
         print("TEST: Predicting...")
         self.test_pred(quick)
         print("TEST: Evaluating...")
-        #self.test_eval()
+        self.test_eval()
         print("TEST: Converting...")
         self.test_convert()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
         print("TEST: Filtering...")
-        #self.test_filter()
+        self.test_filter()
 
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus, self.additivity_check)
@@ -469,14 +469,31 @@ class Tester:
                       os.path.join("deepac-tests", "deepac-test-logs",
                                    "deepac-test-e002-predictions-sample_test.npy"),
                       replicates=5)
-        filter_fasta(os.path.join("deepac-tests", "sample-test.fasta"),
-                     os.path.join("deepac-tests", "deepac-test-logs",
+        filter_fasta(input_fasta=os.path.join("deepac-tests", "sample-test.fasta"),
+                     predictions=os.path.join("deepac-tests", "deepac-test-logs",
                                   "deepac-test-e002-predictions-sample_test.npy"),
-                     os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
+                     output=os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
                      print_potentials=True,
                      output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
                      confidence_thresh=0.65,
                      output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
                      pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
                                                    "deepac-test-e002-predictions-sample_test-std.npy"))
+
+        filter_paired_fasta(input_fasta_1=os.path.join("deepac-tests", "sample-test.fasta"),
+                            predictions_1=os.path.join("deepac-tests", "deepac-test-logs",
+                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                            output_pos=os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"),
+                            input_fasta_2=os.path.join("deepac-tests", "sample-test.fasta"),
+                            predictions_2=os.path.join("deepac-tests", "deepac-test-logs",
+                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                            print_potentials=True,
+                            output_neg=os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"),
+                            confidence_thresh=0.65,
+                            output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
+                            pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
+                                                          "deepac-test-e002-predictions-sample_test-std.npy"))
+
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"))), "Filtering failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"))),\
+            "Filtering failed."
