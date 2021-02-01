@@ -144,30 +144,38 @@ def write_filtered(output, fasta_1, fasta_2, y_pred_pos, pred_uncertainty, preci
 
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
                         output_neg=None, threshold=0.5, print_potentials=False, precision=3,
-                        confidence_thresh=0.5, output_undef=None, pred_uncertainty=None):
+                        confidence_thresh=0.5, output_undef=None, pred_uncertainty=None, no_classes=2):
     """Filter reads in paired fasta files by pathogenic potential."""
     fasta_data_1, fasta_data_2, y_pred = get_fasta_preds(input_fasta_1, predictions_1, input_fasta_2, predictions_2)
 
-    if np.isclose(confidence_thresh, threshold):
-        y_pred_class_pos = y_pred > threshold
-        y_pred_class_neg = y_pred <= threshold
-        y_pred_class_undef = []
-    else:
-        interval = np.abs(confidence_thresh - threshold)
-        y_pred_class_pos = y_pred > (threshold + interval)
-        y_pred_class_neg = y_pred < (threshold - interval)
-        y_pred_class_undef = np.logical_not(np.any([y_pred_class_pos, y_pred_class_neg], axis=0))
+    y_pred_classes = {}
 
-    fasta_pos_1 = list(itertools.compress(fasta_data_1, y_pred_class_pos))
-    fasta_neg_1 = list(itertools.compress(fasta_data_1, y_pred_class_neg))
+    if no_classes == 2:
+        if np.isclose(confidence_thresh, threshold):
+            y_pred_classes[0] = y_pred <= threshold
+            y_pred_classes[1] = y_pred > threshold
+            y_pred_class_undef = []
+        else:
+            interval = np.abs(confidence_thresh - threshold)
+            y_pred_classes[0] = y_pred < (threshold - interval)
+            y_pred_classes[1] = y_pred > (threshold + interval)
+            y_pred_class_undef = np.logical_not(np.any([y_pred_classes[0], y_pred_classes[1]], axis=0))
+    else:
+        raise NotImplementedError
+
+    fasta_classes_1 = {}
+    fasta_classes_2 = {}
+
+    for i in range(no_classes):
+        fasta_classes_1[i] = list(itertools.compress(fasta_data_1, y_pred_classes[i]))
     fasta_undef_1 = list(itertools.compress(fasta_data_1, y_pred_class_undef))
     if fasta_data_2 is not None:
-        fasta_pos_2 = list(itertools.compress(fasta_data_2, y_pred_class_pos))
-        fasta_neg_2 = list(itertools.compress(fasta_data_2, y_pred_class_neg))
+        for i in range(no_classes):
+            fasta_classes_2[i] = list(itertools.compress(fasta_data_2, y_pred_classes[i]))
         fasta_undef_2 = list(itertools.compress(fasta_data_2, y_pred_class_undef))
     else:
-        fasta_pos_2 = []
-        fasta_neg_2 = []
+        for i in range(no_classes):
+            fasta_classes_2[i] = []
         fasta_undef_2 = []
     if pred_uncertainty is not None:
         do_uncert = True
@@ -176,13 +184,15 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
         do_uncert = False
         pred_uncertainty = np.zeros(y_pred.shape)
 
-    write_filtered(output_pos, fasta_pos_1, fasta_pos_2, y_pred[y_pred_class_pos], pred_uncertainty[y_pred_class_pos],
-                   precision, print_potentials, do_uncert)
-    if output_neg is not None:
-        write_filtered(output_neg, fasta_neg_1, fasta_neg_2, y_pred[y_pred_class_neg],
-                       pred_uncertainty[y_pred_class_neg],
+    if no_classes > 2 or output_neg is not None:
+        write_filtered(output_pos, fasta_classes_1[0], fasta_classes_2[0],
+                       y_pred[y_pred_classes[0]], pred_uncertainty[y_pred_classes[0]],
                        precision, print_potentials, do_uncert)
-        if not np.isclose(confidence_thresh, threshold):
-            write_filtered(output_undef, fasta_undef_1, fasta_undef_2, y_pred[y_pred_class_undef],
-                           pred_uncertainty[y_pred_class_undef],
-                           precision, print_potentials, do_uncert)
+    for i in range(1, no_classes):
+        write_filtered(output_pos, fasta_classes_1[i], fasta_classes_2[i],
+                       y_pred[y_pred_classes[i]], pred_uncertainty[y_pred_classes[i]],
+                       precision, print_potentials, do_uncert)
+    if not np.isclose(confidence_thresh, threshold) and output_neg is not None:
+        write_filtered(output_undef, fasta_undef_1, fasta_undef_2, y_pred[y_pred_class_undef],
+                       pred_uncertainty[y_pred_class_undef],
+                       precision, print_potentials, do_uncert)
