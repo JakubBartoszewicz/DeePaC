@@ -16,6 +16,7 @@ from deepac.utils import set_mem_growth
 from multiprocessing import Process
 import configparser
 import os
+from termcolor import colored
 
 
 class Tester:
@@ -94,6 +95,11 @@ class Tester:
         print("TEST: Filtering...")
         self.test_filter()
 
+        if self.multiclass and (self.do_all or self.gwpa or self.explain):
+            print(colored("Explainability workflows assume binary classification. Skipping...", "yellow"))
+            print(colored("TEST: OK", "green"))
+            return
+
         if self.do_all or self.gwpa:
             gwpatester = GWPATester(self.n_cpus, self.additivity_check)
             print("X-TEST: gff2genome...")
@@ -133,7 +139,7 @@ class Tester:
             print("X-TEST: Nucleotide contribution map...")
             gwpatester.test_ntcontribs()
 
-        print("TEST: OK")
+        print(colored("TEST: OK", "green"))
 
     def test_preproc(self, npy=True, tfrec=True, multiclass=False):
         """Test preprocessing."""
