@@ -470,38 +470,38 @@ class Tester:
             positive_classes = (1,)
 
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs",
-                                                        "deepac-test-e002_converted_converted.h5"),
+                                                        "deepac-test-e004.h5"),
                                            custom_objects=get_custom_objects())
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
-                                   "deepac-test-e002-predictions-sample_test.npy"),
+                                   "deepac-test-e004-predictions-sample_test.npy"),
                       replicates=5)
         filter_fasta(input_fasta=os.path.join("deepac-tests", "sample-test.fasta"),
                      predictions=os.path.join("deepac-tests", "deepac-test-logs",
-                                              "deepac-test-e002-predictions-sample_test.npy"),
+                                              "deepac-test-e004-predictions-sample_test.npy"),
                      output=os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
                      print_potentials=True,
                      output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
                      confidence_thresh=None,
                      output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
                      pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
-                                                   "deepac-test-e002-predictions-sample_test-std.npy"),
+                                                   "deepac-test-e004-predictions-sample_test-std.npy"),
                      n_classes=n_classes,
                      positive_classes=positive_classes)
 
         filter_paired_fasta(input_fasta_1=os.path.join("deepac-tests", "sample-test.fasta"),
                             predictions_1=os.path.join("deepac-tests", "deepac-test-logs",
-                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                                                       "deepac-test-e004-predictions-sample_test.npy"),
                             output_pos=os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"),
                             input_fasta_2=os.path.join("deepac-tests", "sample-test.fasta"),
                             predictions_2=os.path.join("deepac-tests", "deepac-test-logs",
-                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                                                       "deepac-test-e004-predictions-sample_test.npy"),
                             print_potentials=True,
                             output_neg=os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"),
                             confidence_thresh=0.65,
-                            output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
+                            output_undef=os.path.join("deepac-tests", "sample-test-filtered-paired-undef.fasta"),
                             pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
-                                                          "deepac-test-e002-predictions-sample_test-std.npy"),
+                                                          "deepac-test-e004-predictions-sample_test-std.npy"),
                             n_classes=n_classes,
                             positive_classes=positive_classes)
 
