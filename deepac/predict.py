@@ -75,15 +75,17 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512)
 
 
 def filter_fasta(input_fasta, predictions, output, threshold=0.5, print_potentials=False, precision=3,
-                 output_neg=None, confidence_thresh=0.5, output_undef=None, pred_uncertainty=None):
+                 output_neg=None, confidence_thresh=None, output_undef=None, pred_uncertainty=None, n_classes=2,
+                 positive_classes=(1,)):
     """Filter reads in a fasta file by pathogenic potential."""
     filter_paired_fasta(input_fasta, predictions, output, input_fasta_2=None, predictions_2=None,
                         output_neg=output_neg, threshold=threshold, print_potentials=print_potentials,
                         precision=precision, confidence_thresh=confidence_thresh, output_undef=output_undef,
-                        pred_uncertainty=pred_uncertainty)
+                        pred_uncertainty=pred_uncertainty, n_classes=n_classes, positive_classes=positive_classes)
 
 
 def ensemble(predictions_list, outpath_npy):
+    """Average predictions of multiple classifiers."""
     ys = []
     for p in predictions_list:
         ys.append(np.load(p, mmap_mode='r'))
@@ -93,6 +95,7 @@ def ensemble(predictions_list, outpath_npy):
 
 
 def predict_multiread(array, threshold=0.5, confidence_threshold=0.5):
+    """Predict from multiple reads."""
     if np.isclose(confidence_threshold, threshold):
         pred = np.mean(array)
     else:
@@ -108,6 +111,7 @@ def predict_multiread(array, threshold=0.5, confidence_threshold=0.5):
 
 
 def get_fasta_preds(input_fasta_1, predictions_1, input_fasta_2=None, predictions_2=None):
+    """Load predictions for reads or read pairs."""
     with open(input_fasta_1) as in_handle:
         fasta_data_1 = [(title, seq) for (title, seq) in SimpleFastaParser(in_handle)]
     y_pred_1 = np.load(predictions_1, mmap_mode='r')
@@ -123,18 +127,28 @@ def get_fasta_preds(input_fasta_1, predictions_1, input_fasta_2=None, prediction
 
 
 def format_record(title, seq, y, ci, precision, print_potentials=False, do_uncert=False):
-    record = ">{}\n".format(title)
+    """Format a filtered sequence."""
+    record = ">{}".format(title)
     if print_potentials and precision > 0:
-        record = record + " | pp={val:.{precision}f}".format(val=y, precision=precision)
+        if isinstance(y, (list, np.ndarray)):
+            y_str = "; ".join(["{y_val:.{precision}f}".format(y_val=y_val, precision=precision) for y_val in y])
+        else:
+            y_str = "{y_val:.{precision}f}".format(y_val=y, precision=precision)
+        record = record + " | pp={y_str}".format(y_str=y_str)
     if do_uncert is not None and precision > 0:
-        record = record + " +/- {ci:.{precision}f}".format(ci=ci, precision=precision)
-    record = record + "{}\n".format(seq)
+        if isinstance(ci, (list, np.ndarray)):
+            ci_str = "; ".join(["{ci_val:.{precision}f}".format(ci_val=ci_val, precision=precision) for ci_val in ci])
+        else:
+            ci_str = "{ci_val:.{precision}f}".format(ci_val=ci, precision=precision)
+        record = record + " +/- {ci_str}".format(ci_str=ci_str)
+    record = record + "\n{}\n".format(seq)
     return record
 
 
 def write_filtered(output, fasta_1, fasta_2, y_pred_pos, pred_uncertainty, precision,
-                   print_potentials=False, do_uncert=False):
-    with open(output, "w") as out_handle:
+                   print_potentials=False, do_uncert=False, mode="a"):
+    """Save filtered sequences."""
+    with open(output, mode) as out_handle:
         for ((title, seq), y, ci) in zip(fasta_1, y_pred_pos, pred_uncertainty):
             out_handle.write(format_record(title, seq, y, ci, precision, print_potentials, do_uncert))
         if fasta_2 is not None and len(fasta_2) > 0:
@@ -144,37 +158,49 @@ def write_filtered(output, fasta_1, fasta_2, y_pred_pos, pred_uncertainty, preci
 
 def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=None, predictions_2=None,
                         output_neg=None, threshold=0.5, print_potentials=False, precision=3,
-                        confidence_thresh=0.5, output_undef=None, pred_uncertainty=None, no_classes=2):
+                        confidence_thresh=None, output_undef=None, pred_uncertainty=None, n_classes=2,
+                        positive_classes=(1,)):
     """Filter reads in paired fasta files by pathogenic potential."""
     fasta_data_1, fasta_data_2, y_pred = get_fasta_preds(input_fasta_1, predictions_1, input_fasta_2, predictions_2)
 
     y_pred_classes = {}
 
-    if no_classes == 2:
-        if np.isclose(confidence_thresh, threshold):
+    y_pred_class_undef = []
+    do_undef = False
+    if n_classes == 2:
+        if confidence_thresh is None or np.isclose(confidence_thresh, threshold):
             y_pred_classes[0] = y_pred <= threshold
             y_pred_classes[1] = y_pred > threshold
-            y_pred_class_undef = []
         else:
+            do_undef = True
             interval = np.abs(confidence_thresh - threshold)
             y_pred_classes[0] = y_pred < (threshold - interval)
             y_pred_classes[1] = y_pred > (threshold + interval)
             y_pred_class_undef = np.logical_not(np.any([y_pred_classes[0], y_pred_classes[1]], axis=0))
     else:
-        raise NotImplementedError
+        y_pred_dense = np.argmax(y_pred, axis=-1)
+        if confidence_thresh is None:
+            for i in range(n_classes):
+                y_pred_classes[i] = y_pred_dense == i
+        else:
+            do_undef = True
+            above_thresh = np.max(y_pred, axis=-1) > confidence_thresh
+            y_pred_class_undef = np.logical_not(above_thresh)
+            for i in range(n_classes):
+                y_pred_classes[i] = np.all([y_pred_dense == i, above_thresh], axis=0)
 
     fasta_classes_1 = {}
     fasta_classes_2 = {}
 
-    for i in range(no_classes):
+    for i in range(n_classes):
         fasta_classes_1[i] = list(itertools.compress(fasta_data_1, y_pred_classes[i]))
     fasta_undef_1 = list(itertools.compress(fasta_data_1, y_pred_class_undef))
     if fasta_data_2 is not None:
-        for i in range(no_classes):
+        for i in range(n_classes):
             fasta_classes_2[i] = list(itertools.compress(fasta_data_2, y_pred_classes[i]))
         fasta_undef_2 = list(itertools.compress(fasta_data_2, y_pred_class_undef))
     else:
-        for i in range(no_classes):
+        for i in range(n_classes):
             fasta_classes_2[i] = []
         fasta_undef_2 = []
     if pred_uncertainty is not None:
@@ -184,15 +210,21 @@ def filter_paired_fasta(input_fasta_1, predictions_1, output_pos, input_fasta_2=
         do_uncert = False
         pred_uncertainty = np.zeros(y_pred.shape)
 
-    if no_classes > 2 or output_neg is not None:
-        write_filtered(output_pos, fasta_classes_1[0], fasta_classes_2[0],
-                       y_pred[y_pred_classes[0]], pred_uncertainty[y_pred_classes[0]],
-                       precision, print_potentials, do_uncert)
-    for i in range(1, no_classes):
+    if os.path.exists(output_pos):
+        os.remove(output_pos)
+    for i in positive_classes:
         write_filtered(output_pos, fasta_classes_1[i], fasta_classes_2[i],
                        y_pred[y_pred_classes[i]], pred_uncertainty[y_pred_classes[i]],
                        precision, print_potentials, do_uncert)
-    if not np.isclose(confidence_thresh, threshold) and output_neg is not None:
+    if output_neg is not None:
+        if os.path.exists(output_neg):
+            os.remove(output_neg)
+        negative_classes = [c for c in range(n_classes) if c not in positive_classes]
+        for i in negative_classes:
+            write_filtered(output_neg, fasta_classes_1[i], fasta_classes_2[i],
+                           y_pred[y_pred_classes[i]], pred_uncertainty[y_pred_classes[i]],
+                           precision, print_potentials, do_uncert)
+    if do_undef and output_undef is not None:
         write_filtered(output_undef, fasta_undef_1, fasta_undef_2, y_pred[y_pred_class_undef],
                        pred_uncertainty[y_pred_class_undef],
-                       precision, print_potentials, do_uncert)
+                       precision, print_potentials, do_uncert, mode="w")
