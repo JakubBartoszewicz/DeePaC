@@ -168,11 +168,11 @@ class Tester:
             p.join()
             if multiclass:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_data",
-                                                    "sample_train_multi_data_0-{}.tfrec".format(256*self.scale-1)))),\
+                                                    "sample_train_multi_data_0-{}.tfrec".format(1024*self.scale-1)))),\
                     "TFData Preprocessing failed."
             else:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
-                                                    "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
+                                                    "sample_train_data_0-{}.tfrec".format(512*self.scale-1)))),\
                     "TFData Preprocessing failed."
 
         config = configparser.ConfigParser()
@@ -199,11 +199,11 @@ class Tester:
             p.join()
             if multiclass:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data",
-                                                    "sample_val_multi_data_0-{}.tfrec".format(256*self.scale-1)))),\
+                                                    "sample_val_multi_data_0-{}.tfrec".format(1024*self.scale-1)))),\
                     "TFData Preprocessing failed."
             else:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
-                                                    "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
+                                                    "sample_val_data_0-{}.tfrec".format(512*self.scale-1)))),\
                     "TFData Preprocessing failed."
 
     def test_train(self, quick=False, epoch_start=0, epoch_end=2):
