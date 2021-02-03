@@ -53,16 +53,21 @@ def run_filter(args):
     if args.precision <= 0:
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
-        args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
+        if args.n_classes == 2:
+            args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
+        else:
+            args.output = os.path.splitext(args.input)[0] + "_filtered_multiclass.fasta"
     if args.paired_predictions is None:
         filter_fasta(args.input, args.predictions, args.output,
                      threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                     confidence_thresh=args.c_thresh,
                      pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
     else:
         if args.paired_fasta is None:
             args.paired_fasta = args.input
         filter_paired_fasta(args.input, args.predictions, args.output, args.paired_fasta, args.paired_predictions,
                             threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                            confidence_thresh=args.c_thresh,
                             pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
 
 
@@ -318,20 +323,23 @@ class MainRunner:
                                    help="Second mate input file path [.fasta].")
         parser_filter.add_argument('-R', '--paired-predictions', dest="paired_predictions",
                                    help="Second mate predictions in matching order [.npy].")
-        parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
-        parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
-                                   default=False, action="store_true")
+        parser_filter.add_argument('-t', '--threshold', help="Threshold for binary classification [default=0.5].",
+                                   default=0.5, type=float)
+        parser_filter.add_argument('-c', '--confidence-threshold', dest="c_thresh",
+                                   help="Confidence threshold [default=None].", type=float)
         parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.add_argument('-s', '--std', dest="std",
                                    help="Standard deviations of predictions if MC dropout used.")
-        parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
-                                   "[default=3].", default=3, type=int)
         parser_filter.add_argument('-n', '--n-classes', dest="n_classes",
                                    help="Format pathogenic potentials to given precision "
                                    "[default=2].", default=2, type=int)
         parser_filter.add_argument('-P', '--positive-classes', dest="positive_classes",
                                    help="Format pathogenic potentials to given precision "
                                    "[default=1].", nargs='+', default=[1], type=int)
+        parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
+                                   default=False, action="store_true")
+        parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
+                                   "[default=3].", default=3, type=int)
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
