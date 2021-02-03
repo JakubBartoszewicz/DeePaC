@@ -13,7 +13,7 @@ import os
 import shutil
 import multiprocessing
 
-from deepac.predict import predict_fasta, predict_npy, filter_fasta
+from deepac.predict import predict_fasta, predict_npy, filter_fasta, filter_paired_fasta
 from deepac.nn_train import RCNet, RCConfig
 from tensorflow.keras.utils import get_custom_objects
 from deepac.preproc import preproc
@@ -54,8 +54,16 @@ def run_filter(args):
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
         args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision,
-                 pred_uncertainty=args.std)
+    if args.paired_predictions is None:
+        filter_fasta(args.input, args.predictions, args.output,
+                     threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                     pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
+    else:
+        if args.paired_fasta is None:
+            args.paired_fasta = args.input
+        filter_paired_fasta(args.input, args.predictions, args.output, args.paired_fasta, args.paired_predictions,
+                            threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                            pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
 
 
 def run_preproc(args):
@@ -306,6 +314,10 @@ class MainRunner:
 
         parser_filter.add_argument('input',  help="Input file path [.fasta].")
         parser_filter.add_argument('predictions', help="Predictions in matching order [.npy].")
+        parser_filter.add_argument('-r', '--paired-fasta', dest="paired_fasta",
+                                   help="Second mate input file path [.fasta].")
+        parser_filter.add_argument('-R', '--paired-predictions', dest="paired_predictions",
+                                   help="Second mate predictions in matching order [.npy].")
         parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
         parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
                                    default=False, action="store_true")
@@ -314,6 +326,12 @@ class MainRunner:
                                    help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
+        parser_filter.add_argument('-n', '--n-classes', dest="n_classes",
+                                   help="Format pathogenic potentials to given precision "
+                                   "[default=2].", default=2, type=int)
+        parser_filter.add_argument('-P', '--positive-classes', dest="positive_classes",
+                                   help="Format pathogenic potentials to given precision "
+                                   "[default=1].", nargs='+', default=[1], type=int)
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command

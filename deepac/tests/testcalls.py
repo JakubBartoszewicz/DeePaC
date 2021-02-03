@@ -515,8 +515,6 @@ class Tester:
                             output_neg=os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"),
                             confidence_thresh=0.65,
                             output_undef=os.path.join("deepac-tests", "sample-test-filtered-paired-undef.fasta"),
-                            pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
-                                                          "deepac-test-e002-predictions-sample_test-std.npy"),
                             n_classes=n_classes,
                             positive_classes=positive_classes)
 
