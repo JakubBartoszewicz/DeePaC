@@ -148,7 +148,7 @@ def preproc(config):
         for i in range(n_files):
             start = i * slice_size
             end = min((i+1) * slice_size, n_all)
-            features_dataset = tf.data.Dataset.from_tensor_slices((x_train[start::end], y_train[start::end]))
+            features_dataset = tf.data.Dataset.from_tensor_slices((x_train[start:end], y_train[start:end]))
 
             serialized_features_dataset = features_dataset.map(tf_serialize_example)
 
