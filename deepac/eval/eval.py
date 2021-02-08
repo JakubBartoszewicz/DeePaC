@@ -13,6 +13,7 @@ import numpy as np
 import csv
 from deepac.predict import predict_array
 from tensorflow.keras.utils import get_custom_objects
+from termcolor import colored
 
 
 class EvalConfig:
@@ -39,6 +40,7 @@ class EvalConfig:
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
         self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
+        self.n_classes = config['Data'].getint('N_Classes')
 
         # Set the first and last epoch to evaluate
         self.epoch_start = config['Epochs'].getint('EpochStart')
@@ -147,12 +149,19 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
     y_test_matched = y_test
     missing = 0
     prediction_rate = 1
+    multiclass = True if evalconfig.n_classes > 2 else False
+    average = "macro" if multiclass else "binary"
+
     if np.isclose(evalconfig.confidence_thresh, evalconfig.thresh):
         # Assign classes using the chosen threshold
-        y_pred_class = (y_pred > evalconfig.thresh).astype(np.float)
-        y_pred_class[np.isnan(y_pred)] = np.nan
+        if multiclass:
+            y_pred_class = np.argmax(y_pred, axis=-1).astype(np.float)
+        else:
+            y_pred_class = (y_pred > evalconfig.thresh).astype(np.float)
+        y_pred_class[np.any(np.isnan(y_pred))] = np.nan
         y_pred_class_matched = y_pred_class
     else:
+        #TODO
         interval = np.abs(evalconfig.confidence_thresh - evalconfig.thresh)
         y_pred_class_pos = y_pred > (evalconfig.thresh + interval)
         y_pred_class_neg = y_pred < (evalconfig.thresh - interval)
@@ -173,26 +182,36 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
             y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = 1
     # Calculate performance measures
     log_loss = try_metric(mtr.log_loss, y_test, y_pred, eps=1e-07)
-    auroc = try_metric(mtr.roc_auc_score, y_test, y_pred)
-    aupr = try_metric(mtr.average_precision_score, y_test, y_pred)
+    auroc = try_metric(mtr.roc_auc_score, y_test, y_pred, multi_class='ovr')
+    if multiclass:
+        y_test_multi = np.zeros((y_test.shape[0], evalconfig.n_classes))
+        for i in range(y_test.shape[0]):
+            y_test_multi[i, y_test[i]] = 1
+        aupr = try_metric(mtr.average_precision_score, y_test_multi, y_pred)
+    else:
+        aupr = try_metric(mtr.average_precision_score, y_test, y_pred)
     acc = try_metric(mtr.accuracy_score, y_test_main, y_pred_class)
     mcc = try_metric(mtr.matthews_corrcoef, y_test_main, y_pred_class)
-    f1 = try_metric(mtr.f1_score, y_test_main, y_pred_class)
-    precision = try_metric(mtr.precision_score, y_test_main, y_pred_class)
-    recall = try_metric(mtr.recall_score, y_test_main, y_pred_class)
-    try:
-        tn, fp, fn, tp = mtr.confusion_matrix(y_test_matched, y_pred_class_matched).ravel()
-    except Exception as err:
-        print(err)
-        tn, fp, fn, tp = np.nan, np.nan, np.nan, np.nan
-    try:
-        if ignore_unmatched:
-            specificity = tn / (tn + fp)
-        else:
-            specificity = tn / (tn + fp + missing)
-    except Exception as err:
-        print(err)
-        specificity = np.nan
+    f1 = try_metric(mtr.f1_score, y_test_main, y_pred_class, average=average)
+    precision = try_metric(mtr.precision_score, y_test_main, y_pred_class, average=average)
+    recall = try_metric(mtr.recall_score, y_test_main, y_pred_class, average=average)
+
+    if multiclass:
+        tn = fp = fn = tp = specificity = "n/a"
+    else:
+        try:
+            tn, fp, fn, tp = mtr.confusion_matrix(y_test_matched, y_pred_class_matched).ravel()
+        except Exception as err:
+            print(err)
+            tn, fp, fn, tp = np.nan, np.nan, np.nan, np.nan
+        try:
+            if ignore_unmatched:
+                specificity = tn / (tn + fp)
+            else:
+                specificity = tn / (tn + fp + missing)
+        except Exception as err:
+            print(err)
+            specificity = np.nan
 
     # Save the results
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
@@ -200,6 +219,10 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan, ig
         file_writer.writerow((n_epoch, dataset_name, tp, tn, fp, fn, missing, log_loss, acc, auroc, aupr, precision,
                               recall, specificity, mcc, f1, prediction_rate))
     if evalconfig.do_plots:
+        if multiclass:
+            print(colored("ROC and PR curve plots possible for binary classification only.", "yellow"))
+            return
+
         if not np.isnan(auroc):
             fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
             plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
