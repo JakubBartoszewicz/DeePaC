@@ -51,6 +51,7 @@ class EvalSpecConfig:
         self.thresh = config['Data'].getfloat('Threshold')
         self.read_confidence_thresh = config['Data'].getfloat('ReadConfidenceThresh')
         self.confidence_thresh = config['Data'].getfloat('GenomeConfidenceThresh')
+        self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 
         # Set plotting
         self.do_plots = config['Options'].getboolean('Do_plots')

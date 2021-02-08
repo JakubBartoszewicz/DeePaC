@@ -41,7 +41,7 @@ class EvalEnsConfig:
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
         self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
-        self.n_classes = config['Data'].getint('N_Classes')
+        self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 
         # Set the first and last epoch to evaluate
         self.epoch = [int(e) for e in config['Epochs']['Epoch'].split(',')]

@@ -429,6 +429,7 @@ class Tester:
         if self.multiclass:
             config['Data']['DataSet'] = 'sample_val_multi'
             config['Data']['PairedSet'] = 'sample_val_multi'
+            config['Data']['N_Classes'] = '4'
             config['Options']['Do_plots'] = 'False'
         evaluate_reads(config)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
@@ -444,6 +445,7 @@ class Tester:
         if self.multiclass:
             config['Data']['DataSet'] = 'sample_val_multi'
             config['Data']['PairedSet'] = 'sample_val_multi'
+            config['Data']['N_Classes'] = '4'
             config['Options']['Do_plots'] = 'False'
         evaluate_ensemble(config)
         assert (os.path.isfile(os.path.join("deepac-tests",
