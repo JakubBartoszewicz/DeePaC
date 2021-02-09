@@ -40,7 +40,11 @@ class EvalEnsConfig:
         self.name_prefix = self.ensname
         # Set the classification threshold
         self.thresh = config['Data'].getfloat('Threshold')
-        self.confidence_thresh = config['Data'].getfloat('ConfidenceThresh')
+        self.confidence_thresh = config['Data'].get('ConfidenceThresh', fallback=None)
+        if self.confidence_thresh == "none" or self.confidence_thresh == "None":
+            self.confidence_thresh = None
+        else:
+            self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 
         # Set the first and last epoch to evaluate
@@ -48,7 +52,7 @@ class EvalEnsConfig:
 
         self.do_plots = config['Options'].getboolean('Do_plots')
         self.do_pred = config['Options'].getboolean('Do_Pred')
-        self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
+        self.force_concordance = config['Options'].getboolean('force_concordance')
 
 
 def evaluate_ensemble(config):
@@ -74,8 +78,7 @@ def evaluate_ensemble(config):
     print("Predicting labels for {}_data.npy...".format(evalconfig.dataset_path))
 
     y_pred_1 = predict(evalconfig, x_test, do_pred=evalconfig.do_pred)
-    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path,
-                    ignore_unmatched=evalconfig.ignore_unmatched)
+    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
 
     if evalconfig.pairedset_path is not None:
         print("Loading {}_data.npy...".format(evalconfig.pairedset_path))
@@ -85,12 +88,10 @@ def evaluate_ensemble(config):
 
         print("Predicting labels for {}_data.npy...".format(evalconfig.pairedset_path))
         y_pred_2 = predict(evalconfig, x_test, paired=True, do_pred=evalconfig.do_pred)
-        get_performance(evalconfig, y_test, y_pred_2,  dataset_name=evalconfig.pairedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_2,  dataset_name=evalconfig.pairedset_path)
 
         y_pred_combined = np.mean([y_pred_1, y_pred_2], axis=0)
-        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
 
 
 def predict(evalconfig, x_test, paired=False, do_pred=True):

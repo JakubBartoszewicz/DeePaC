@@ -49,8 +49,16 @@ class EvalSpecConfig:
         self.name_prefix = config['Data']['RunName']
         # Set threshold
         self.thresh = config['Data'].getfloat('Threshold')
-        self.read_confidence_thresh = config['Data'].getfloat('ReadConfidenceThresh')
-        self.confidence_thresh = config['Data'].getfloat('GenomeConfidenceThresh')
+        self.read_confidence_thresh = config['Data'].get('ReadConfidenceThresh', fallback=None)
+        if self.read_confidence_thresh == "none" or self.read_confidence_thresh == "None":
+            self.read_confidence_thresh = None
+        else:
+            self.read_confidence_thresh = float(self.read_confidence_thresh)
+        self.confidence_thresh = config['Data'].get('GenomeConfidenceThresh', fallback=None)
+        if self.confidence_thresh == "none" or self.confidence_thresh == "None":
+            self.confidence_thresh = None
+        else:
+            self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 
         # Set plotting
@@ -105,8 +113,7 @@ def evaluate_species(config):
     y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
                                          threshold=evalconfig.thresh,
                                          confidence_thresh=evalconfig.read_confidence_thresh)
-    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path,
-                    ignore_unmatched=evalconfig.ignore_unmatched)
+    get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
 
     if evalconfig.pairedset_path is not None:
         print("Loading {}...".format(evalconfig.pairedpred_path))      
@@ -116,13 +123,11 @@ def evaluate_species(config):
         y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
                                              threshold=evalconfig.thresh,
                                              confidence_thresh=evalconfig.read_confidence_thresh)
-        get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path)
 
         y_pred_combined_raw = np.mean([y_pred_1_raw, y_pred_2_raw], axis=0)
         y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
                                                     threshold=evalconfig.thresh,
                                                     confidence_thresh=evalconfig.read_confidence_thresh)
-        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path,
-                        ignore_unmatched=evalconfig.ignore_unmatched)
+        get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
 
