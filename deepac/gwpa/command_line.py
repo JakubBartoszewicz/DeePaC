@@ -32,7 +32,7 @@ def add_gwpa_parser(gparser):
                                   help="Directory containing the predictions (.npy) of the fragmented genomes")
     parser_genomemap.add_argument("-g", "--genomes-dir", required=True, help="Directory containing genomes (.genome)")
     parser_genomemap.add_argument("-o", "--out-dir", default=".", help="Output directory")
-    parser_genomemap.add_argument("-t", "--target-class", dest="target_class", type=int,
+    parser_genomemap.add_argument("-T", "--target-class", dest="target_class", type=int,
                                   help="Target class ID. Leave unset for binary classification")
     parser_genomemap.set_defaults(func=run_genomemap)
 
@@ -69,6 +69,8 @@ def add_gwpa_parser(gparser):
                                    help="Use Integrated Gradients instead of DeepLIFT.")
     parser_ntcontribs.add_argument("--no-check", dest="no_check", action="store_true",
                                    help="Disable additivity check.")
+    parser_ntcontribs.add_argument("-T", "--target-class", dest="target_class", type=int,
+                                   help="Target class ID. Leave unset for binary classification")
     parser_ntcontribs.set_defaults(func=run_ntcontribs)
 
     parser_factiv = gwpa_subparsers.add_parser('factiv', help='Get filter activations.')

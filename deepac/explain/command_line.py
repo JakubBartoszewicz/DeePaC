@@ -69,6 +69,8 @@ def add_explain_parser(xparser):
     partial_group.add_argument("-e", "--easy-partial", dest="easy_partial", action="store_true",
                                help="Calculate easy partial nucleotide contributions per filter. "
                                     "Works for the first convolutional layer only; disables all-occurences mode.")
+    parser_fcontribs.add_argument("-T", "--target-class", dest="target_class", type=int,
+                                  help="Target class ID. Leave unset for binary classification")
     parser_fcontribs.set_defaults(func=run_fcontribs)
 
     parser_franking = explain_subparsers.add_parser('franking', help='Generate filter rankings.')
@@ -81,6 +83,8 @@ def add_explain_parser(xparser):
     parser_franking.add_argument("-y", "--true-label", required=True, help="File with true read labels (.npy)")
     parser_franking.add_argument("-p", "--pred-label", required=True, help="File with predicted read labels (.npy)")
     parser_franking.add_argument("-o", "--out-dir", required=True, help="Output directory")
+    parser_franking.add_argument("-T", "--target-class", dest="target_class", type=int,
+                                 help="Target class ID. Leave unset for binary classification")
     parser_franking.set_defaults(func=run_franking)
 
     parser_fa2transfac = explain_subparsers.add_parser('fa2transfac', help='Calculate transfac from fasta files.')

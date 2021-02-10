@@ -17,7 +17,12 @@ def get_filter_ranking(args):
     y_truth = np.load(args.true_label, mmap_mode='r')
     # load predicted labels
     y_pred = np.load(args.pred_label, mmap_mode='r')
-    y_pred = (y_pred > 0.5).astype('int32').flatten()
+
+    target = args.target_class
+    if target is None:
+        y_pred = (y_pred > 0.5).astype('int32').flatten()
+    else:
+        y_pred = (np.argmax(y_pred, axis=-1) == target).astype('int32').flatten()
 
     # nonzero scores per filter
     filter_scores = dict()
