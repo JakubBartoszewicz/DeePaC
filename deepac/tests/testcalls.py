@@ -4,6 +4,7 @@ from deepac.nn_train import RCConfig, RCNet
 from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_ens import evaluate_ensemble
+from deepac.eval.eval_species import evaluate_species
 from deepac.convert import convert_cudnn
 from deepac import preproc
 from deepac.tests import datagen
@@ -424,6 +425,7 @@ class Tester:
 
     def test_eval(self):
         """Test evaluating."""
+        print("TEST: Evaluating reads...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval-test.ini"))
         if self.multiclass:
@@ -440,6 +442,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
 
+        print("TEST: Evaluating ensembles...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
         if self.multiclass:
@@ -455,6 +458,23 @@ class Tester:
                                                 "ens01_sample_val_auc.png"))), "Evaluation failed."
             assert (os.path.isfile(os.path.join("deepac-tests",
                                                 "ens01_sample_val_aupr.png"))), "Evaluation failed."
+
+        print("TEST: Evaluating species...")
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_species-test.ini"))
+        if self.multiclass:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['N_Classes'] = '4'
+            config['Options']['Do_plots'] = 'False'
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_aupr.png"))), "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""
