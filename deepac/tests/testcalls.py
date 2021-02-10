@@ -4,6 +4,7 @@ from deepac.nn_train import RCConfig, RCNet
 from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_ens import evaluate_ensemble
+from deepac.eval.eval_species import evaluate_species
 from deepac.convert import convert_cudnn
 from deepac import preproc
 from deepac.tests import datagen
@@ -455,6 +456,17 @@ class Tester:
                                                 "ens01_sample_val_auc.png"))), "Evaluation failed."
             assert (os.path.isfile(os.path.join("deepac-tests",
                                                 "ens01_sample_val_aupr.png"))), "Evaluation failed."
+
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_species-test.ini"))
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_aupr.png"))), "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""

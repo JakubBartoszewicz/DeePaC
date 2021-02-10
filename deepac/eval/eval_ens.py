@@ -43,7 +43,7 @@ class EvalEnsConfig:
         self.confidence_thresh = config['Data'].get('ConfidenceThresh', fallback=None)
         if self.confidence_thresh == "none" or self.confidence_thresh == "None":
             self.confidence_thresh = None
-        else:
+        elif self.confidence_thresh is not None:
             self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 

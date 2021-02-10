@@ -52,12 +52,12 @@ class EvalSpecConfig:
         self.read_confidence_thresh = config['Data'].get('ReadConfidenceThresh', fallback=None)
         if self.read_confidence_thresh == "none" or self.read_confidence_thresh == "None":
             self.read_confidence_thresh = None
-        else:
+        elif self.read_confidence_thresh is not None:
             self.read_confidence_thresh = float(self.read_confidence_thresh)
         self.confidence_thresh = config['Data'].get('GenomeConfidenceThresh', fallback=None)
         if self.confidence_thresh == "none" or self.confidence_thresh == "None":
             self.confidence_thresh = None
-        else:
+        elif self.confidence_thresh is not None:
             self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 

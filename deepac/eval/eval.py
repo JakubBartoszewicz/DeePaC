@@ -42,7 +42,7 @@ class EvalConfig:
         self.confidence_thresh = config['Data'].get('ConfidenceThresh', fallback=None)
         if self.confidence_thresh == "none" or self.confidence_thresh == "None":
             self.confidence_thresh = None
-        else:
+        elif self.confidence_thresh is not None:
             self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
 
@@ -149,7 +149,6 @@ def try_metric(function, *args, **kwargs):
 def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     """Get performance measures from predictions using the supplied configuration."""
     y_test_main = y_test
-    y_test_matched = y_test
     missing = 0
     prediction_rate = 1
     multiclass = True if evalconfig.n_classes > 2 else False
