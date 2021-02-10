@@ -94,17 +94,23 @@ def ensemble(predictions_list, outpath_npy):
     np.save(outpath_npy, y_pred)
 
 
-def predict_multiread(array, threshold=0.5, confidence_threshold=0.5):
+def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes=2):
     """Predict from multiple reads."""
-    if np.isclose(confidence_threshold, threshold):
-        pred = np.mean(array)
+    multiclass = n_classes > 2
+    if confidence_threshold is None or \
+            (np.isclose(confidence_threshold, threshold) and not multiclass):
+        pred = np.mean(array, axis=0)
     else:
-        interval = np.abs(confidence_threshold - threshold)
-        y_pred_class_pos = array > (threshold + interval)
-        y_pred_class_neg = array < (threshold - interval)
-        preds = np.concatenate((array[y_pred_class_pos], array[y_pred_class_neg]))
+        if multiclass:
+            above_thresh = np.max(array, axis=-1) > confidence_threshold
+            preds = array[above_thresh]
+        else:
+            interval = np.abs(confidence_threshold - threshold)
+            y_pred_class_pos = array > (threshold + interval)
+            y_pred_class_neg = array < (threshold - interval)
+            preds = np.concatenate((array[y_pred_class_pos], array[y_pred_class_neg]))
         if preds.size > 0:
-            pred = np.mean(preds)
+            pred = np.mean(preds, axis=0)
         else:
             pred = np.nan
     return pred

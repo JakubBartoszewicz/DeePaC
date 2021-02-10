@@ -153,6 +153,10 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     prediction_rate = 1
     multiclass = True if evalconfig.n_classes > 2 else False
     average = "macro" if multiclass else "binary"
+    y_orig_pred_undef = np.isnan(y_pred)
+    if len(y_orig_pred_undef.shape) > 1:
+        y_orig_pred_undef = np.any(y_orig_pred_undef, axis=-1)
+    y_orig_pred_def = np.logical_not(y_orig_pred_undef)
 
     if evalconfig.confidence_thresh is None or \
             (np.isclose(evalconfig.confidence_thresh, evalconfig.thresh) and not multiclass):
@@ -162,17 +166,19 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
         else:
             y_pred = y_pred.flatten()
             y_pred_class = (y_pred > evalconfig.thresh).astype(np.float)
-        y_pred_class_undef = np.isnan(y_pred)
+        y_pred_class_undef = y_orig_pred_undef
         y_pred_class[y_pred_class_undef] = np.nan
         y_pred_class_matched = y_pred_class[np.logical_not(y_pred_class_undef)]
         y_test_matched = y_test[np.logical_not(y_pred_class_undef)]
     else:
         interval = np.abs(evalconfig.confidence_thresh - evalconfig.thresh)
         if multiclass:
-            y_pred_class_def = np.all([np.logical_not(np.isnan(y_pred)),
+            y_pred_class_def = np.all([y_orig_pred_def,
                                        np.max(y_pred, axis=-1) > evalconfig.confidence_thresh], axis=0)
             y_pred_class_undef = np.logical_not(y_pred_class_def)
-            y_pred_class_matched = np.argmax(y_pred, axis=-1).astype(np.float)[np.logical_not(y_pred_class_undef)]
+            y_pred_class = np.argmax(y_pred, axis=-1).astype(np.float)
+            y_pred_class[y_pred_class_undef] = np.nan
+            y_pred_class_matched = y_pred_class[np.logical_not(y_pred_class_undef)]
             y_test_matched = y_test[y_pred_class_def]
             y_pred_class = y_pred_class_matched
             y_test_main = y_test_matched
@@ -190,8 +196,11 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             y_test_matched = y_test[y_pred_class_def]
 
     if np.any(y_pred_class_undef):
-        y_pred_class[np.all([y_pred_class_undef, y_test], axis=0)] = 0
-        y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = 1
+        if multiclass:
+            print(colored("Cannot handle NaN predictions in multiclass setting.", "yellow"))
+        else:
+            y_pred_class[np.all([y_pred_class_undef, y_test], axis=0)] = 0
+            y_pred_class[np.all([y_pred_class_undef, np.logical_not(y_test)], axis=0)] = 1
 
         missing = np.sum(y_pred_class_undef.astype(np.float))
         prediction_rate = (y_test.shape[0] - missing) / y_test.shape[0]
@@ -199,19 +208,15 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     # Calculate performance measures
     # missing predictions due to confidence thresh don't affect AUPR, AUC & log loss
     # (but NaNs present in the original predictions must be filtered)
-    log_loss = try_metric(mtr.log_loss, y_test[np.logical_not(np.isnan(y_pred))],
-                          y_pred[np.logical_not(np.isnan(y_pred))], eps=1e-07)
-    auroc = try_metric(mtr.roc_auc_score, y_test[np.logical_not(np.isnan(y_pred))],
-                       y_pred[np.logical_not(np.isnan(y_pred))], multi_class='ovr')
+    log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07)
+    auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], multi_class='ovr')
     if multiclass:
         y_test_multi = np.zeros((y_test.shape[0], evalconfig.n_classes))
         for i in range(y_test.shape[0]):
             y_test_multi[i, y_test[i]] = 1
-        aupr = try_metric(mtr.average_precision_score, y_test_multi[np.logical_not(np.isnan(y_pred))],
-                          y_pred[np.logical_not(np.isnan(y_pred))])
+        aupr = try_metric(mtr.average_precision_score, y_test_multi[y_orig_pred_def], y_pred[y_orig_pred_def])
     else:
-        aupr = try_metric(mtr.average_precision_score, y_test[np.logical_not(np.isnan(y_pred))],
-                          y_pred[np.logical_not(np.isnan(y_pred))])
+        aupr = try_metric(mtr.average_precision_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def])
 
     # missing predictions don't affect mcc & precision
     mcc = try_metric(mtr.matthews_corrcoef, y_test_matched, y_pred_class_matched)

@@ -40,9 +40,7 @@ class EvalSpecConfig:
             self.pairedpred_path = None
 
         # Set the evaluation dataset name                                         
-        self.poscsv_path = config['Data']['PosCSV']                                     
-        # Set the paired dataset name                                       
-        self.negcsv_path = config['Data']['NegCSV']
+        self.classcsv_path = config['Data']['ClassCSV']
         # Set csv delimiter
         self.delim = config['Data']['Delim']
         # Set Run name
@@ -66,30 +64,29 @@ class EvalSpecConfig:
         self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
 
 
-def get_species_preds(y_pred, poscsv_path, negcsv_path, delimiter=';',
-                      threshold=0.5, confidence_thresh=0.5):
+def get_species_preds(y_pred, class_csv_path, delimiter=';',
+                      threshold=0.5, confidence_thresh=None, n_classes=2):
     """Generate species-wise predictions."""
-    neglist = []
-    with open(negcsv_path, 'r') as negcsv:
-        negreader = csv.reader(negcsv, delimiter=delimiter)
-        for row in negreader:
-            neglist.append((row[0], int(row[1])))
-    poslist = []
-    with open(poscsv_path, 'r') as poscsv:
-        posreader = csv.reader(poscsv, delimiter=delimiter)
-        for row in posreader:
-            poslist.append((row[0], int(row[1])))
+    species_list = []
+    with open(class_csv_path, 'r') as class_csv:
+        classreader = csv.reader(class_csv, delimiter=delimiter)
+        for row in classreader:
+            species_list.append((int(row[0]), row[1], int(row[2])))
     used = 0
     y_result = []
-    for species in neglist:
-        pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh)
-        y_result.append(pred)
-        used = used + species[1]
-    for species in poslist:
-        pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh)
-        y_result.append(pred)
-        used = used + species[1]
-    return np.asarray(y_result), np.concatenate((np.repeat(0, len(neglist)), np.repeat(1, len(poslist))))
+    class_dict = {}
+    labels = []
+    for c in range(n_classes):
+        class_dict[c] = []
+    for row in species_list:
+        labels.append(row[0])
+        class_dict[row[0]].append((row[1], row[2]))
+    for c in range(n_classes):
+        for species in class_dict[c]:
+            pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh, n_classes)
+            y_result.append(pred)
+            used = used + species[1]
+    return np.asarray(y_result), np.asarray(labels)
 
 
 def evaluate_species(config):
@@ -110,9 +107,10 @@ def evaluate_species(config):
 
     # Evaluate for each saved model in epoch range
     print("Predicting labels for {}...".format(evalconfig.datapred_path))
-    y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+    y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.classcsv_path,
                                          threshold=evalconfig.thresh,
-                                         confidence_thresh=evalconfig.read_confidence_thresh)
+                                         confidence_thresh=evalconfig.read_confidence_thresh,
+                                         n_classes=evalconfig.n_classes)
     get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
 
     if evalconfig.pairedset_path is not None:
@@ -120,14 +118,16 @@ def evaluate_species(config):
         y_pred_2_raw = np.load("{}/{}".format(evalconfig.dir_path, evalconfig.pairedpred_path))
 
         print("Predicting labels for {}...".format(evalconfig.pairedpred_path))
-        y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+        y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.classcsv_path,
                                              threshold=evalconfig.thresh,
-                                             confidence_thresh=evalconfig.read_confidence_thresh)
+                                             confidence_thresh=evalconfig.read_confidence_thresh,
+                                             n_classes=evalconfig.n_classes)
         get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path)
 
         y_pred_combined_raw = np.mean([y_pred_1_raw, y_pred_2_raw], axis=0)
-        y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.poscsv_path, evalconfig.negcsv_path,
+        y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.classcsv_path,
                                                     threshold=evalconfig.thresh,
-                                                    confidence_thresh=evalconfig.read_confidence_thresh)
+                                                    confidence_thresh=evalconfig.read_confidence_thresh,
+                                                    n_classes=evalconfig.n_classes)
         get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
 

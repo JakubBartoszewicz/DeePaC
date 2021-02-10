@@ -425,6 +425,7 @@ class Tester:
 
     def test_eval(self):
         """Test evaluating."""
+        print("TEST: Evaluating reads...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval-test.ini"))
         if self.multiclass:
@@ -441,6 +442,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
 
+        print("TEST: Evaluating ensembles...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
         if self.multiclass:
@@ -457,8 +459,14 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests",
                                                 "ens01_sample_val_aupr.png"))), "Evaluation failed."
 
+        print("TEST: Evaluating species...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_species-test.ini"))
+        if self.multiclass:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['N_Classes'] = '4'
+            config['Options']['Do_plots'] = 'False'
         evaluate_species(config)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-species-metrics.csv"))), "Evaluation failed."
