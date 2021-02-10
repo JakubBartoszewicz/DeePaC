@@ -96,13 +96,8 @@ class Tester:
         print("TEST: Filtering...")
         self.test_filter()
 
-        if self.multiclass and (self.do_all or self.gwpa or self.explain):
-            print(colored("Explainability workflows assume binary classification. Skipping...", "yellow"))
-            print(colored("TEST: OK", "green"))
-            return
-
         if self.do_all or self.gwpa:
-            gwpatester = GWPATester(self.n_cpus, self.additivity_check)
+            gwpatester = GWPATester(self.n_cpus, self.additivity_check, target_class=1 if self.multiclass else None)
             print("X-TEST: gff2genome...")
             gwpatester.test_gff2genome()
             print("X-TEST: Fragmenting genomes...")
@@ -115,6 +110,11 @@ class Tester:
             gwpatester.test_factiv()
             print("X-TEST: Filter enrichment...")
             gwpatester.test_fenrichment()
+
+        if self.multiclass and (self.do_all or self.explain):
+            print(colored("Explainability workflows assume binary classification. Skipping...", "yellow"))
+            print(colored("TEST: OK", "green"))
+            return
 
         if self.do_all or self.explain:
             explaintester = ExplainTester(self.n_cpus, self.additivity_check)

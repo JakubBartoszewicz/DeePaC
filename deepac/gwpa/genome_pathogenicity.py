@@ -14,6 +14,8 @@ def genome_map(args):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    target = args.target_class
+
     mean_scores = []
 
     # for each fragmented genome do
@@ -31,7 +33,10 @@ def genome_map(args):
 
             # load predictions per fragment
             preds_file = args.dir_fragmented_genomes_preds + "/" + genome + "_predictions.npy"
-            preds = np.load(preds_file)
+            if target is None:
+                preds = np.load(preds_file)
+            else:
+                preds = np.load(preds_file)[:, target]
 
             assert num_fragments == len(preds), \
                 print("Something went wrong! Number fragments in fasta file and predictions differ ...")
@@ -76,7 +81,8 @@ def genome_map(args):
 
                 # compute mean pathogenicity score per nucleotide
                 genome_patho_dict[seq_name] /= genome_read_counter
-                genome_patho_dict[seq_name] = genome_patho_dict[seq_name] - 0.5
+                if target is None:
+                    genome_patho_dict[seq_name] = genome_patho_dict[seq_name] - 0.5
 
                 # convert array of nucelotide pathogenicity scores to intervals (-> bedgraph format)
                 strain_len = int(genome_info.loc[seq_name])
@@ -114,7 +120,9 @@ def genome_map(args):
             df[['start', 'end']] = df[['start', 'end']].astype(int)
             df.to_csv(out_file, sep="\t", index=False, header=False)
 
-            mean_score = 0.5 + sum(x * y for x, y in zip(df.score, df.end-df.start)) / sum(df.end-df.start)
+            mean_score = sum(x * y for x, y in zip(df.score, df.end-df.start)) / sum(df.end-df.start)
+            if target is None:
+                mean_score = mean_score + 0.5
             mean_scores.append((genome.replace("_fragmented_genomes", ""), mean_score))
 
         mean_scores.sort(key=itemgetter(1))

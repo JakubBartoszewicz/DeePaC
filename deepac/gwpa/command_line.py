@@ -32,6 +32,8 @@ def add_gwpa_parser(gparser):
                                   help="Directory containing the predictions (.npy) of the fragmented genomes")
     parser_genomemap.add_argument("-g", "--genomes-dir", required=True, help="Directory containing genomes (.genome)")
     parser_genomemap.add_argument("-o", "--out-dir", default=".", help="Output directory")
+    parser_genomemap.add_argument("-t", "--target-class", dest="target_class", type=int,
+                                  help="Target class ID. Leave unset for binary classification")
     parser_genomemap.set_defaults(func=run_genomemap)
 
     parser_granking = gwpa_subparsers.add_parser('granking', help='Generate gene rankings.')

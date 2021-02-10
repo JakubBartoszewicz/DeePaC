@@ -20,11 +20,12 @@ class GWPATester:
 
     """
 
-    def __init__(self, n_cpus=8, additivity_check=False):
+    def __init__(self, n_cpus=8, additivity_check=False, target_class=None):
         self.n_cpus = n_cpus
         self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5")
         self.outpath = os.path.join("deepac-tests", "gwpa")
         self.additivity_check = additivity_check
+        self.target_class = target_class
         self.__gen_data()
 
     def __gen_data(self):
@@ -91,7 +92,8 @@ class GWPATester:
         args = Namespace(dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          dir_fragmented_genomes_preds=os.path.join(self.outpath, "genome_frag_pred"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
-                         out_dir=os.path.join(self.outpath, "bedgraph"))
+                         out_dir=os.path.join(self.outpath, "bedgraph"),
+                         target_class=self.target_class)
         genome_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_pathogenicity.bedgraph"))), \
