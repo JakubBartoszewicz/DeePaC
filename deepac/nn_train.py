@@ -127,6 +127,12 @@ class RCConfig:
             self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
             # Define the network architecture
+            try:
+                self.n_classes = config['Architecture'].getint('N_Classes')
+            except KeyError:
+                self.n_classes = 2
+            if self.n_classes < 2:
+                raise ValueError("Number of classes must be greater or equal to 2")
             self.rc_mode = config['Architecture']['RC_Mode']
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
@@ -160,19 +166,19 @@ class RCConfig:
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
             try:
-                self.input_scale = config['Architecture'].getint('Scale_Input_Dim')
+                self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim')
             except KeyError:
                 self.input_scale = 1
             try:
-                self.full_rc_att = config['Architecture'].getboolean('Full_RC_Attention')
-                self.full_rc_ffn = config['Architecture'].getboolean('Full_RC_FFN')
-                self.n_tformer = config['Architecture'].getint('Tformer_Blocks')
-                self.tformer_heads = [int(u) for u in config['Architecture']['Tformer_Heads'].split(',')]
-                self.tformer_dim = [int(u) for u in config['Architecture']['Tformer_Dim'].split(',')]
-                self.tformer_edim = [int(u) for u in config['Architecture']['Tformer_EDim'].split(',')]
-                self.tformer_perf_dim = [int(u) for u in config['Architecture']['Tformer_Performer_Dim'].split(',')]
-                self.tformer_dropout = config['Architecture'].getfloat('Tformer_Dropout')
-                self.tformer_keep_edim = config['Architecture'].getboolean('Tformer_Keep_Edim')
+                self.full_rc_att = config['ArchitectureExtras'].getboolean('Full_RC_Attention')
+                self.full_rc_ffn = config['ArchitectureExtras'].getboolean('Full_RC_FFN')
+                self.n_tformer = config['ArchitectureExtras'].getint('Tformer_Blocks')
+                self.tformer_heads = [int(u) for u in config['ArchitectureExtras']['Tformer_Heads'].split(',')]
+                self.tformer_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Dim'].split(',')]
+                self.tformer_edim = [int(u) for u in config['ArchitectureExtras']['Tformer_EDim'].split(',')]
+                self.tformer_perf_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Performer_Dim'].split(',')]
+                self.tformer_dropout = config['ArchitectureExtras'].getfloat('Tformer_Dropout')
+                self.tformer_keep_edim = config['ArchitectureExtras'].getboolean('Tformer_Keep_Edim')
             except KeyError:
                 self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
@@ -920,11 +926,18 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x,
                                                                           training=self.config.dropout_training_mode)
 
-        # Output layer for binary classification
-        x = Dense(1,
-                  kernel_initializer=self.config.initializers["out"],
-                  kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+        if self.config.n_classes == 2:
+            # Output layer for binary classification
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            # Output layer for binary classification
+            x = Dense(self.config.n_classes,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1148,12 +1161,24 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = self._add_rc_merge_dense(x, 1)
+            if self.config.n_classes == 2:
+                x = self._add_rc_merge_dense(x, 1)
+            else:
+                x = self._add_rc_merge_dense(x, self.config.n_classes)
         else:
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+            if self.config.n_classes == 2:
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -1397,8 +1422,11 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            # Output layer for binary classification
-            x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            else:
+                x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.n_classes)
         else:
             # Dense layers
             x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
@@ -1418,11 +1446,20 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout,
                             seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-            # Output layer for binary classification
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid', dtype='float32')(x)
+
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs_fwd, x)
@@ -1431,7 +1468,11 @@ class RCNet:
         """Compile model and save model summaries"""
         if float(tf.__version__[:3]) < 2.2 or self.config.epoch_start == 0:
             print("Compiling...")
-            self.model.compile(loss='binary_crossentropy',
+            if self.config.n_classes == 2:
+                loss = 'binary_crossentropy'
+            else:
+                loss = 'sparse_categorical_crossentropy'
+            self.model.compile(loss=loss,
                                optimizer=self.config.optimizer,
                                metrics=['accuracy'])
 

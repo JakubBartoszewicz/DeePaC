@@ -19,6 +19,10 @@ def nt_map(args, allow_eager=False):
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
+    target = args.target_class
+    if target is None:
+        target = 0
+
     ref_samples = get_reference_seqs(args, args.read_length)
     if tf.executing_eagerly() and not allow_eager:
         print("Using SHAP. Disabling eager execution...")
@@ -49,10 +53,10 @@ def nt_map(args, allow_eager=False):
             scores_nt_chunks = []
             while i < num_fragments:
                 if args.gradient:
-                    contribs_chunk = explainer.shap_values(records[i:i + chunk_size, :])[0]
+                    contribs_chunk = explainer.shap_values(records[i:i + chunk_size, :])[target]
                 else:
                     contribs_chunk = \
-                        explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[0]
+                        explainer.shap_values(records[i:i+chunk_size, :], check_additivity=check_additivity)[target]
                 scores_nt_chunk = np.sum(contribs_chunk, axis=-1)
                 scores_nt_chunks.append(scores_nt_chunk)
                 i = i + chunk_size

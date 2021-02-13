@@ -16,14 +16,15 @@ class ExplainTester:
 
     """
 
-    def __init__(self, n_cpus=8, additivity_check=False):
+    def __init__(self, n_cpus=8, additivity_check=False, target_class=None):
         self.n_cpus = n_cpus
         self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5")
-        self.neg_fasta = os.path.join("deepac-tests", "sample-val-neg.fasta")
-        self.pos_fasta = os.path.join("deepac-tests", "sample-val-pos.fasta")
+        self.neg_fasta = os.path.join("deepac-tests", "sample-val-0.fasta")
+        self.pos_fasta = os.path.join("deepac-tests", "sample-val-1.fasta")
         self.test_data = os.path.join("deepac-tests", "sample_val_data.npy")
         self.outpath = os.path.join("deepac-tests", "explain")
         self.additivity_check = additivity_check
+        self.target_class = target_class
 
     def test_maxact(self):
         """Test maxact (DeepBind) scores."""
@@ -42,7 +43,7 @@ class ExplainTester:
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs"), ref_mode="N",
                          inter_neuron=None, chunk_size=500, all_occurrences=False,
                          do_lstm=False, inter_layer=1, easy_partial=True, partial=False, train_data=None,
-                         no_check=(not self.additivity_check))
+                         no_check=(not self.additivity_check), target_class=self.target_class)
         get_filter_contribs(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "fasta",
                                             "sample_val_data_motifs_filter_1.fasta"))), "Fcontribs failed."
@@ -57,7 +58,7 @@ class ExplainTester:
         y = os.path.join("deepac-tests", "sample_val_labels.npy")
         y_pred = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy")
         args = Namespace(mode="original", scores_dir=scores_dir, true_label=y, pred_label=y_pred,
-                         out_dir=os.path.join(self.outpath, "franking"))
+                         out_dir=os.path.join(self.outpath, "franking"), target_class=self.target_class)
         get_filter_ranking(args)
 
         assert (os.path.isfile(os.path.join(self.outpath, "franking", "original",

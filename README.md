@@ -27,7 +27,7 @@ If you want to run the predictions in real-time during an Illumina sequencing ru
 ## Installation
 
 We recommend using Bioconda (based on the `conda` package manager) or custom Docker images based on official Tensorflow images.
-Alternatively, a `pip` installation is possible as well.
+Alternatively, a `pip` installation is possible as well. For installation on IBM Power Systems (e.g. AC992), see separate [installation instructions (experimental)](https://gitlab.com/rki_bioinformatics/DeePaC/-/blob/master/dockerfiles/ppc64le/README.md).
 
 ### With Bioconda (recommended)
  [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/deepac/README.html)
@@ -56,6 +56,11 @@ conda install tensorflow-gpu deepac
 conda install deepac
 ```
 
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
+```
+deepac getmodels --fetch
+```
+
 If you want to install the plugins as well, use:
 
 ```
@@ -64,35 +69,47 @@ conda install deepacvir deepacstrain
 
 ### With Docker (also recommended)
 
-Requirements: install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
-For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+Requirements: 
+* install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
+* For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+
 See [TF Docker installation guide](https://www.tensorflow.org/install/docker) and the 
 [NVIDIA Docker support installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) 
-for details.
+for details. The guide below assumes you have Docker 19.03 or above.
 
 You can then pull the desired image:
 ```
 # Basic installation - CPU only
-docker pull jbartoszewicz/deepac:0.13.3
+docker pull dacshpi/deepac:0.13.5
 
 # For GPU support
-docker pull jbartoszewicz/deepac:0.13.3-gpu
+docker pull dacshpi/deepac:0.13.5-gpu
 ```
 
 And run it:
 ```
 # Basic installation - CPU only
-docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac --help
-docker run -v "$(pwd):/deepac" --rm jbartoszewicz/deepac:0.13.3 deepac test -q
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac --help
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac test -q
 
 # With GPU support
-docker run -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu deepac test
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu deepac test
 
 # If you want to use the shell inside the container
-docker run -it -v "$(pwd):/deepac" --rm --gpus all jbartoszewicz/deepac:0.13.3-gpu bash
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu bash
 ```
 
-The image ships the main `deepac` package along with `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
+
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
+```
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5 deepac --fetch
+```
+
+For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
+ consult the [User Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#user-guide).
+
+The `dacshpi/deepac:latest` corresponds to the latest version of the CPU build. We recommend using explicit version tags instead.
 
 ### With pip
 
@@ -105,16 +122,14 @@ source my_env/bin/activate
 
 You can then install DeePaC with `pip`. For GPU support, you need to install CUDA and CuDNN manually first (see TensorFlow installation guide for details). 
 Then you can do the same as above:
+
 ```
-# For GPU support (recommended)
-pip install tensorflow-gpu
 pip install deepac
 ```
 
-Alternatively, if you don't need GPU support: 
+Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
-# Basic installation (CPU-only)
-pip install deepac
+deepac getmodels --fetch
 ```
 
 If you want to install the plugins, use:
@@ -297,8 +312,9 @@ deepac gwpa factiv -m model.h5 -t fragmented_genomes/sample1_fragmented_genomes.
 # Check for enrichment within annotated genomic features
 deepac gwpa fenrichment -i factiv -g genomes_gff/sample1.gff -o fenrichment
 ```
+
 ## Supplementary data and scripts
-Datasets are available here: <https://doi.org/10.5281/zenodo.3678562> (bacteria) and here: <https://doi.org/10.5281/zenodo.3630803> (viruses).
+Datasets are available here: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3678563.svg)](https://doi.org/10.5281/zenodo.3678563) (bacteria) and here: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4312525.svg)](https://doi.org/10.5281/zenodo.4312525) (viruses).
 In the supplement_paper directory you can find the R scripts and data files used in the papers for dataset preprocessing and benchmarking.
 
 ## Erratum
@@ -318,6 +334,7 @@ Unfortunately, the following issues are independent of the DeePaC codebase:
 * h5py>=3.0 is not compatible with Tensorflow at the moment and will cause errors when loading Keras (and DeePaC) models (hence, deepac tests will fail as well). 
 Conda installation takes care of it automatically, but the pip Tensorflow installation does not. To solve it, use conda installation or install h5py<3.0. 
 This issue should be resolved in a future version of Tensorflow.
+* shap 0.38 requires IPython but the pip installer does not install it. Manual installation solves the problem.
 
 ## Cite us
 If you find DeePaC useful, please cite:

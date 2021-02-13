@@ -27,6 +27,11 @@ def get_filter_contribs(args, allow_eager=False):
     model = load_model(args.model, custom_objects=get_custom_objects())
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     check_additivity = not args.no_check
+
+    target = args.target_class
+    if target is None:
+        target = 0
+
     if args.w_norm and not args.do_lstm:
         print("Create model with mean-centered weight matrices ...")
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)][0]
@@ -145,7 +150,7 @@ def get_filter_contribs(args, allow_eager=False):
 
         scores_filter = explainer.shap_values([intermediate_fwd,
                                                intermediate_rc], check_additivity=check_additivity)
-        scores_fwd, scores_rc = scores_filter[0]
+        scores_fwd, scores_rc = scores_filter[target]
 
         # shape: [num_reads, len_reads, n_filters]
 

@@ -8,10 +8,10 @@ from deepac.explain.rf_sizes import get_rf_size
 from termcolor import colored
 
 
-def pred_fwd_rc(model, input_npy, output_fwd, output_rc, replicates=1):
+def pred_fwd_rc(model, input_npy, output_fwd, output_rc, replicates=1, batch_size=512):
     """Predict pathogenic potentials from a preprocessed numpy array and its reverse-complement."""
-    y_fwd, _ = predict_npy(model, input_npy, output_fwd, rc=False, replicates=replicates)
-    y_rc, _ = predict_npy(model, input_npy, output_rc, rc=True, replicates=replicates)
+    y_fwd, _ = predict_npy(model, input_npy, output_fwd, rc=False, replicates=replicates, batch_size=batch_size)
+    y_rc, _ = predict_npy(model, input_npy, output_rc, rc=True, replicates=replicates, batch_size=batch_size)
     return y_fwd, y_rc
 
 
@@ -43,7 +43,7 @@ def test_all_close(fwd, rc, tol_mode, severe=True):
         return False
 
 
-def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1):
+def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1, batch_size=512):
     sns.set_context("paper", font_scale=2.5)
     out = "{}.png".format(os.path.splitext(output)[0])
     if kind != "kde":
@@ -64,8 +64,10 @@ def compare_rc(model, input_npy, output, kind="scatter", alpha=0.5, replicates=1
         motif_length = get_rf_size(model, conv_layer_idx, verbose=True)
         print("Receptive field size: {}".format(motif_length))
 
-    fwd, rc = pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc, replicates=replicates)
+    fwd_raw, rc_raw = pred_fwd_rc(model, input_npy, output_fwd=pred_fwd, output_rc=pred_rc, replicates=replicates,
+                                  batch_size=batch_size)
 
+    fwd, rc = fwd_raw.flatten(), rc_raw.flatten()
     print(scipy.stats.ks_2samp(fwd, rc))
     print(scipy.stats.spearmanr(fwd, rc))
     diff = np.abs(fwd - rc)
