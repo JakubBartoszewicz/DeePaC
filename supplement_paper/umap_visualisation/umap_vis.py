@@ -52,10 +52,12 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
     fig = plt.figure()
     if n_components == 1:
         ax = fig.add_subplot(111)
-        ax.scatter(embedding[:, 0], range(len(embedding)), c=labels, s=1, alpha=0.3)
+        scatter = ax.scatter(embedding[:, 0], range(len(embedding)), c=labels, s=1, alpha=0.3)
+        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
     if n_components == 2:
         ax = fig.add_subplot(111)
-        ax.scatter(embedding[:, 0], embedding[:, 1], c=labels, s=1, alpha=0.3)
+        scatter = ax.scatter(embedding[:, 0], embedding[:, 1], c=labels, s=1, alpha=0.3)
+        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
     if n_components == 3:
         ax = fig.add_subplot(111, projection='3d')
         scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2], c=labels, s=1, alpha=0.3)
@@ -89,8 +91,6 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
 
 
 def run(args):
-    date = datetime.now()
-    date_now = date.strftime("%Y-%m-%d_%H-%M-%S")
 
     parser = argparse.ArgumentParser()
 
@@ -105,7 +105,6 @@ def run(args):
     classes = check_number_of_classes(labels)
     data_reshaped = reshape_data(data)
     embedding = run_umap(data_reshaped, params.n_components)
-    file_name = "_".join([date_now, file_name])
     create_scatter_plot(file_name, path, labels, classes, params.n_components, embedding)
 
 
