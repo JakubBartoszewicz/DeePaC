@@ -63,7 +63,7 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
         scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2], c=labels, s=1, alpha=0.3)
         ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
 
-    plot_name = "_".join(["scatter_plot", file_name.replace(".npy", ".png")])
+    plot_name = "_".join(["scatter_plot", file_name.replace(".npy", "".join(["_", str(n_components)+"d", ".png"]))])
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     mpl.style.use("seaborn")
@@ -84,7 +84,7 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3)
 
-        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs)]))
+        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs), str(n_components)+"d"]))
         plt.title(plot_name_temp.replace(".png", ""), fontsize=24)
         plt.savefig(os.path.join(path, plot_name_temp))
         plt.close()
