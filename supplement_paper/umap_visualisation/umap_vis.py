@@ -1,16 +1,13 @@
 import numpy as np
-from sklearn.datasets import load_digits
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
+import matplotlib as mpl
 import tensorflow as tf
 import random as rn
 import umap
-import os
+import utils
 import argparse
 import sys
+import os
 from datetime import datetime
 
 seed = 1
@@ -18,28 +15,6 @@ seed = 1
 np.random.seed(seed)
 tf.random.set_seed(seed)
 rn.seed(seed)
-
-
-def get_data_name(data_path):
-    path_splitted = os.path.split(data_path)
-    path = path_splitted[0]
-    file_name = path_splitted[1]
-
-    return file_name, path
-
-
-def read_data_and_labels(data_path, label_path):
-    print("Reading data...")
-    try:
-        data = np.load(data_path)  # read the data
-        labels = np.load(label_path)
-        print("Data succesfully read.")
-
-    except IOError:
-        print("Error: ", data_path, " or ", label_path, " not found.")
-        sys.exit(0)
-
-    return data, labels
 
 
 def check_number_of_classes(labels):
@@ -83,22 +58,33 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
         ax.scatter(embedding[:, 0], embedding[:, 1], c=labels, s=1, alpha=0.3)
     if n_components == 3:
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2], c=labels, s=1, alpha=0.3)
+        scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2], c=labels, s=1, alpha=0.3)
+        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
 
     plot_name = "_".join(["scatter_plot", file_name.replace(".npy", ".png")])
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
-    plt.title(plot_name.replace(".png", ""), fontsize=24);
-    plt.savefig("/".join([path, plot_name]))
+    mpl.style.use("seaborn")
+    plt.title(plot_name.replace(".png", ""), fontsize=24)
+    plt.savefig(os.path.join(path, plot_name))
     plt.close()
 
-    for c in classes:
-        plot_name_temp = plot_name.replace("scatter_plot", ("_").join(["scatter_plot", str(c)]))
-        plt.scatter(embedding[np.isclose(labels, c), 0], embedding[np.isclose(labels, c), 1],
-                    embedding[np.isclose(labels, c), 2], s=1)
-        plt.gca().set_aspect('equal', 'datalim')
-        plt.title(plot_name_temp.replace(".png", ""), fontsize=24);
-        plt.savefig("/".join([path, plot_name_temp]))
+    for cs in classes:
+        fig = plt.figure()
+        if n_components == 1:
+            ax = fig.add_subplot(111)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding)), s=1, alpha=0.3)
+        if n_components == 2:
+            ax = fig.add_subplot(111)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1], s=1, alpha=0.3)
+        if n_components == 3:
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
+                       embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3)
+
+        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs)]))
+        plt.title(plot_name_temp.replace(".png", ""), fontsize=24)
+        plt.savefig(os.path.join(path, plot_name_temp))
         plt.close()
 
 
@@ -114,8 +100,8 @@ def run(args):
 
     params = parser.parse_args(args)
 
-    file_name, path = get_data_name(params.dataset_filename)
-    data, labels = read_data_and_labels(params.dataset_filename, params.label_filename)
+    file_name, path = utils.get_data_name(params.dataset_filename)
+    data, labels = utils.read_data_and_labels(params.dataset_filename, params.label_filename)
     classes = check_number_of_classes(labels)
     data_reshaped = reshape_data(data)
     embedding = run_umap(data_reshaped, params.n_components)
