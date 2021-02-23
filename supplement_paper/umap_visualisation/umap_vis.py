@@ -10,12 +10,6 @@ import argparse
 import sys
 import os
 
-seed = 1
-
-np.random.seed(seed)
-tf.random.set_seed(seed)
-rn.seed(seed)
-
 
 # check number of classes in the data set
 def check_number_of_classes(labels):
@@ -36,10 +30,10 @@ def reshape_data(data):
 
 
 # runs umap with default parameters
-def run_umap(path, data, n_components):
+def run_umap(path, data, n_components, seed):
 
     print("Running umap...")
-    reducer = umap.UMAP(random_state=42, n_components=n_components)
+    reducer = umap.UMAP(random_state=seed, n_components=n_components)
     reducer.fit(data)
 
     print("Transforming data...")
@@ -110,21 +104,32 @@ def run(args):
     parser.add_argument('-e', '--embedding-filename', dest='embedding_filename', default=None)
     parser.add_argument('-l', '--label-filename', dest="label_filename")
     parser.add_argument('-n', '--n-components', dest="n_components", type=int, default=2)
+    parser.add_argument('-s', '--seed', dest="seed", type=int, default=None)
 
     params = parser.parse_args(args)
     file_name, path = utils.get_data_name(params.dataset_filename)
 
+    # set seed
+    if params.seed is not None:
+        seed = params.seed
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+        rn.seed(seed)
+
+    # if embedding is not available - run umap
     if params.embedding_filename is None:
         data, labels = utils.read_data_and_labels(params.dataset_filename, params.label_filename)
         data_reshaped = reshape_data(data)
-        embedding = run_umap(path, data_reshaped, params.n_components)
-    else:
+        embedding = run_umap(path, data_reshaped, params.n_components, params.seed)
+    else:  # otherwise read and use ready embedding
         data, labels = utils.read_data_and_labels(params.dataset_filename, params.label_filename)
         umap_object = utils.read_embedding(params.embedding_filename)
         data_reshaped = reshape_data(data)
         embedding = umap_object.transform(data_reshaped)
 
+    # check the number of classes in labels
     classes = check_number_of_classes(labels)
+    # plot embeddings
     create_scatter_plot(file_name, path, labels, classes, params.n_components, embedding)
 
 
