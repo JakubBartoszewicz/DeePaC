@@ -28,6 +28,28 @@ def read_data_and_labels(data_path, label_path):
     return data, labels
 
 
+# check number of classes in the data set
+def check_number_of_classes(labels):
+
+    classes = set(labels)
+    print("Classes: ", classes)
+
+    return classes
+
+
+def convert_labels(labels):
+
+    classes = check_number_of_classes(labels)
+
+    counts = [np.count_nonzero(labels == i) for i in classes]
+
+    new_labels = np.array(range(0, len(classes)))
+
+    converted_labels = np.repeat(new_labels, counts)
+
+    return classes, converted_labels
+
+
 def read_embedding(embedding_path):
 
     print("Reading embedding...")

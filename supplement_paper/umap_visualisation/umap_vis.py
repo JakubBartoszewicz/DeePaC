@@ -11,15 +11,6 @@ import sys
 import os
 
 
-# check number of classes in the data set
-def check_number_of_classes(labels):
-
-    classes = set(labels)
-    print("Classes: ", classes)
-
-    return classes
-
-
 # reshape the data - flatten reads from 3 to 2 dimensions
 def reshape_data(data):
 
@@ -39,7 +30,7 @@ def run_umap(path, data, n_components, seed):
     print("Transforming data...")
     embedding = reducer.transform(data)
 
-    pickle.dump(reducer, open(os.path.join(path, "embedding.pickle"), 'wb'))
+    pickle.dump(reducer, open(os.path.join(path, str(n_components)+"d_embedding.pickle"), 'wb'))
 
     assert (np.all(embedding == reducer.embedding_))
 
@@ -52,28 +43,32 @@ def run_umap(path, data, n_components, seed):
 def create_scatter_plot(file_name, path, labels, classes, n_components, embedding):
 
     print("Creating plots...")
+    mpl.style.use("seaborn")
 
     fig = plt.figure()
+
     if n_components == 1:
         ax = fig.add_subplot(111)
-        scatter = ax.scatter(embedding[:, 0], range(len(embedding)), c=labels, s=1, alpha=0.3)
-        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+        for cs in classes:
+            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding)), s=1, alpha=0.3)
     if n_components == 2:
         ax = fig.add_subplot(111)
-        scatter = ax.scatter(embedding[:, 0], embedding[:, 1], c=labels, s=1, alpha=0.3)
-        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+        for cs in classes:
+            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
+                       s=1, alpha=0.3, label=cs)
     if n_components == 3:
         ax = fig.add_subplot(111, projection='3d')
-        scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2], c=labels, s=1, alpha=0.3)
-        ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+        for cs in classes:
+            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
+                       embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3, label=cs)
 
     pre, ext = os.path.splitext(file_name)
     plot_name = pre + ".png"
     plot_name = "_".join(["scatter_plot", plot_name])
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
-    mpl.style.use("seaborn")
-    plt.title(plot_name.replace(".png", ""), fontsize=24)
+    plt.legend(markerscale=5.0)
+    plt.title(plot_name.replace(".png", ""), fontsize=18)
     plt.savefig(os.path.join(path, plot_name))
     plt.close()
 
@@ -84,15 +79,55 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
             ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding)), s=1, alpha=0.3)
         if n_components == 2:
             ax = fig.add_subplot(111)
-            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1], s=1, alpha=0.3)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
+                       s=1, alpha=0.3)
         if n_components == 3:
             ax = fig.add_subplot(111, projection='3d')
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3)
 
         plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs), str(n_components)+"d"]))
-        plt.title(plot_name_temp.replace(".png", ""), fontsize=24)
+        plt.title(plot_name_temp.replace(".png", ""), fontsize=18)
         plt.savefig(os.path.join(path, plot_name_temp))
+        plt.close()
+
+
+# generates plots that highlight given classes
+def highlight_classes(file_name, path, labels, hl_classes, n_components, embedding):
+
+    mpl.style.use("seaborn")
+
+    for ind in hl_classes:
+
+        print("Highlight class: ", str(ind))
+
+        temp_labels = np.array(['other' if str(i) != str(ind) else str(i) for i in labels])
+
+        fig = plt.figure()
+
+        if n_components == 1:
+            ax = fig.add_subplot(111)
+            for cs in set(temp_labels):
+                ax.scatter(embedding[temp_labels == cs, 0], range(len(embedding)), s=1, alpha=0.3, label=cs)
+        if n_components == 2:
+            ax = fig.add_subplot(111)
+            for cs in set(temp_labels):
+                ax.scatter(embedding[temp_labels == cs, 0], embedding[temp_labels == cs, 1],
+                           s=1, alpha=0.3, label=cs)
+        if n_components == 3:
+            ax = fig.add_subplot(111, projection='3d')
+            for cs in set(temp_labels):
+                ax.scatter(embedding[temp_labels == cs, 0], embedding[temp_labels == cs, 1],
+                           embedding[temp_labels == cs, 2], s=1, alpha=0.3, label=cs)
+
+        pre, ext = os.path.splitext(file_name)
+        plot_name = "hl_class" + str(ind) + "_" + pre + ".png"
+        plot_name = "_".join(["scatter_plot", plot_name])
+        # plt.gca().set_aspect('equal', 'datalim')
+        # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
+        plt.legend(markerscale=5.0)
+        plt.title(plot_name.replace(".png", ""), fontsize=18)
+        plt.savefig(os.path.join(path, plot_name))
         plt.close()
 
 
@@ -105,6 +140,7 @@ def run(args):
     parser.add_argument('-l', '--label-filename', dest="label_filename")
     parser.add_argument('-n', '--n-components', dest="n_components", type=int, default=2)
     parser.add_argument('-s', '--seed', dest="seed", type=int, default=None)
+    parser.add_argument('-c', '--highlight_classes', dest='highlight_classes', type=str, default=None)
 
     params = parser.parse_args(args)
     file_name, path = utils.get_data_name(params.dataset_filename)
@@ -128,9 +164,14 @@ def run(args):
         embedding = umap_object.transform(data_reshaped)
 
     # check the number of classes in labels
-    classes = check_number_of_classes(labels)
+    classes = utils.check_number_of_classes(labels)
+    # classes, converted_labels = utils.convert_labels(labels)
     # plot embeddings
-    create_scatter_plot(file_name, path, labels, classes, params.n_components, embedding)
+    if params.highlight_classes is not None:
+        hl_classes = params.highlight_classes.split(";")
+        highlight_classes(file_name, path, labels, hl_classes, params.n_components, embedding)
+    else:
+        create_scatter_plot(file_name, path, labels, classes, params.n_components, embedding)
 
 
 if __name__ == "__main__":
