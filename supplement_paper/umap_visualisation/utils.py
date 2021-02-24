@@ -64,3 +64,14 @@ def read_embedding(embedding_path):
         sys.exit(0)
 
     return umap_object
+
+
+def shuffle_arrays(array_a, array_b):
+
+    if len(array_a) != len(array_a):
+        print("Arrays cannot be shuffled together - different sizes!")
+        sys.exit(0)
+
+    perm = np.random.permutation(len(array_a))
+
+    return array_a[perm], array_b[perm]
