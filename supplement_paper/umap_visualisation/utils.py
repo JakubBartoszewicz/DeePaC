@@ -1,3 +1,4 @@
+from sklearn.utils import shuffle
 import numpy as np
 import pickle
 import sys
@@ -72,6 +73,6 @@ def shuffle_arrays(array_a, array_b):
         print("Arrays cannot be shuffled together - different sizes!")
         sys.exit(0)
 
-    perm = np.random.permutation(len(array_a))
+    array_a_sh, array_b_sh = shuffle(array_a, array_b, random_state=1)
 
-    return array_a[perm], array_b[perm]
+    return array_a_sh, array_b_sh
