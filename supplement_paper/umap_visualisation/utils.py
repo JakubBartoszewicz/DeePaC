@@ -26,6 +26,10 @@ def read_data_and_labels(data_path, label_path):
         print("Error: ", data_path, " or ", label_path, " not found.")
         sys.exit(0)
 
+    if len(data) != len(labels):
+        print("Number of reads and labels not equal.")
+        sys.exit(0)
+
     return data, labels
 
 

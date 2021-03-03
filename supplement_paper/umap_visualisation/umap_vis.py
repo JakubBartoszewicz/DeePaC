@@ -30,7 +30,9 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, seed):
     print("Transforming data...")
     embedding = reducer.transform(data)
 
-    pickle.dump(reducer, open(os.path.join(path, file_name + "_"+ str(n_components)+"d_embedding.pickle"), 'wb'))
+    print("Saving the embedding...")
+    parameters = "_".join([str(min_dist), str(n_neighbors), str(n_components) + "d"])
+    pickle.dump(reducer, open(os.path.join(path, file_name + "_" + parameters + "_embedding.pickle"), 'wb'))
 
     assert (np.all(embedding == reducer.embedding_))
 
@@ -40,13 +42,14 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, seed):
     return embedding
 
 
-def create_scatter_plot(file_name, path, labels, classes, n_components, embedding):
+def create_scatter_plot(file_name, path, parameters, labels, classes, n_components, embedding):
 
     print("Creating plots...")
     mpl.style.use("seaborn")
 
     fig = plt.figure()
 
+    print("Creating multiclass plots...")
     if n_components == 1:
         ax = fig.add_subplot(111)
         for cs in classes:
@@ -63,7 +66,7 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3, label=cs)
 
     plot_name = file_name + ".png"
-    plot_name = "_".join(["scatter_plot", plot_name])
+    plot_name = "_".join(["scatter_plot", plot_name, parameters])
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     plt.legend(markerscale=5.0)
@@ -71,6 +74,7 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
     plt.savefig(os.path.join(path, plot_name))
     plt.close()
 
+    print("Creating single-class plots...")
     for cs in classes:
         fig = plt.figure()
         if n_components == 1:
@@ -85,7 +89,7 @@ def create_scatter_plot(file_name, path, labels, classes, n_components, embeddin
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3)
 
-        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs), str(n_components)+"d"]))
+        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs), parameters]))
         plt.title(plot_name_temp.replace(".png", ""), fontsize=18)
         plt.savefig(os.path.join(path, plot_name_temp))
         plt.close()
@@ -96,6 +100,7 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
 
     mpl.style.use("seaborn")
 
+    print("Highlighting classes...")
     for ind in hl_classes:
 
         print("Highlight class: ", str(ind))
@@ -129,7 +134,44 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
         plt.close()
 
 
-def run(args):
+def run_workflow(dataset_filename, embedding_filename, label_filename, n_components, min_dist, n_neighbors, seed,
+                 highlight_classes):
+
+    file_name, path = utils.get_data_name(dataset_filename)
+
+    # set seed
+    if seed is not None:
+        seed = seed
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+        rn.seed(seed)
+
+    f_name, ext = os.path.splitext(file_name)
+
+    # if embedding is not available - run umap
+    if embedding_filename is None:
+        data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
+        data_reshaped = reshape_data(data)
+        embedding = run_umap(path, f_name, data_reshaped, n_components, min_dist, n_neighbors, seed)
+    else:  # otherwise read and use ready embedding
+        data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
+        umap_object = utils.read_embedding(embedding_filename)
+        data_reshaped = reshape_data(data)
+        embedding = umap_object.transform(data_reshaped)
+
+    # check the number of classes in labels
+    classes = utils.check_number_of_classes(labels)
+
+    # plot embeddings
+    if highlight_classes is not None:  # plot highlight classes
+        hl_classes = highlight_classes.split(";")
+        highlight_classes(f_name, path, labels, hl_classes, n_components, embedding)
+    else:  # plot all and separate class plots
+        parameters = "_".join([str(min_dist), str(n_neighbors), str(n_components) + "d"])
+        create_scatter_plot(f_name, path, parameters, labels, classes, n_components, embedding)
+
+
+def parse_and_run(args):
 
     # parsing arguments
     parser = argparse.ArgumentParser()
@@ -144,42 +186,13 @@ def run(args):
     parser.add_argument('-c', '--highlight_classes', dest='highlight_classes', type=str, default=None)
 
     params = parser.parse_args(args)
-    file_name, path = utils.get_data_name(params.dataset_filename)
 
-    # set seed
-    if params.seed is not None:
-        seed = params.seed
-        np.random.seed(seed)
-        tf.random.set_seed(seed)
-        rn.seed(seed)
-
-    f_name, ext = os.path.splitext(file_name)
-
-    # if embedding is not available - run umap
-    if params.embedding_filename is None:
-        data, labels = utils.read_data_and_labels(params.dataset_filename, params.label_filename)
-        data_reshaped = reshape_data(data)
-        embedding = run_umap(path, f_name, data_reshaped, params.n_components, params.min_dist,
-                             params.n_neighbors, params.seed)
-    else:  # otherwise read and use ready embedding
-        data, labels = utils.read_data_and_labels(params.dataset_filename, params.label_filename)
-        umap_object = utils.read_embedding(params.embedding_filename)
-        data_reshaped = reshape_data(data)
-        embedding = umap_object.transform(data_reshaped)
-
-    # check the number of classes in labels
-    classes = utils.check_number_of_classes(labels)
-
-    # plot embeddings
-    if params.highlight_classes is not None:  # plot highlight classes
-        hl_classes = params.highlight_classes.split(";")
-        highlight_classes(f_name, path, labels, hl_classes, params.n_components, embedding)
-    else:  # plot all and separate class plots
-        create_scatter_plot(f_name, path, labels, classes, params.n_components, embedding)
+    run_workflow(params.dataset_filename, params.embedding_filename, params.label_filename, params.n_components,
+                 params.min_dist, params.n_neighbors, params.seed, params.highlight_classes)
 
 
 if __name__ == "__main__":
-    run(sys.argv[1:])
+    parse_and_run(sys.argv[1:])
 
 
 
