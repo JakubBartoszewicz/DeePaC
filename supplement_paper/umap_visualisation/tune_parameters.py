@@ -34,7 +34,7 @@ def run(args):
             umap_vis.run_workflow(params.dataset_filename, None, params.label_filename, c, 0.1, n, 1, None)
 
         for d in min_dist_params:
-            umap_vis.run_workflow(params.dataset_filename, None, params.label_filename, c, 15, d, 1, None)
+            umap_vis.run_workflow(params.dataset_filename, None, params.label_filename, c, d, 15, 1, None)
 
 
 if __name__ == "__main__":
