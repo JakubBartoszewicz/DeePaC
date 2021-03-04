@@ -31,7 +31,7 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, seed):
     embedding = reducer.transform(data)
 
     print("Saving the embedding...")
-    parameters = "_".join([str(min_dist), str(n_neighbors), str(n_components) + "d"])
+    parameters = "_".join([str(min_dist).replace(".", ""), str(n_neighbors), str(n_components) + "d"])
     pickle.dump(reducer, open(os.path.join(path, file_name + "_" + parameters + "_embedding.pickle"), 'wb'))
 
     assert (np.all(embedding == reducer.embedding_))
@@ -53,7 +53,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
     if n_components == 1:
         ax = fig.add_subplot(111)
         for cs in classes:
-            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding)), s=1, alpha=0.3)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=1, alpha=0.3, label=cs)
     if n_components == 2:
         ax = fig.add_subplot(111)
         for cs in classes:
@@ -65,8 +65,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3, label=cs)
 
-    plot_name = file_name + ".png"
-    plot_name = "_".join(["scatter_plot", plot_name, parameters])
+    plot_name = "_".join(["scatter_plot", file_name, parameters]) + ".png"
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     plt.legend(markerscale=5.0)
@@ -79,7 +78,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
         fig = plt.figure()
         if n_components == 1:
             ax = fig.add_subplot(111)
-            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding)), s=1, alpha=0.3)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=1, alpha=0.3)
         if n_components == 2:
             ax = fig.add_subplot(111)
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
@@ -89,7 +88,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=1, alpha=0.3)
 
-        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs), parameters]))
+        plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs)]))
         plt.title(plot_name_temp.replace(".png", ""), fontsize=18)
         plt.savefig(os.path.join(path, plot_name_temp))
         plt.close()
@@ -112,7 +111,8 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
         if n_components == 1:
             ax = fig.add_subplot(111)
             for cs in set(temp_labels):
-                ax.scatter(embedding[temp_labels == cs, 0], range(len(embedding)), s=1, alpha=0.3, label=cs)
+                ax.scatter(embedding[temp_labels == cs, 0], range(len(embedding[temp_labels == cs, 0])), s=1, alpha=0.3,
+                           label=cs)
         if n_components == 2:
             ax = fig.add_subplot(111)
             for cs in set(temp_labels):
@@ -167,7 +167,7 @@ def run_workflow(dataset_filename, embedding_filename, label_filename, n_compone
         hl_classes = highlight_classes.split(";")
         highlight_classes(f_name, path, labels, hl_classes, n_components, embedding)
     else:  # plot all and separate class plots
-        parameters = "_".join([str(min_dist), str(n_neighbors), str(n_components) + "d"])
+        parameters = "_".join([str(min_dist).replace(".", ""), str(n_neighbors), str(n_components) + "d"])
         create_scatter_plot(f_name, path, parameters, labels, classes, n_components, embedding)
 
 
