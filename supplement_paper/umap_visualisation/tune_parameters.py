@@ -27,8 +27,8 @@ def run(args):
                           int(0.005*element_no),
                           int(0.01*element_no)]
 
-    min_dist_params = [0.0, 0.1, 0.25, 0.5, 0.75, 0.99]
-    n_components_params = [1, 2, 3]
+    min_dist_params = [0.0, 0.1, 0.25, 0.5, 0.75]
+    n_components_params = [2, 3]
 
     params = parser.parse_args(args)
 
