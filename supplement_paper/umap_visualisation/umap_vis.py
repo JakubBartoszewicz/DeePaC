@@ -45,7 +45,7 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, seed):
 def create_scatter_plot(file_name, path, parameters, labels, classes, n_components, embedding):
 
     print("Creating plots...")
-    mpl.style.use("seaborn")
+    plt.style.use("seaborn")
 
     fig = plt.figure()
 
@@ -53,7 +53,8 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
     if n_components == 1:
         ax = fig.add_subplot(111)
         for cs in classes:
-            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=1, alpha=0.3, label=cs)
+            ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=1,
+                       alpha=0.3, label=cs)
     if n_components == 2:
         ax = fig.add_subplot(111)
         for cs in classes:

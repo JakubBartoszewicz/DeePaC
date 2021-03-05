@@ -2,9 +2,12 @@ import argparse
 import umap_vis
 import utils
 import sys
+import time
 
 
 def run(args):
+
+    start = time.time()
 
     # parsing arguments
     parser = argparse.ArgumentParser()
@@ -35,6 +38,10 @@ def run(args):
 
         for d in min_dist_params:
             umap_vis.run_workflow(params.dataset_filename, None, params.label_filename, c, d, 15, 1, None)
+
+    end = time.time()
+
+    print("RUN-TIME: ", end-start)
 
 
 if __name__ == "__main__":
