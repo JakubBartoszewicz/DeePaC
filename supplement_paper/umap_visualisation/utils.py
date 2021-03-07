@@ -1,6 +1,7 @@
 from sklearn.utils import shuffle
 import numpy as np
 import pickle
+import pandas as pd
 import sys
 import os
 
@@ -71,12 +72,49 @@ def read_embedding(embedding_path):
     return umap_object
 
 
-def shuffle_arrays(array_a, array_b):
+def read_data_desc(data_desc_csv):
 
-    if len(array_a) != len(array_a):
+    file_name, path = get_data_name(data_desc_csv)
+    f_name, ext = os.path.splitext(file_name)
+    data_desc = pd.read_csv(data_desc_csv, sep=";", header=None)
+
+    species_labels = data_desc.iloc[:, 1].values.tolist()
+    number_of_reads = data_desc.iloc[:, 2].values.tolist()
+
+    read_sum = np.sum(number_of_reads)
+    print("Number of reads: ", read_sum)
+    species_labels_long = np.repeat(species_labels, number_of_reads)
+
+    for i in range(0, len(species_labels)):
+        assert np.count_nonzero(species_labels_long == species_labels[i]) == number_of_reads[i]
+
+    np.save(os.path.join(path, "_".join([f_name, "species_labels.npy"])), species_labels_long)
+    print("Species label file created!")
+
+
+def shuffle_arrays(array_a, array_b, array_c):
+
+    a_a = np.load(array_a)
+    a_b = np.load(array_b)
+    a_c = np.load(array_c)
+
+    if len(a_a) != len(a_b) or len(a_a) != len(a_c):
         print("Arrays cannot be shuffled together - different sizes!")
         sys.exit(0)
 
-    array_a_sh, array_b_sh = shuffle(array_a, array_b, random_state=1)
+    array_a_sh, array_b_sh, array_c_sh = shuffle(a_a, a_b, a_c, random_state=1)
 
-    return array_a_sh, array_b_sh
+    file_name, path = get_data_name(array_a)
+    f_name, ext = os.path.splitext(file_name)
+
+    np.save(os.path.join(path, "_".join([f_name, "shuffled.npy"])), array_a_sh)
+
+    file_name, path = get_data_name(array_b)
+    f_name, ext = os.path.splitext(file_name)
+
+    np.save(os.path.join(path, "_".join([f_name, "shuffled.npy"])), array_b_sh)
+
+    file_name, path = get_data_name(array_c)
+    f_name, ext = os.path.splitext(file_name)
+
+    np.save(os.path.join(path, "_".join([f_name, "shuffled.npy"])), array_c_sh)
