@@ -30,12 +30,25 @@ class ExplainTester:
         """Test maxact (DeepBind) scores."""
         args = Namespace(model=self.model, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "maxact"),
-                         n_cpus=self.n_cpus, do_lstm=False, inter_layer=1, chunk_size=500)
+                         n_cpus=self.n_cpus, do_lstm=False, inter_layer=1, chunk_size=500, save_activs=False)
         get_maxact(args)
         assert (os.path.isfile(os.path.join(self.outpath, "maxact", "fasta",
                                             "deepbind_sample_val_data_motifs_filter_1.fasta"))), "Maxact failed."
         assert (os.path.isfile(os.path.join(self.outpath, "maxact", "filter_activations",
                                             "deepbind_sample_val_data_act_filter_1.csv"))), "Maxact failed."
+
+        args = Namespace(model=self.model, test_data=self.test_data, nonpatho_test=self.neg_fasta,
+                         patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "maxact_last"),
+                         n_cpus=self.n_cpus, do_lstm=False, inter_layer=0, chunk_size=500, save_activs=True,
+                         save_activs_merge="sum", save_activs_pool="avg")
+        get_maxact(args)
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "fasta",
+                                            "deepbind_sample_val_data_motifs_filter_1.fasta"))), "Maxact failed."
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "filter_activations",
+                                            "deepbind_sample_val_data_act_filter_1.csv"))), "Maxact failed."
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "activations_fwd.npy"))), "Maxact failed."
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "activations_rc.npy"))), "Maxact failed."
+        assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "activations.npy"))), "Maxact failed."
 
     def test_fcontribs(self):
         """Test contribution (DeepLIFT) scores."""

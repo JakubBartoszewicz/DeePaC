@@ -31,6 +31,12 @@ def add_explain_parser(xparser):
                                help="Perform calculations for this intermediate layer")
     parser_maxact.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                   help="Sequence chunk size. Decrease for lower memory usage.")
+    parser_maxact.add_argument("--save-activs", dest="save_activs", action="store_true",
+                               help="Save raw activations in .npy format.")
+    parser_maxact.add_argument("--merge-activs", dest="save_activs_merge", default="sum",
+                               help="RC merging function to use (sum/max/mul/avg).")
+    parser_maxact.add_argument("--pool-activs", dest="save_activs_pool", default="avg",
+                               help="Global pooling function to use (max or average).")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')

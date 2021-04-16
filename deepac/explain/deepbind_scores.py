@@ -56,6 +56,11 @@ def get_maxact(args):
     """Calculates DeepBind scores for all neurons in the convolutional layer
     and extract all motifs for which a filter neuron got a positive score."""
     set_mem_growth()
+
+    save_activations_npy = args.save_activs
+    merge_activations_npy = args.save_activs_merge if save_activations_npy else None
+    pool_activations_npy = args.save_activs_pool if save_activations_npy else None
+
     # Creates the model and loads weights
     model = load_model(args.model, custom_objects=get_custom_objects())
     print(model.summary())
@@ -68,7 +73,8 @@ def get_maxact(args):
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
                           if "Bidirectional" in str(layer)][args.inter_layer - 1]
     else:
-        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)
+                          and layer.kernel_size[0] > 1]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
         motif_length = get_rf_size(model, conv_layer_idx)
         pad_left = (motif_length - 1) // 2
@@ -135,6 +141,9 @@ def get_maxact(args):
     else:
         cores = args.n_cpus
 
+    all_act_fwd = []
+    all_act_rc = []
+
     # for each read do:
     while n < total_num_reads:
 
@@ -166,6 +175,10 @@ def get_maxact(args):
                 results_rc = iterate_rc([samples_chunk, 0])
             n_filters = results_fwd[0].shape[-1]
 
+        if save_activations_npy:
+            all_act_fwd.append(results_fwd[0])
+            all_act_rc.append(results_rc[0])
+
         # for each filter do:
         if cores > 1:
             with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
@@ -194,3 +207,29 @@ def get_maxact(args):
     end_time = time.time()
     print("Done "+str(min(n, total_num_reads))+" from "+str(total_num_reads)+" sequences")
     print("Processed in " + str(end_time - start_time))
+    if save_activations_npy:
+        print("Saving raw activations...")
+        all_act_fwd = np.concatenate(all_act_fwd)
+        all_act_rc = np.concatenate(all_act_rc)
+        if pool_activations_npy == "max" or pool_activations_npy == "maximum":
+            all_act_fwd = all_act_fwd.max(axis=1)
+            all_act_rc = all_act_rc.max(axis=1)
+        elif pool_activations_npy == "avg" or pool_activations_npy == "average":
+            all_act_fwd = all_act_fwd.mean(axis=1)
+            all_act_rc = all_act_rc.mean(axis=1)
+        else:
+            raise ValueError(f"Unrecognized pooling method: {pool_activations_npy}.")
+
+        np.save(os.path.join(args.out_dir, "activations_fwd.npy"), all_act_fwd)
+        np.save(os.path.join(args.out_dir, "activations_rc.npy"), all_act_rc)
+
+        if merge_activations_npy == "add" or merge_activations_npy == "sum":
+            np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd + all_act_rc)
+        elif merge_activations_npy == "max" or merge_activations_npy == "maximum":
+            np.save(os.path.join(args.out_dir, "activations.npy"), np.maximum(all_act_fwd, all_act_rc))
+        elif merge_activations_npy == "mul" or merge_activations_npy == "multiply":
+            np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd * all_act_rc)
+        elif pool_activations_npy == "avg" or pool_activations_npy == "average":
+            np.save(os.path.join(args.out_dir, "activations.npy"), (all_act_fwd + all_act_rc)/2)
+        else:
+            raise ValueError(f"Unrecognized merging method: {merge_activations_npy}.")
