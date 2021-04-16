@@ -154,12 +154,14 @@ def run_workflow(dataset_filename, embedding_filename, label_filename, n_compone
     # if embedding is not available - run umap
     if embedding_filename is None:
         data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
-        data_reshaped = reshape_data(data)
+        if len(data.shape) > 2:
+            data_reshaped = reshape_data(data)
         embedding = run_umap(path, f_name, data_reshaped, n_components, min_dist, n_neighbors, metric, seed)
     else:  # otherwise read and use ready embedding
         data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
         umap_object = utils.read_embedding(embedding_filename)
-        data_reshaped = reshape_data(data)
+        if len(data.shape) > 2:
+            data_reshaped = reshape_data(data)
         embedding = umap_object.transform(data_reshaped)
 
     # check the number of classes in labels
