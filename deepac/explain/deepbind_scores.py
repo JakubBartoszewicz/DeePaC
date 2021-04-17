@@ -57,7 +57,8 @@ def get_maxact(args):
     and extract all motifs for which a filter neuron got a positive score."""
     set_mem_growth()
 
-    save_activations_npy = args.save_activs
+    save_activations_npy = args.save_activs_and_maxact or args.save_activs_only
+    find_maxact = not args.save_activs_only
     merge_activations_npy = args.save_activs_merge if save_activations_npy else None
     pool_activations_npy = args.save_activs_pool if save_activations_npy else None
 
@@ -144,6 +145,7 @@ def get_maxact(args):
     all_act_fwd = []
     all_act_rc = []
     act_fwd, act_rc = None, None
+    results_fwd, results_rc = None, None
 
     # for each read do:
     while n < total_num_reads:
@@ -168,46 +170,48 @@ def get_maxact(args):
         else:
             if tf.executing_eagerly():
                 act_fwd, act_rc = model(samples_chunk, training=False)
-                results_fwd = [K.max(act_fwd, axis=1).numpy(), K.argmax(act_fwd, axis=1).numpy()]
-                out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
-                results_rc = [K.max(act_rc, axis=1).numpy(), out_shape[1] - 1 - K.argmax(act_rc, axis=1).numpy()]
                 if save_activations_npy:
                     act_fwd = act_fwd.numpy()
                     act_rc = act_rc.numpy()
+                if find_maxact:
+                    results_fwd = [K.max(act_fwd, axis=1).numpy(), K.argmax(act_fwd, axis=1).numpy()]
+                    out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
+                    results_rc = [K.max(act_rc, axis=1).numpy(), out_shape[1] - 1 - K.argmax(act_rc, axis=1).numpy()]
             else:
-                results_fwd = iterate_fwd([samples_chunk, 0])
-                results_rc = iterate_rc([samples_chunk, 0])
                 if save_activations_npy:
                     act_fwd = K.function([model.layers[0].input, K.learning_phase()], [layer_output_fwd])
                     act_rc = K.function([model.layers[0].input, K.learning_phase()], [layer_output_rc])
-
-            n_filters = results_fwd[0].shape[-1]
+                if find_maxact:
+                    results_fwd = iterate_fwd([samples_chunk, 0])
+                    results_rc = iterate_rc([samples_chunk, 0])
         if save_activations_npy:
             all_act_fwd.append(act_fwd)
             all_act_rc.append(act_rc)
 
-        # for each filter do:
-        if cores > 1:
-            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
-                p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
-                              reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                              out_dir=args.out_dir),
-                      range(n_filters))
-                p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
-                              reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                              out_dir=args.out_dir, rc=True),
-                      range(n_filters))
-        else:
-            list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
-            list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
-                             reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                             out_dir=args.out_dir),
-                     range(n_filters)))
-            list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
-                             reads_chunk=reads_chunk, motif_length=motif_length, test_data_set_name=test_data_set_name,
-                             out_dir=args.out_dir, rc=True),
-                     range(n_filters)))
+        if find_maxact:
+            n_filters = results_fwd[0].shape[-1]
+            # for each filter do:
+            if cores > 1:
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
+                    p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
+                    p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                                  reads_chunk=reads_chunk, motif_length=motif_length,
+                                  test_data_set_name=test_data_set_name, out_dir=args.out_dir),
+                          range(n_filters))
+                    p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
+                                  reads_chunk=reads_chunk, motif_length=motif_length,
+                                  test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
+                          range(n_filters))
+            else:
+                list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
+                list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
+                                 reads_chunk=reads_chunk, motif_length=motif_length,
+                                 test_data_set_name=test_data_set_name, out_dir=args.out_dir),
+                         range(n_filters)))
+                list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
+                                 reads_chunk=reads_chunk, motif_length=motif_length,
+                                 test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
+                         range(n_filters)))
 
         n += chunk_size
 

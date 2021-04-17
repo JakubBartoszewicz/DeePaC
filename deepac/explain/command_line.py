@@ -31,8 +31,11 @@ def add_explain_parser(xparser):
                                help="Perform calculations for this intermediate layer")
     parser_maxact.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                   help="Sequence chunk size. Decrease for lower memory usage.")
-    parser_maxact.add_argument("--save-activs", dest="save_activs", action="store_true",
-                               help="Save raw activations in .npy format.")
+    parser_maxact.add_argument("--save-activs", dest="save_activs_and_maxact", action="store_true",
+                               help="Save raw activations in .npy format (and find max activating motifs).")
+    parser_maxact.add_argument("--save-activs-only", dest="save_activs_only", action="store_true",
+                               help="Do not search for max activating motifs (only save raw activations)."
+                                    " Overrides --save-activs.")
     parser_maxact.add_argument("--merge-activs", dest="save_activs_merge", default="sum",
                                help="RC merging function to use (sum/max/mul/avg).")
     parser_maxact.add_argument("--pool-activs", dest="save_activs_pool", default="avg",
