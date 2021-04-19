@@ -217,7 +217,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     # Calculate performance measures
     # missing predictions due to confidence thresh don't affect AUPR, AUC & log loss
     # (but NaNs present in the original predictions must be filtered)
-    log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07)
+    log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07, labels=labels)
     if average is not None:
         auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
                            multi_class="ovr", average=average, labels=labels)
