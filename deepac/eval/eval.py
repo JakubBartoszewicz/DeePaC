@@ -157,6 +157,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     missing = 0
     prediction_rate = 1
     multiclass = True if evalconfig.n_classes > 2 else False
+    labels = list(range(evalconfig.n_classes))
     average = None
     target_class = evalconfig.target_class
     if target_class is None:
@@ -219,7 +220,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07)
     if average is not None:
         auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
-                           multi_class="ovr", average=average)
+                           multi_class="ovr", average=average, labels=labels)
     else:
         # mtr.roc_auc_score doesn't support average=None
         print(colored("AUC not supported for multiclass evaluation with a specific target class", "yellow"))
@@ -236,13 +237,13 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
 
     # missing predictions don't affect mcc & precision
     mcc = try_metric(mtr.matthews_corrcoef, y_test_matched, y_pred_class_matched)
-    precision = try_metric(mtr.precision_score, y_test_matched, y_pred_class_matched, average=average)
+    precision = try_metric(mtr.precision_score, y_test_matched, y_pred_class_matched, average=average, labels=labels)
 
     # missing predictions affect acc, recall, specificity & f1
     matched_acc = try_metric(mtr.accuracy_score, y_test_matched, y_pred_class_matched)
     acc = try_metric(mtr.accuracy_score, y_test_main, y_pred_class)
-    matched_recall = try_metric(mtr.recall_score, y_test_matched, y_pred_class_matched, average=average)
-    recall = try_metric(mtr.recall_score, y_test_main, y_pred_class, average=average)
+    matched_recall = try_metric(mtr.recall_score, y_test_matched, y_pred_class_matched, average=average, labels=labels)
+    recall = try_metric(mtr.recall_score, y_test_main, y_pred_class, average=average, labels=labels)
 
     if multiclass:
         tn = fp = fn = tp = matched_specificity = specificity = "n/a"
@@ -271,7 +272,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             else:
                 raise ValueError("Unrecognized confusion matrix structure.")
         except Exception as err:
-            print(err)
+            print(colored("confusion_matrix: " + str(err), "red"))
             tn, fp, fn, tp = np.nan, np.nan, np.nan, np.nan
 
     if target_class is not None:
