@@ -172,5 +172,6 @@ for(obj in ls()){
   plot = get(obj)
   if("ggplot" %in% class(plot)){
     ggsave(  filename = paste0("plots/",obj,".png"),plot = plot,width = 9,height = 4)
+    ggsave(  filename = paste0("plots/",obj,".eps"),plot = plot,width = 9,height = 4, device="eps")
   }
 }
