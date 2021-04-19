@@ -45,8 +45,13 @@ class EvalConfig:
         elif self.confidence_thresh is not None:
             self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
+        self.target_class = config['Data'].get('TargetClass', fallback="*")
+        if self.target_class == "*":
+            self.target_class = None
+        else:
+            self.target_class = config['Data'].getint('TargetClass')
 
-        # Set the first and last epoch to evaluate
+            # Set the first and last epoch to evaluate
         self.epoch_start = config['Epochs'].getint('EpochStart')
         self.epoch_end = config['Epochs'].getint('EpochEnd')
 
@@ -57,8 +62,8 @@ class EvalConfig:
 
 
 def get_eval_header():
-    return ("epoch", "set", "tp", "tn", "fp", "fn", "missing", "log_loss", "matched_acc", "matched_recall",
-            "matched_spec", "total_acc", "auroc",
+    return ("epoch", "set", "target_class", "tp", "tn", "fp", "fn", "missing", "log_loss", "matched_acc",
+            "matched_recall", "matched_spec", "total_acc", "auroc",
             "aupr", "precision", "total_recall", "total_spec", "mcc", "pred_rate")
 
 
@@ -142,7 +147,7 @@ def try_metric(function, *args, **kwargs):
     try:
         return function(*args, **kwargs)
     except Exception as err:
-        print(err)
+        print(colored(function.__name__ + ": " + str(err), "red"))
         return np.nan
 
 
@@ -152,7 +157,10 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     missing = 0
     prediction_rate = 1
     multiclass = True if evalconfig.n_classes > 2 else False
-    average = "macro" if multiclass else "binary"
+    average = None
+    target_class = evalconfig.target_class
+    if target_class is None:
+        average = "macro" if multiclass else "binary"
     y_orig_pred_undef = np.isnan(y_pred)
     if len(y_orig_pred_undef.shape) > 1:
         y_orig_pred_undef = np.any(y_orig_pred_undef, axis=-1)
@@ -209,14 +217,22 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     # missing predictions due to confidence thresh don't affect AUPR, AUC & log loss
     # (but NaNs present in the original predictions must be filtered)
     log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07)
-    auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], multi_class='ovr')
+    if average is not None:
+        auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
+                           multi_class="ovr", average=average)
+    else:
+        # mtr.roc_auc_score doesn't support average=None
+        print(colored("AUC not supported for multiclass evaluation with a specific target class", "yellow"))
+        auroc = "n/a"
     if multiclass:
         y_test_multi = np.zeros((y_test.shape[0], evalconfig.n_classes))
         for i in range(y_test.shape[0]):
             y_test_multi[i, y_test[i]] = 1
-        aupr = try_metric(mtr.average_precision_score, y_test_multi[y_orig_pred_def], y_pred[y_orig_pred_def])
+        aupr = try_metric(mtr.average_precision_score, y_test_multi[y_orig_pred_def], y_pred[y_orig_pred_def],
+                          average=average)
     else:
-        aupr = try_metric(mtr.average_precision_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def])
+        aupr = try_metric(mtr.average_precision_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
+                          average=average)
 
     # missing predictions don't affect mcc & precision
     mcc = try_metric(mtr.matthews_corrcoef, y_test_matched, y_pred_class_matched)
@@ -258,10 +274,20 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             print(err)
             tn, fp, fn, tp = np.nan, np.nan, np.nan, np.nan
 
+    if target_class is not None:
+        precision = precision[target_class]
+        matched_recall = matched_recall[target_class]
+        recall = recall[target_class]
+        aupr = aupr[target_class]
+        if not multiclass:
+            matched_specificity = matched_specificity[target_class]
+            specificity = specificity[target_class]
+
     # Save the results
+    target_class = "*" if target_class is None else target_class
     with open("{}-metrics.csv".format(evalconfig.name_prefix), 'a', newline="") as csv_file:
         file_writer = csv.writer(csv_file)
-        file_writer.writerow((n_epoch, dataset_name, tp, tn, fp, fn, int(missing), log_loss, matched_acc,
+        file_writer.writerow((n_epoch, dataset_name, target_class, tp, tn, fp, fn, int(missing), log_loss, matched_acc,
                               matched_recall, matched_specificity, acc, auroc,
                               aupr, precision, recall, specificity, mcc, prediction_rate))
     if evalconfig.do_plots:

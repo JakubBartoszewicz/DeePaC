@@ -46,6 +46,11 @@ class EvalEnsConfig:
         elif self.confidence_thresh is not None:
             self.confidence_thresh = float(self.confidence_thresh)
         self.n_classes = config['Data'].getint('N_Classes', fallback=2)
+        self.target_class = config['Data'].get('TargetClass', fallback="*")
+        if self.target_class == "*":
+            self.target_class = None
+        else:
+            self.target_class = config['Data'].getint('TargetClass')
 
         # Set the first and last epoch to evaluate
         self.epoch = [int(e) for e in config['Epochs']['Epoch'].split(',')]
