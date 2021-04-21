@@ -86,24 +86,27 @@ def get_maxact(args):
     samples = np.load(args.test_data, mmap_mode='r')
     total_num_reads = samples.shape[0]
 
-    print("Loading test data (.fasta) ...")
-    nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))
-    patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))
-    reads = nonpatho_reads + patho_reads
-
-    assert len(reads) == total_num_reads, "Test data in .npy-format and fasta files containing different" \
-                                          " number of reads!"
-
-    print("Padding reads ...")
-    reads = ["N" * pad_left + r + "N" * pad_right for r in reads]
-
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
-    if not os.path.exists(args.out_dir + "/filter_activations/"):
-        os.makedirs(args.out_dir + "/filter_activations/")
-    if not os.path.exists(args.out_dir + "/fasta/"):
-        os.makedirs(args.out_dir + "/fasta/")
+
+    if find_maxact:
+        print("Loading test data (.fasta) ...")
+        if args.nonpatho_test is None or args.patho_test is None:
+            raise ValueError("No path to reads (.fasta) supplied.")
+        nonpatho_reads = list(SeqIO.parse(args.nonpatho_test, "fasta"))
+        patho_reads = list(SeqIO.parse(args.patho_test, "fasta"))
+        reads = nonpatho_reads + patho_reads
+
+        assert len(reads) == total_num_reads, "Test data in .npy-format and fasta files containing different" \
+                                              " number of reads!"
+        print("Padding reads ...")
+        reads = ["N" * pad_left + r + "N" * pad_right for r in reads]
+        # create output directory
+        if not os.path.exists(args.out_dir + "/filter_activations/"):
+            os.makedirs(args.out_dir + "/filter_activations/")
+        if not os.path.exists(args.out_dir + "/fasta/"):
+            os.makedirs(args.out_dir + "/fasta/")
 
     # Specify input and output of the network
 
@@ -146,14 +149,15 @@ def get_maxact(args):
     all_act_rc = []
     act_fwd, act_rc = None, None
     results_fwd, results_rc = None, None
+    reads_chunk = None
 
     # for each read do:
     while n < total_num_reads:
-
         print("Done "+str(n)+" from "+str(total_num_reads)+" sequences")
         samples_chunk = samples[n:n+chunk_size, :, :]
         samples_chunk = samples_chunk.astype('float32')
-        reads_chunk = reads[n:n+chunk_size]
+        if find_maxact:
+            reads_chunk = reads[n:n+chunk_size]
         if do_lstm:
             if tf.executing_eagerly():
                 act_fwd, act_rc = model(samples_chunk, training=False)

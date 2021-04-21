@@ -19,10 +19,8 @@ def add_explain_parser(xparser):
     parser_maxact = explain_subparsers.add_parser('maxact', help='Get DeepBind-like max-activation scores.')
     parser_maxact.add_argument("-m", "--model", required=True, help="Model file (.h5)")
     parser_maxact.add_argument("-t", "--test-data", required=True, help="Test data (.npy)")
-    parser_maxact.add_argument("-N", "--nonpatho-test", required=True,
-                               help="Nonpathogenic reads of the test data set (.fasta)")
-    parser_maxact.add_argument("-P", "--patho-test", required=True, help="Pathogenic reads of"
-                                                                         " the test data set (.fasta)")
+    parser_maxact.add_argument("-N", "--nonpatho-test", help="Nonpathogenic reads of the test data set (.fasta)")
+    parser_maxact.add_argument("-P", "--patho-test", help="Pathogenic reads of the test data set (.fasta)")
     parser_maxact.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_maxact.add_argument("-n", "--n-cpus", dest="n_cpus", type=int, help="Number of CPU cores. Default: all.")
     parser_maxact.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
