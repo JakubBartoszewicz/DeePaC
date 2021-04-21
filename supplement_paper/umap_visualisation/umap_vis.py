@@ -156,13 +156,17 @@ def run_workflow(dataset_filename, embedding_filename, label_filename, n_compone
         data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
         if len(data.shape) > 2:
             data_reshaped = reshape_data(data)
-        embedding = run_umap(path, f_name, data_reshaped, n_components, min_dist, n_neighbors, metric, seed)
+            embedding = run_umap(path, f_name, data_reshaped, n_components, min_dist, n_neighbors, metric, seed)
+        else:
+            embedding = run_umap(path, f_name, data, n_components, min_dist, n_neighbors, metric, seed)
     else:  # otherwise read and use ready embedding
         data, labels = utils.read_data_and_labels(dataset_filename, label_filename)
         umap_object = utils.read_embedding(embedding_filename)
         if len(data.shape) > 2:
             data_reshaped = reshape_data(data)
-        embedding = umap_object.transform(data_reshaped)
+            embedding = umap_object.transform(data_reshaped)
+        else:
+            embedding = umap_object.transform(data)
 
     # check the number of classes in labels
     classes = utils.check_number_of_classes(labels)
