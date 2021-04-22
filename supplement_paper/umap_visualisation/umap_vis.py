@@ -33,7 +33,8 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, metric,
 
     print("Saving the embedding...")
     parameters = "_".join([str(min_dist).replace(".", ""), str(n_neighbors), str(metric), str(n_components) + "d"])
-    pickle.dump(reducer, open(os.path.join(path, file_name + "_" + parameters + "_embedding.pickle"), 'wb'))
+    pickle.dump(reducer, open(os.path.join(path, file_name + "_" + parameters + "_embedding.pickle"), 'wb'),
+                protocol=max(4, pickle.DEFAULT_PROTOCOL))
 
     assert (np.all(embedding == reducer.embedding_))
 
