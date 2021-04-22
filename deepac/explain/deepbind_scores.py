@@ -61,6 +61,7 @@ def get_maxact(args):
     find_maxact = not args.save_activs_only
     merge_activations_npy = args.save_activs_merge if save_activations_npy else None
     pool_activations_npy = args.save_activs_pool if save_activations_npy else None
+    reads = None
 
     # Creates the model and loads weights
     model = load_model(args.model, custom_objects=get_custom_objects())
@@ -145,8 +146,8 @@ def get_maxact(args):
     else:
         cores = args.n_cpus
 
-    all_act_fwd = []
-    all_act_rc = []
+    all_act_fwd = None
+    all_act_rc = None
     act_fwd, act_rc = None, None
     results_fwd, results_rc = None, None
     reads_chunk = None
@@ -189,8 +190,12 @@ def get_maxact(args):
                     results_fwd = iterate_fwd([samples_chunk, 0])
                     results_rc = iterate_rc([samples_chunk, 0])
         if save_activations_npy:
-            all_act_fwd.append(act_fwd)
-            all_act_rc.append(act_rc)
+            if all_act_fwd is None:
+                all_act_fwd = act_fwd
+                all_act_rc = act_rc
+            else:
+                all_act_fwd = np.concatenate((all_act_fwd, act_fwd))
+                all_act_rc = np.concatenate((all_act_rc, act_rc))
 
         if find_maxact:
             n_filters = results_fwd[0].shape[-1]
@@ -224,8 +229,6 @@ def get_maxact(args):
     print("Processed in " + str(end_time - start_time))
     if save_activations_npy:
         print("Saving raw activations...")
-        all_act_fwd = np.concatenate(all_act_fwd)
-        all_act_rc = np.concatenate(all_act_rc)
         if pool_activations_npy == "max" or pool_activations_npy == "maximum":
             all_act_fwd = all_act_fwd.max(axis=1)
             all_act_rc = all_act_rc.max(axis=1)
