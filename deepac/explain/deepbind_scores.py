@@ -113,6 +113,8 @@ def get_maxact(args):
 
     layer_output_fwd = model.get_layer(index=conv_layer_idx).get_output_at(0)
     layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
+    layer_output_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(0)
+    n_filters = layer_output_shape[-1]
     if tf.executing_eagerly():
         model = tf.keras.Model(model.inputs,
                                (layer_output_fwd, layer_output_rc))
@@ -130,11 +132,10 @@ def get_maxact(args):
             iterate_fwd = K.function([input_img, K.learning_phase()],
                                      [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
 
-            layer_output_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
             # index at fwd_output = output size - index at rc_output. returns index at FWD!
             iterate_rc = K.function([input_img, K.learning_phase()],
                                     [K.max(layer_output_rc, axis=1),
-                                     layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
+                                    layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
 
     start_time = time.time()
 
@@ -146,8 +147,8 @@ def get_maxact(args):
     else:
         cores = args.n_cpus
 
-    all_act_fwd = None
-    all_act_rc = None
+    all_act_fwd = np.zeros((samples.shape[0], n_filters))
+    all_act_rc = np.zeros((samples.shape[0], n_filters))
     act_fwd, act_rc = None, None
     results_fwd, results_rc = None, None
     reads_chunk = None
@@ -167,7 +168,6 @@ def get_maxact(args):
             else:
                 act_fwd = iterate_fwd([samples_chunk, 0])[0]
                 act_rc = iterate_rc([samples_chunk, 0])[0]
-            n_filters = act_fwd.shape[-1]
             mot_fwd = np.zeros((chunk_size, n_filters), dtype="int32")
             mot_rc = np.zeros((chunk_size, n_filters), dtype="int32")
             results_fwd = [act_fwd, mot_fwd]
@@ -190,12 +190,14 @@ def get_maxact(args):
                     results_fwd = iterate_fwd([samples_chunk, 0])
                     results_rc = iterate_rc([samples_chunk, 0])
         if save_activations_npy:
-            if all_act_fwd is None:
-                all_act_fwd = act_fwd
-                all_act_rc = act_rc
+            if pool_activations_npy == "max" or pool_activations_npy == "maximum":
+                all_act_fwd[n:n+chunk_size, :] = act_fwd.max(axis=1)
+                all_act_rc[n:n+chunk_size, :] = act_rc.max(axis=1)
+            elif pool_activations_npy == "avg" or pool_activations_npy == "average":
+                all_act_fwd[n:n+chunk_size, :] = act_fwd.mean(axis=1)
+                all_act_rc[n:n+chunk_size, :] = act_rc.mean(axis=1)
             else:
-                all_act_fwd = np.concatenate((all_act_fwd, act_fwd))
-                all_act_rc = np.concatenate((all_act_rc, act_rc))
+                raise ValueError(f"Unrecognized pooling method: {pool_activations_npy}.")
 
         if find_maxact:
             n_filters = results_fwd[0].shape[-1]
@@ -229,14 +231,6 @@ def get_maxact(args):
     print("Processed in " + str(end_time - start_time))
     if save_activations_npy:
         print("Saving raw activations...")
-        if pool_activations_npy == "max" or pool_activations_npy == "maximum":
-            all_act_fwd = all_act_fwd.max(axis=1)
-            all_act_rc = all_act_rc.max(axis=1)
-        elif pool_activations_npy == "avg" or pool_activations_npy == "average":
-            all_act_fwd = all_act_fwd.mean(axis=1)
-            all_act_rc = all_act_rc.mean(axis=1)
-        else:
-            raise ValueError(f"Unrecognized pooling method: {pool_activations_npy}.")
 
         np.save(os.path.join(args.out_dir, "activations_fwd.npy"), all_act_fwd)
         np.save(os.path.join(args.out_dir, "activations_rc.npy"), all_act_rc)
