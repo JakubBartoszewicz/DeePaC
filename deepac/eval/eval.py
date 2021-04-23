@@ -159,9 +159,11 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     multiclass = True if evalconfig.n_classes > 2 else False
     labels = list(range(evalconfig.n_classes))
     average = None
+    average_au = None
     target_class = evalconfig.target_class
     if target_class is None:
         average = "macro" if multiclass else "binary"
+        average_au = "macro"
     y_orig_pred_undef = np.isnan(y_pred)
     if len(y_orig_pred_undef.shape) > 1:
         y_orig_pred_undef = np.any(y_orig_pred_undef, axis=-1)
@@ -218,9 +220,9 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     # missing predictions due to confidence thresh don't affect AUPR, AUC & log loss
     # (but NaNs present in the original predictions must be filtered)
     log_loss = try_metric(mtr.log_loss, y_test[y_orig_pred_def], y_pred[y_orig_pred_def], eps=1e-07, labels=labels)
-    if average is not None:
+    if average_au is not None:
         auroc = try_metric(mtr.roc_auc_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
-                           multi_class="ovr", average=average, labels=labels)
+                           multi_class="ovr", average=average_au, labels=labels)
     else:
         # mtr.roc_auc_score doesn't support average=None
         print(colored("AUC not supported for multiclass evaluation with a specific target class", "yellow"))
@@ -230,10 +232,10 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
         for i in range(y_test.shape[0]):
             y_test_multi[i, y_test[i]] = 1
         aupr = try_metric(mtr.average_precision_score, y_test_multi[y_orig_pred_def], y_pred[y_orig_pred_def],
-                          average=average)
+                          average=average_au)
     else:
         aupr = try_metric(mtr.average_precision_score, y_test[y_orig_pred_def], y_pred[y_orig_pred_def],
-                          average=average)
+                          average=average_au)
 
     # missing predictions don't affect mcc & precision
     mcc = try_metric(mtr.matthews_corrcoef, y_test_matched, y_pred_class_matched)
