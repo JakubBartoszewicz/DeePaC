@@ -59,15 +59,30 @@ def get_maxact(args):
 
     save_activations_npy = args.save_activs_and_maxact or args.save_activs_only
     find_maxact = not args.save_activs_only
+    do_rc = args.inter_layer > 0
     merge_activations_npy = args.save_activs_merge if save_activations_npy else None
-    pool_activations_npy = args.save_activs_pool if save_activations_npy else None
     reads = None
 
     # Creates the model and loads weights
     model = load_model(args.model, custom_objects=get_custom_objects())
     print(model.summary())
     do_lstm = args.do_lstm
-    if do_lstm:
+    if args.inter_layer == 0:
+        if find_maxact:
+            raise ValueError("Finding max activations not supported for the global pooling layer.")
+        # Special case - last layer (after pooling)
+        pad_left = 0
+        pad_right = 0
+        motif_length = None
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers)
+                          if "Global" in str(layer)]
+        if len(conv_layer_ids) > 1:
+            raise ValueError("Only one global pooling layer was assumed. Found more.")
+        else:
+            conv_layer_idx = conv_layer_ids[0]
+    elif args.inter_layer < 0:
+        raise ValueError("Negative layer index.")
+    elif do_lstm:
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
         motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
         pad_left = 0
@@ -75,6 +90,7 @@ def get_maxact(args):
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
                           if "Bidirectional" in str(layer)][args.inter_layer - 1]
     else:
+        # ignore size-1 Convs in skip connections
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)
                           and layer.kernel_size[0] > 1]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
@@ -112,30 +128,35 @@ def get_maxact(args):
     # Specify input and output of the network
 
     layer_output_fwd = model.get_layer(index=conv_layer_idx).get_output_at(0)
-    layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
+    layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1) if do_rc else None
+    iterate_rc = None
     layer_output_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(0)
     n_filters = layer_output_shape[-1]
     if tf.executing_eagerly():
-        model = tf.keras.Model(model.inputs,
-                               (layer_output_fwd, layer_output_rc))
+        if do_rc:
+            model = tf.keras.Model(model.inputs,
+                                   (layer_output_fwd, layer_output_rc))
+        else:
+            model = tf.keras.Model(model.inputs, layer_output_fwd)
         iterate_fwd = None
-        iterate_rc = None
     else:
         input_img = model.layers[0].input
         if do_lstm:
             iterate_fwd = K.function([input_img, K.learning_phase()],
                                      [layer_output_fwd])
             # index at fwd_output = output size - index at rc_output. returns index at FWD!
-            iterate_rc = K.function([input_img, K.learning_phase()],
-                                    [layer_output_rc])
+            if do_rc:
+                iterate_rc = K.function([input_img, K.learning_phase()],
+                                        [layer_output_rc])
         else:
             iterate_fwd = K.function([input_img, K.learning_phase()],
                                      [K.max(layer_output_fwd, axis=1), K.argmax(layer_output_fwd, axis=1)])
 
             # index at fwd_output = output size - index at rc_output. returns index at FWD!
-            iterate_rc = K.function([input_img, K.learning_phase()],
-                                    [K.max(layer_output_rc, axis=1),
-                                    layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
+            if do_rc:
+                iterate_rc = K.function([input_img, K.learning_phase()],
+                                        [K.max(layer_output_rc, axis=1),
+                                        layer_output_shape[1] - 1 - K.argmax(layer_output_rc, axis=1)])
 
     start_time = time.time()
 
@@ -148,7 +169,7 @@ def get_maxact(args):
         cores = args.n_cpus
 
     all_act_fwd = np.zeros((samples.shape[0], n_filters))
-    all_act_rc = np.zeros((samples.shape[0], n_filters))
+    all_act_rc = np.zeros((samples.shape[0], n_filters)) if do_rc else None
     act_fwd, act_rc = None, None
     results_fwd, results_rc = None, None
     reads_chunk = None
@@ -162,42 +183,48 @@ def get_maxact(args):
             reads_chunk = reads[n:n+chunk_size]
         if do_lstm:
             if tf.executing_eagerly():
-                act_fwd, act_rc = model(samples_chunk, training=False)
+                if do_rc:
+                    act_fwd, act_rc = model(samples_chunk, training=False)
+                    act_rc = act_rc.numpy()
+                else:
+                    act_fwd = model(samples_chunk, training=False)
                 act_fwd = act_fwd.numpy()
-                act_rc = act_rc.numpy()
             else:
                 act_fwd = iterate_fwd([samples_chunk, 0])[0]
-                act_rc = iterate_rc([samples_chunk, 0])[0]
+                if do_rc:
+                    act_rc = iterate_rc([samples_chunk, 0])[0]
             mot_fwd = np.zeros((chunk_size, n_filters), dtype="int32")
-            mot_rc = np.zeros((chunk_size, n_filters), dtype="int32")
+            mot_rc = np.zeros((chunk_size, n_filters), dtype="int32") if do_rc else None
             results_fwd = [act_fwd, mot_fwd]
             results_rc = [act_rc, mot_rc]
         else:
             if tf.executing_eagerly():
-                act_fwd, act_rc = model(samples_chunk, training=False)
+                if do_rc:
+                    act_fwd, act_rc = model(samples_chunk, training=False)
+                else:
+                    act_fwd = model(samples_chunk, training=False)
                 if save_activations_npy:
                     act_fwd = act_fwd.numpy()
-                    act_rc = act_rc.numpy()
+                    act_rc = act_rc.numpy() if do_rc else None
                 if find_maxact:
                     results_fwd = [K.max(act_fwd, axis=1).numpy(), K.argmax(act_fwd, axis=1).numpy()]
                     out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
-                    results_rc = [K.max(act_rc, axis=1).numpy(), out_shape[1] - 1 - K.argmax(act_rc, axis=1).numpy()]
+                    if do_rc:
+                        results_rc = [K.max(act_rc, axis=1).numpy(),
+                                      out_shape[1] - 1 - K.argmax(act_rc, axis=1).numpy()]
             else:
                 if save_activations_npy:
                     act_fwd = K.function([model.layers[0].input, K.learning_phase()], [layer_output_fwd])
-                    act_rc = K.function([model.layers[0].input, K.learning_phase()], [layer_output_rc])
+                    if do_rc:
+                        act_rc = K.function([model.layers[0].input, K.learning_phase()], [layer_output_rc])
                 if find_maxact:
                     results_fwd = iterate_fwd([samples_chunk, 0])
-                    results_rc = iterate_rc([samples_chunk, 0])
+                    if do_rc:
+                        results_rc = iterate_rc([samples_chunk, 0])
         if save_activations_npy:
-            if pool_activations_npy == "max" or pool_activations_npy == "maximum":
-                all_act_fwd[n:n+chunk_size, :] = act_fwd.max(axis=1)
-                all_act_rc[n:n+chunk_size, :] = act_rc.max(axis=1)
-            elif pool_activations_npy == "avg" or pool_activations_npy == "average":
-                all_act_fwd[n:n+chunk_size, :] = act_fwd.mean(axis=1)
-                all_act_rc[n:n+chunk_size, :] = act_rc.mean(axis=1)
-            else:
-                raise ValueError(f"Unrecognized pooling method: {pool_activations_npy}.")
+            all_act_fwd[n:n+chunk_size, :] = act_fwd
+            if do_rc:
+                all_act_rc[n:n+chunk_size, :] = act_rc
 
         if find_maxact:
             n_filters = results_fwd[0].shape[-1]
@@ -231,17 +258,24 @@ def get_maxact(args):
     print("Processed in " + str(end_time - start_time))
     if save_activations_npy:
         print("Saving raw activations...")
+        if args.inter_layer == 0:
+            all_act_rc = all_act_fwd[:, n_filters//2:]
+            all_act_rc = all_act_rc[::, ::-1]
+            all_act_fwd = all_act_fwd[:, :n_filters//2]
 
-        np.save(os.path.join(args.out_dir, "activations_fwd.npy"), all_act_fwd)
-        np.save(os.path.join(args.out_dir, "activations_rc.npy"), all_act_rc)
+        if do_rc or args.inter_layer == 0:
+            np.save(os.path.join(args.out_dir, "activations_fwd.npy"), all_act_fwd)
+            np.save(os.path.join(args.out_dir, "activations_rc.npy"), all_act_rc)
 
-        if merge_activations_npy == "add" or merge_activations_npy == "sum":
-            np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd + all_act_rc)
-        elif merge_activations_npy == "max" or merge_activations_npy == "maximum":
-            np.save(os.path.join(args.out_dir, "activations.npy"), np.maximum(all_act_fwd, all_act_rc))
-        elif merge_activations_npy == "mul" or merge_activations_npy == "multiply":
-            np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd * all_act_rc)
-        elif pool_activations_npy == "avg" or pool_activations_npy == "average":
-            np.save(os.path.join(args.out_dir, "activations.npy"), (all_act_fwd + all_act_rc)/2)
+            if merge_activations_npy == "add" or merge_activations_npy == "sum":
+                np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd + all_act_rc)
+            elif merge_activations_npy == "max" or merge_activations_npy == "maximum":
+                np.save(os.path.join(args.out_dir, "activations.npy"), np.maximum(all_act_fwd, all_act_rc))
+            elif merge_activations_npy == "mul" or merge_activations_npy == "multiply":
+                np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd * all_act_rc)
+            elif merge_activations_npy == "avg" or merge_activations_npy == "average":
+                np.save(os.path.join(args.out_dir, "activations.npy"), (all_act_fwd + all_act_rc)/2)
+            else:
+                raise ValueError(f"Unrecognized merging method: {merge_activations_npy}.")
         else:
-            raise ValueError(f"Unrecognized merging method: {merge_activations_npy}.")
+            np.save(os.path.join(args.out_dir, "activations.npy"), all_act_fwd)

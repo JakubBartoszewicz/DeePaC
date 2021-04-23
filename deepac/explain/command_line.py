@@ -36,8 +36,6 @@ def add_explain_parser(xparser):
                                     " Overrides --save-activs.")
     parser_maxact.add_argument("--merge-activs", dest="save_activs_merge", default="sum",
                                help="RC merging function to use (sum/max/mul/avg).")
-    parser_maxact.add_argument("--pool-activs", dest="save_activs_pool", default="avg",
-                               help="Global pooling function to use (max or average).")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')

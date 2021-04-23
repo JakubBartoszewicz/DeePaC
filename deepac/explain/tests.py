@@ -41,7 +41,7 @@ class ExplainTester:
         args = Namespace(model=self.model, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "maxact_last"),
                          n_cpus=self.n_cpus, do_lstm=False, inter_layer=0, chunk_size=500, save_activs_and_maxact=False,
-                         save_activs_only=True, save_activs_merge="sum", save_activs_pool="avg")
+                         save_activs_only=True, save_activs_merge="sum")
         get_maxact(args)
         assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "activations_fwd.npy"))), "Maxact failed."
         assert (os.path.isfile(os.path.join(self.outpath, "maxact_last", "activations_rc.npy"))), "Maxact failed."
