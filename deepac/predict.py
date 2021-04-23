@@ -58,9 +58,8 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512)
         for i in tqdm(range(replicates)):
             y_pred_raw = model.predict(x_data, batch_size=batch_size)
             y_preds[:, i] = y_pred_raw.squeeze()
-        y_preds = np.asarray(y_preds)
-        y_pred = y_preds.mean(axis=0)
-        y_std = y_preds.std(axis=0)
+        y_pred = y_preds.mean(axis=1)
+        y_std = y_preds.std(axis=1)
     else:
         y_pred = model.predict(x_data, batch_size=batch_size)
         y_std = None
