@@ -50,8 +50,8 @@ class EvalConfig:
             self.target_class = None
         else:
             self.target_class = config['Data'].getint('TargetClass')
-
-            # Set the first and last epoch to evaluate
+        self.replicates = config['Data'].getint('Replicates', fallback=1)
+        # Set the first and last epoch to evaluate
         self.epoch_start = config['Epochs'].getint('EpochStart')
         self.epoch_end = config['Epochs'].getint('EpochEnd')
 
@@ -139,7 +139,7 @@ def predict(evalconfig, x_test, n_epoch, paired=False, rc=False):
     else:
         filename = "{p}-e{ne:03d}-predictions-{s}.npy".format(p=evalconfig.name_prefix, ne=n_epoch, s=dataset_path)
     # Predict class probabilities
-    y_pred, _ = predict_array(model, x_test, output=filename, rc=rc)
+    y_pred, _ = predict_array(model, x_test, replicates=evalconfig.replicates, output=filename, rc=rc)
     return y_pred
 
 
@@ -160,7 +160,7 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
     labels = list(range(evalconfig.n_classes))
     average = None
     average_au = None
-    target_class = evalconfig.target_class
+    target_class = evalconfig.target_class if multiclass else None
     if target_class is None:
         average = "macro" if multiclass else "binary"
         average_au = "macro"
