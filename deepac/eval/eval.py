@@ -302,7 +302,11 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
             return
 
         if not np.isnan(auroc):
-            fpr, tpr, threshold = mtr.roc_curve(y_test, y_pred)
+            fpr, tpr, thresholds = mtr.roc_curve(y_test, y_pred)
+            scores = tpr-fpr
+            best_score = np.max(scores)
+            best_thresh = thresholds[scores == best_score]
+            print(f"Best balanced acc.: {(best_score+1)/2}. Optimal threshold(s): {best_thresh}.")
             plt.plot(fpr, tpr, 'b', label='AUC = %0.2f' % auroc)
             plt.title("AUROC: {}".format(dataset_name))
             plt.legend(loc='lower right')
@@ -319,6 +323,11 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
 
         if not np.isnan(aupr):
             precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
+            scores = 2*(precision*recall)/(precision+recall)
+            scores = scores[:thresholds.shape[0]]
+            best_score = np.max(scores)
+            best_thresh = thresholds[scores == best_score]
+            print(f"Best f1: {best_score}. Optimal threshold(s): {best_thresh}.")
             plt.plot(recall, precision, 'b', label='AUC = %0.2f' % aupr)
             plt.title("AUPR: {}".format(dataset_name))
             plt.legend(loc='lower right')
