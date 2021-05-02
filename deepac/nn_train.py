@@ -165,6 +165,13 @@ class RCConfig:
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+
+            self.embedding_model = config['TransferEmbeddings'].get('EmbeddingModel', fallback="none")
+            if self.embedding_model == "none" or self.embedding_model == "None":
+                self.embedding_model = None
+            self.freeze_embeddings = config['TransferEmbeddings'].getboolean('FreezeEmbeddings', fallback=False)
+            self.embedding_remove_top_n = config['TransferEmbeddings'].getint('RemoveTopN', fallback=0)
+
             try:
                 self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim')
             except KeyError:
@@ -794,8 +801,15 @@ class RCNet:
                         seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # First recurrent layer already added
             self._current_recurrent = 1
+        elif self.config.embedding_model is not None:
+            submodel = load_model(self.config.embedding_model)
+            submodel = tf.keras.models.Model(inputs=submodel.input,
+                                             outputs=submodel.get_layer(
+                                                 index=self.config.embedding_remove_top_n).get_output_at(0))
+            submodel.trainable = False
+            x = submodel(x, training=False)
         else:
-            raise ValueError('First layer should convolutional, recurrent or a transformer')
+            raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
         start = None
         # For next convolutional layers
@@ -1009,8 +1023,15 @@ class RCNet:
 
             # First recurrent layer already added
             self._current_recurrent = self._current_recurrent + 1
+        elif self.config.embedding_model is not None:
+            submodel = load_model(self.config.embedding_model)
+            submodel = tf.keras.models.Model(inputs=submodel.input,
+                                             outputs=submodel.get_layer(
+                                                 index=-1-self.config.embedding_remove_top_n).get_output_at(0))
+            submodel.trainable = False
+            x = submodel(x, training=False)
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
         start = None
         # For next convolutional layers
@@ -1261,8 +1282,16 @@ class RCNet:
                                 seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
                 x_rc = Dropout(self.config.recurrent_dropout,
                                seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
-        else:
-            raise ValueError('First layer should be convolutional, recurrent or a transformer')
+            elif self.config.embedding_model is not None:
+                submodel = load_model(self.config.embedding_model)
+                submodel = tf.keras.models.Model(inputs=submodel.input,
+                                                 outputs=submodel.get_layer(
+                                                     index=self.config.embedding_remove_top_n).get_output_at(0))
+                submodel.trainable = False
+                x_fwd = submodel(x_fwd, training=False)
+                x_rc = submodel(x_rc, training=False)
+            else:
+                raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
         start_fwd, start_rc = None, None
         # For next convolutional layers
