@@ -806,7 +806,8 @@ class RCNet:
             submodel = tf.keras.models.Model(inputs=submodel.input,
                                              outputs=submodel.get_layer(
                                                  index=self.config.embedding_remove_top_n).get_output_at(0))
-            submodel.trainable = False
+            if self.config.freeze_embeddings:
+                submodel.trainable = False
             x = submodel(x, training=False)
         else:
             raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
@@ -1028,7 +1029,8 @@ class RCNet:
             submodel = tf.keras.models.Model(inputs=submodel.input,
                                              outputs=submodel.get_layer(
                                                  index=-1-self.config.embedding_remove_top_n).get_output_at(0))
-            submodel.trainable = False
+            if self.config.freeze_embeddings:
+                submodel.trainable = False
             x = submodel(x, training=False)
         else:
             raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
@@ -1287,7 +1289,8 @@ class RCNet:
                 submodel = tf.keras.models.Model(inputs=submodel.input,
                                                  outputs=submodel.get_layer(
                                                      index=self.config.embedding_remove_top_n).get_output_at(0))
-                submodel.trainable = False
+                if self.config.freeze_embeddings:
+                    submodel.trainable = False
                 x_fwd = submodel(x_fwd, training=False)
                 x_rc = submodel(x_rc, training=False)
             else:
