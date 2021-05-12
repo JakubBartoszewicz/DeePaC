@@ -10,6 +10,7 @@ import numpy as np
 import csv
 from deepac.eval.eval import get_performance, get_eval_header
 from deepac.predict import predict_multiread
+import os
 
 
 class EvalSpecConfig:
@@ -135,4 +136,6 @@ def evaluate_species(config):
                                                     confidence_thresh=evalconfig.read_confidence_thresh,
                                                     n_classes=evalconfig.n_classes)
         get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
+        np.save("{}/{}-genomes.npy".format(evalconfig.dir_path, os.path.splitext(evalconfig.datapred_path)[0]),
+                y_pred_combined)
 
