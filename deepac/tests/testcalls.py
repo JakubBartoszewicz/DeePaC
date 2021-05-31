@@ -1,5 +1,5 @@
 import tensorflow as tf
-from deepac.predict import predict_fasta, filter_fasta, filter_paired_fasta
+from deepac.predict import predict_fasta, filter_fasta, filter_paired_fasta, predict_array
 from deepac.nn_train import RCConfig, RCNet
 from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
@@ -18,6 +18,7 @@ from multiprocessing import Process
 import configparser
 import os
 from termcolor import colored
+import numpy as np
 
 
 class Tester:
@@ -418,6 +419,14 @@ class Tester:
                                             "deepac-test-e002-predictions-{}.npy".format(val_data)))), \
             "Prediction failed."
 
+        predict_array(model, np.load(os.path.join("deepac-tests", "{}_data.npy".format(val_data))),
+                      os.path.join("deepac-tests", "deepac-test-logs",
+                                   "deepac-test-e002-predictions-logits-{}.npy".format(val_data)),
+                      replicates=1, get_logits=True)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002-predictions-logits-{}.npy".format(val_data)))), \
+            "Prediction failed."
+
         if not quick:
             print("TEST: Predicting (rapid)...")
             paprconfig = self.bloader.get_rapid_training_config()
@@ -502,6 +511,24 @@ class Tester:
                                                 "deepac-test-species-logit_sample_val_auc.png"))), "Evaluation failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "deepac-test-species-logit_sample_val_aupr.png"))), "Evaluation failed."
+
+        config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit-in'
+        config['Options']['Agg_logits'] = 'False'
+        config['Options']['Add_activ'] = 'True'
+        if self.multiclass:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+        else:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-logit-in-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit-in_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit-in_sample_val_aupr.png"))), "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""

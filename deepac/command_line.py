@@ -222,10 +222,11 @@ class MainRunner:
             compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates,
                        batch_size=args.batch_size)
         elif args.array:
-            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size)
+            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size,
+                        get_logits=args.get_logits)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
-                          batch_size=args.batch_size)
+                          batch_size=args.batch_size, get_logits=args.get_logits)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -306,6 +307,8 @@ class MainRunner:
                                     help='Check RC-constraint compliance (requires .npy input).')
         parser_predict.add_argument('-b', '--batch-size', dest="batch_size", default=512, type=int,
                                     help='Batch size.')
+        parser_predict.add_argument('--get-logits', dest="get_logits", action='store_true',
+                                    help='Return logits instead of the final predictions.')
         parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
                                     help='Plot kind for the RC-constraint compliance check.')
         parser_predict.add_argument('--alpha', default=1.0, type=float,

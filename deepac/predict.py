@@ -13,9 +13,11 @@ import itertools
 from tqdm import tqdm
 import os
 from scipy.special import softmax, logit, expit
+from tensorflow.keras import backend as K
 
 
-def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False, replicates=1, batch_size=512):
+def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False, replicates=1, batch_size=512,
+                  get_logits=False):
     """Predict pathogenic potentials from a fasta file."""
 
     alphabet = "ACGT"
@@ -35,19 +37,19 @@ def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', r
             x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
                                               read_length=read_length), read_fasta(input_handle)))
     # Predict
-    y_pred, y_std = predict_array(model, x_data, output, rc, replicates, batch_size)
+    y_pred, y_std = predict_array(model, x_data, output, rc, replicates, batch_size, get_logits)
     end = time.time()
     print("Preprocessing & predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
     return y_pred, y_std
 
 
-def predict_npy(model, input_npy, output, rc=False, replicates=1, batch_size=512):
+def predict_npy(model, input_npy, output, rc=False, replicates=1, batch_size=512, get_logits=False):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     x_data = np.load(input_npy, mmap_mode='r')
-    return predict_array(model, x_data, output, rc, replicates, batch_size)
+    return predict_array(model, x_data, output, rc, replicates, batch_size, get_logits)
 
 
-def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512):
+def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512, get_logits=False):
     """Predict pathogenic potentials from a preprocessed numpy array."""
     if rc:
         x_data = x_data[::, ::-1, ::-1]
@@ -55,13 +57,32 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512)
     # Predict
     print("Predicting...")
     start = time.time()
+    iterate = None
+    if get_logits:
+        layer_output = model.get_layer(index=-2).get_output_at(0)
+        if tf.executing_eagerly():
+            model = tf.keras.Model(model.inputs, layer_output)
+        else:
+            model_input = model.layers[0].input
+            iterate = K.function([model_input, K.learning_phase()], [layer_output])
+
+    def __get_preds(in_data):
+        if get_logits:
+            if tf.executing_eagerly():
+                out_raw = model(in_data, training=False)
+            else:
+                out_raw = iterate([in_data, 0])[0]
+        else:
+            out_raw = model.predict(in_data, batch_size=batch_size)
+        return out_raw
+
     if replicates > 1:
         if n_outputs == 1:
             y_preds = np.zeros((x_data.shape[0], replicates))
         else:
             y_preds = np.zeros((x_data.shape[0], n_outputs, replicates))
         for i in tqdm(range(replicates)):
-            y_pred_raw = model.predict(x_data, batch_size=batch_size)
+            y_pred_raw = __get_preds(x_data)
             if n_outputs == 1:
                 y_preds[:, i] = y_pred_raw.squeeze()
             else:
@@ -69,7 +90,7 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512)
         y_pred = y_preds.mean(axis=-1)
         y_std = y_preds.std(axis=-1)
     else:
-        y_pred = model.predict(x_data, batch_size=batch_size)
+        y_pred = __get_preds(x_data)
         y_std = None
 
     end = time.time()
@@ -101,7 +122,7 @@ def ensemble(predictions_list, outpath_npy):
     np.save(outpath_npy, y_pred)
 
 
-def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes=2, recover_logits=False):
+def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes=2, recover_logits=False, add_activ=False):
     """Predict from multiple reads."""
     multiclass = n_classes > 2
 
@@ -131,7 +152,7 @@ def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes
         else:
             pred = np.nan
 
-    if recover_logits:
+    if recover_logits or add_activ:
         if multiclass:
             pred = softmax(pred)  # apply softmax
         else:
