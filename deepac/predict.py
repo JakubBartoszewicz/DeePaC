@@ -67,11 +67,8 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512,
             iterate = K.function([model_input, K.learning_phase()], [layer_output])
 
     def __get_preds(in_data):
-        if get_logits:
-            if tf.executing_eagerly():
-                out_raw = model(in_data, training=False)
-            else:
-                out_raw = iterate([in_data, 0])[0]
+        if get_logits and not tf.executing_eagerly():
+            raise ValueError("Please turn eager mode on to get the logits efficiently.")
         else:
             out_raw = model.predict(in_data, batch_size=batch_size)
         return out_raw
