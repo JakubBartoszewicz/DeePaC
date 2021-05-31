@@ -67,11 +67,11 @@ class EvalSpecConfig:
 
         # Set plotting
         self.do_plots = config['Options'].getboolean('Do_plots')
-        self.ignore_unmatched = config['Options'].getboolean('Ignore_unmatched')
+        self.agg_logits = config['Options'].getboolean('Agg_logits', fallback="False")
 
 
 def get_species_preds(y_pred, class_csv_path, delimiter=';',
-                      threshold=0.5, confidence_thresh=None, n_classes=2):
+                      threshold=0.5, confidence_thresh=None, n_classes=2, recover_logits=False):
     """Generate species-wise predictions."""
     species_list = []
     with open(class_csv_path, 'r') as class_csv:
@@ -89,7 +89,8 @@ def get_species_preds(y_pred, class_csv_path, delimiter=';',
         class_dict[row[0]].append((row[1], row[2]))
     for c in range(n_classes):
         for species in class_dict[c]:
-            pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh, n_classes)
+            pred = predict_multiread(y_pred[used:used+species[1]], threshold, confidence_thresh, n_classes,
+                                     recover_logits=recover_logits)
             y_result.append(pred)
             used = used + species[1]
     return np.asarray(y_result), np.asarray(labels)
@@ -116,7 +117,8 @@ def evaluate_species(config):
     y_pred_1, y_test = get_species_preds(y_pred_1_raw, evalconfig.classcsv_path,
                                          threshold=evalconfig.thresh,
                                          confidence_thresh=evalconfig.read_confidence_thresh,
-                                         n_classes=evalconfig.n_classes)
+                                         n_classes=evalconfig.n_classes,
+                                         recover_logits=evalconfig.agg_logits)
     get_performance(evalconfig, y_test, y_pred_1, dataset_name=evalconfig.dataset_path)
 
     if evalconfig.pairedset_path is not None:
@@ -127,14 +129,16 @@ def evaluate_species(config):
         y_pred_2, y_test = get_species_preds(y_pred_2_raw, evalconfig.classcsv_path,
                                              threshold=evalconfig.thresh,
                                              confidence_thresh=evalconfig.read_confidence_thresh,
-                                             n_classes=evalconfig.n_classes)
+                                             n_classes=evalconfig.n_classes,
+                                             recover_logits=evalconfig.agg_logits)
         get_performance(evalconfig, y_test, y_pred_2, dataset_name=evalconfig.pairedset_path)
 
         y_pred_combined_raw = np.mean([y_pred_1_raw, y_pred_2_raw], axis=0)
         y_pred_combined, y_test = get_species_preds(y_pred_combined_raw, evalconfig.classcsv_path,
                                                     threshold=evalconfig.thresh,
                                                     confidence_thresh=evalconfig.read_confidence_thresh,
-                                                    n_classes=evalconfig.n_classes)
+                                                    n_classes=evalconfig.n_classes,
+                                                    recover_logits=evalconfig.agg_logits)
         get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
         np.save("{}/{}-genomes.npy".format(evalconfig.dir_path, os.path.splitext(evalconfig.datapred_path)[0]),
                 y_pred_combined)

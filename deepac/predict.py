@@ -12,6 +12,7 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
 from tqdm import tqdm
 import os
+from scipy.special import softmax, logit, expit
 
 
 def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False, replicates=1, batch_size=512):
@@ -100,13 +101,23 @@ def ensemble(predictions_list, outpath_npy):
     np.save(outpath_npy, y_pred)
 
 
-def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes=2):
+def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes=2, recover_logits=False):
     """Predict from multiple reads."""
     multiclass = n_classes > 2
+
+    if recover_logits:
+        if multiclass:
+            array = np.log(array)  # + arbitrary constant C; let C=0
+        else:
+            array = logit(array)
+
     if confidence_threshold is None or \
             (np.isclose(confidence_threshold, threshold) and not multiclass):
         pred = np.mean(array, axis=0)
     else:
+        if recover_logits:
+            raise ValueError("Aggregation in logit space is incompatible with confidence thresholding."
+                             " Check your config file.")
         if multiclass:
             above_thresh = np.max(array, axis=-1) > confidence_threshold
             preds = array[above_thresh]
@@ -119,6 +130,13 @@ def predict_multiread(array, threshold=0.5, confidence_threshold=None, n_classes
             pred = np.mean(preds, axis=0)
         else:
             pred = np.nan
+
+    if recover_logits:
+        if multiclass:
+            pred = softmax(pred)  # apply softmax
+        else:
+            pred = expit(pred)  # apply sigmoid
+
     return pred
 
 
