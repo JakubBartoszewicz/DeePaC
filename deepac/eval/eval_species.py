@@ -140,6 +140,11 @@ def evaluate_species(config):
                                                     n_classes=evalconfig.n_classes,
                                                     recover_logits=evalconfig.agg_logits)
         get_performance(evalconfig, y_test, y_pred_combined, dataset_name=evalconfig.combinedset_path)
-        np.save("{}/{}-genomes.npy".format(evalconfig.dir_path, os.path.splitext(evalconfig.datapred_path)[0]),
-                y_pred_combined)
+        if evalconfig.agg_logits:
+            np.save("{}/{}-logit-genomes.npy".format(evalconfig.dir_path,
+                                                     os.path.splitext(evalconfig.datapred_path)[0]),
+                    y_pred_combined)
+        else:
+            np.save("{}/{}-genomes.npy".format(evalconfig.dir_path, os.path.splitext(evalconfig.datapred_path)[0]),
+                    y_pred_combined)
 
