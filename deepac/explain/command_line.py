@@ -35,7 +35,7 @@ def add_explain_parser(xparser):
                                help="Do not search for max activating motifs (only save raw activations)."
                                     " Overrides --save-activs.")
     parser_maxact.add_argument("--merge-activs", dest="save_activs_merge", default="sum",
-                               help="RC merging function to use (sum/max/mul/avg).")
+                               help="RC merging function to use (sum/max/mul/avg). Default: sum")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')
