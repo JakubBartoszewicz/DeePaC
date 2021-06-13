@@ -151,7 +151,7 @@ def run_gff2genome(args):
 
 def gff2genome(gff3_path, out_path):
     """Generate a .genome file."""
-    ptrn = re.compile(r'\sregion')
+    ptrn = re.compile(r'(Genbank)|(RefSeq)\s+region')
     out_lines = []
     with open(gff3_path) as in_file:
         for line in in_file:
