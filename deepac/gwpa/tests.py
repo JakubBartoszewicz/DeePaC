@@ -54,7 +54,7 @@ class GWPATester:
         df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), "Genbank", "region", "1", contigs[0], ".", "+", ".",
                             "ID=SAMPLE{i}1.1".format(i=s_id)],
                            ["SAMPLE{i}1.1".format(i=s_id), "Genbank", "gene", "51", contigs[0] - 50, ".", "+", ".",
-                            "ID=gene-EXP1;gene=EXP1;product=EXP1"],
+                            "ID=gene-EXP1;gene=EXP1;product=EXP1;Note= This is a region coding for a gene"],
                            ["SAMPLE{i}2.1".format(i=s_id), "Genbank", "region", "1", contigs[1], ".", "+", ".",
                             "ID=SAMPLE{i}2.1".format(i=s_id)],
                            ["SAMPLE{i}3.1".format(i=s_id), "Genbank", "region", "1", contigs[2], ".", "+", ".",
@@ -62,7 +62,8 @@ class GWPATester:
                            ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "region", "1", contigs[3], ".", "+", ".",
                             "ID=SAMPLE{i}4.1".format(i=s_id)],
                            ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "gene", "51", contigs[3] - 50, ".", "+", ".",
-                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i}".format(i=s_id)]])
+                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i};"
+                            "Note= This is a region coding for a gene".format(i=s_id)]])
         df.to_csv(os.path.join(self.outpath, "genome_gff3", "sample_genome{i}.gff3".format(i=s_id)), sep="\t",
                   header=False, index=False)
 
