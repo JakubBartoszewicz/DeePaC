@@ -14,6 +14,7 @@ from deepac import __file__
 from deepac.explain.tests import ExplainTester
 from deepac.gwpa.tests import GWPATester
 from deepac.utils import set_mem_growth
+from deepac.builtin_loading import RemoteLoader
 from multiprocessing import Process
 import configparser
 import os
@@ -29,7 +30,7 @@ class Tester:
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
                  do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False,
-                 large=False):
+                 large=False, offline=False):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -44,6 +45,7 @@ class Tester:
         self.additivity_check = additivity_check
         self.do_large = large
         self.multiclass = large
+        self.offline = offline
         self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
@@ -83,6 +85,9 @@ class Tester:
             self.run_datagen(npy=True,
                              tfrec=self.input_modes_dict["tfdata"])
         set_mem_growth()
+        if not self.offline:
+            print("TEST: Fetching models...")
+            self.test_fetch()
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")
@@ -139,6 +144,16 @@ class Tester:
             gwpatester.test_ntcontribs()
 
         print(colored("TEST: OK", "green"))
+
+    def test_fetch(self):
+        """Test fetching."""
+        out_dir = os.path.join("deepac-tests", "deepac_builtin_models")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        rloader = RemoteLoader()
+        rloader.fetch_models(out_dir, True)
+        assert (os.path.isfile(os.path.join(out_dir, "latest_weights_configs/",
+                                            "nano-vir-res18.h5"))), "Model fetching failed."
 
     def test_preproc(self, npy=True, tfrec=True, multiclass=False):
         """Test preprocessing."""
@@ -199,7 +214,8 @@ class Tester:
             p.join()
             if multiclass:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data",
-                                                    "sample_val_multi_data_0-{}.tfrec".format(1024 * self.scale - 1)))), \
+                                                    "sample_val_multi_data_0-{}.tfrec".format(
+                                                        1024 * self.scale - 1)))), \
                     "TFData Preprocessing failed."
             else:
                 assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
@@ -516,8 +532,10 @@ class Tester:
         config['Options']['Agg_logits'] = 'False'
         config['Options']['Add_activ'] = 'True'
         if self.multiclass:
-            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
-            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+            config['Data']['DataPredictions'] = \
+                'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = \
+                'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
         else:
             config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
             config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
@@ -526,9 +544,11 @@ class Tester:
                                             "deepac-test-species-logit-in-metrics.csv"))), "Evaluation failed."
         if not self.multiclass:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit-in_sample_val_auc.png"))), "Evaluation failed."
+                                                "deepac-test-species-logit-in_sample_val_auc.png"))),\
+                "Evaluation failed."
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit-in_sample_val_aupr.png"))), "Evaluation failed."
+                                                "deepac-test-species-logit-in_sample_val_aupr.png"))),\
+                "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""

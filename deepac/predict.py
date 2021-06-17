@@ -12,7 +12,7 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import itertools
 from tqdm import tqdm
 import os
-from scipy.special import softmax, logit, expit
+from scipy.special import softmax, expit
 from tensorflow.keras import backend as K
 
 

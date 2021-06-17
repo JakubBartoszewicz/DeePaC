@@ -128,7 +128,7 @@ class RCConfig:
 
             # Define the network architecture
             try:
-                self.n_classes = config['Architecture'].getint('N_Classes')
+                self.n_classes = config['Architecture'].getint('N_Classes', fallback=2)
             except KeyError:
                 self.n_classes = 2
             if self.n_classes < 2:
@@ -136,15 +136,15 @@ class RCConfig:
             self.rc_mode = config['Architecture']['RC_Mode']
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
-                self.skip_size = config['Architecture'].getint('Skip_Size')
+                self.skip_size = config['Architecture'].getint('Skip_Size', fallback=0)
             except KeyError:
                 self.skip_size = 0
             try:
-                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks')
+                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks', fallback=False)
             except KeyError:
                 self.bottlenecks = False
             try:
-                self.cardinality = config['Architecture'].getint('Cardinality')
+                self.cardinality = config['Architecture'].getint('Cardinality', fallback=1)
             except KeyError:
                 self.cardinality = 1
             if self.cardinality > 1 and not self.bottlenecks:
@@ -153,7 +153,10 @@ class RCConfig:
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
-            self.conv_bottle_units = [int(u) for u in config['Architecture']['Conv_Bottleneck_Units'].split(',')]
+            try:
+                self.conv_bottle_units = [int(u) for u in config['Architecture']['Conv_Bottleneck_Units'].split(',')]
+            except KeyError:
+                self.conv_bottle_units = 0
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
             self.conv_stride = [int(s) for s in config['Architecture']['Conv_Stride'].split(',')]
@@ -166,14 +169,17 @@ class RCConfig:
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
 
-            self.embedding_model = config['TransferEmbeddings'].get('EmbeddingModel', fallback="none")
-            if self.embedding_model == "none" or self.embedding_model == "None":
-                self.embedding_model = None
-            self.freeze_embeddings = config['TransferEmbeddings'].getboolean('FreezeEmbeddings', fallback=False)
-            self.embedding_remove_top_n = config['TransferEmbeddings'].getint('RemoveTopN', fallback=0)
+            try:
+                self.embedding_model = config['TransferEmbeddings'].get('EmbeddingModel', fallback="none")
+                if self.embedding_model == "none" or self.embedding_model == "None":
+                    self.embedding_model = None
+                self.freeze_embeddings = config['TransferEmbeddings'].getboolean('FreezeEmbeddings', fallback=False)
+                self.embedding_remove_top_n = config['TransferEmbeddings'].getint('RemoveTopN', fallback=0)
+            except KeyError:
+                self.embedding_model, self.freeze_embeddings, self.embedding_remove_top_n = None, None, None
 
             try:
-                self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim')
+                self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim', fallback=1)
             except KeyError:
                 self.input_scale = 1
             try:

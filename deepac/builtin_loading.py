@@ -12,7 +12,7 @@ import hashlib
 
 
 class RemoteLoader:
-    def __init__(self, remote_repo_url):
+    def __init__(self, remote_repo_url=None):
         if remote_repo_url is None:
             self.remote_repo_url = "https://zenodo.org/api/records/4456008"
         else:
