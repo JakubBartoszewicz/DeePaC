@@ -154,6 +154,7 @@ class Tester:
         rloader.fetch_models(out_dir, True)
         assert (os.path.isfile(os.path.join(out_dir, "latest_weights_configs/",
                                             "nano-vir-res18.h5"))), "Model fetching failed."
+        assert (os.path.isfile(os.path.join(out_dir, "nano-vir-res18.h5"))), "Model fetching failed."
 
     def test_preproc(self, npy=True, tfrec=True, multiclass=False):
         """Test preprocessing."""
