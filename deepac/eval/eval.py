@@ -323,7 +323,14 @@ def get_performance(evalconfig, y_test, y_pred, dataset_name, n_epoch=np.nan):
 
         if not np.isnan(aupr):
             precision, recall, thresholds = mtr.precision_recall_curve(y_test, y_pred)
-            scores = 2*(precision*recall)/(precision+recall)
+            bad_thresholds = np.logical_and(np.isclose(0.0, precision), np.isclose(0.0, recall))
+            scores = np.zeros(recall.shape[0])
+            if np.any(bad_thresholds):
+                print('Found thresholds with zero precision and recall. Assuming F1=0.')
+                gt = np.logical_not(bad_thresholds)
+                scores[gt] = 2 * (precision[gt] * recall[gt]) / (precision[gt] + recall[gt])
+            else:
+                scores = 2 * (precision * recall) / (precision + recall)
             scores = scores[:thresholds.shape[0]]
             best_score = np.max(scores)
             best_thresh = thresholds[scores == best_score]
