@@ -7,7 +7,8 @@
 
 require(stringr, quietly = T)
 options(warn=1)
-MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL, byContig=FALSE){
+MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL, byContig=FALSE,
+                                  header.pattern="\\|.*", taxid.as.accession=F){
 
   if(groundTruth == T){
     if (byContig == F){
@@ -41,49 +42,52 @@ MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F,
     }
   }
 
-  # myReferences_acc <- str_replace(string=as.character(Blast$Target), pattern=".*_", replacement="")
-  myReferences <- str_replace(string=as.character(Blast$Target), pattern="^._", replacement="")
+  myReferences <- str_replace(string=as.character(Blast$Target), pattern=header.pattern, replacement="")
   if(use.suppTable){
     reptable <- read.table(suppTable)
     ids_right = as.character(reptable$V2)
     names(ids_right) <- as.character(reptable$V1)
     myReferences <- ids_right[myReferences]
   }
-  myReferences_acc = sapply(1:length(myReferences), function(x){IMGdata[grepl(pattern = myReferences[x], x = IMGdata$refseq.id, fixed = T),"assembly_accession"]})
+  if (taxid.as.accession){
+    myReferences_acc <- sapply(1:length(myReferences), function(x){IMGdata[grepl(pattern = myReferences[x], x = IMGdata$refseq.id, fixed = T),"assembly_accession"]})
+  } else {
+    myReferences_acc <- myReferences
+  }
 
   # map to IMG and extract species and label
   Match2IMG <- match(myReferences_acc,as.character(IMGdata$assembly_accession))
   Matched_Species <- as.character(IMGdata$Species)[Match2IMG]
   Matched_Label <- IMGdata$Pathogenic[Match2IMG]
 
-  # check if multiple alignments
-  # which(duplicated(Blast$Query) )
-
-  # MultipleAlignments <- grepl("XS",myAlignment[,"Other"])
-
   if(groundTruth == T){
     myData <- data.frame(Reference = Blast$Target, assembly_accession = myReferences_acc, MatchedSpecies = Matched_Species, MatchedLabel = Matched_Label, QuerySpecies = Query_Species, QueryLabel = Query_Label)
   } else {
     myData <- data.frame(Reference = Blast$Target, assembly_accession = myReferences_acc, MatchedSpecies = Matched_Species, MatchedLabel = Matched_Label)
   }
-  # myData <- data.frame(Reference = myReferences_raw,MultipleAlignments = MultipleAlignments, Bioproject.Accession = myReferences_Bioproject.Accession, MatchedSpecies = Matched_Species, MatchedLabel = Matched_Label)
 
   rownames(myData) <- sapply(strsplit(as.character(Blast$Query),"[/]"), function(x) tail(x,1))
 
   return(myData)
 }
 
-HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_virS"
+HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_fungi"
 ProjectFolder <-  "PathogenReads"
 WorkingDirectory <- "HP_NHP"
 # Choose test folder
 ReadType <- "Left_250bp"
 Fold <- 1
 by.contig <- FALSE
+# for the viral dataset
+# data.header.pattern <- "^._"
+# for the fungal and bacterial datasets
+data.header.pattern <- "\\|.*"
+# true for viruses
+set.taxid.as.accession <- FALSE
 
-IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"VHDB_all.rds") )
+IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"fungi_all.rds") )
 suppTable = "~/SCRATCH_NOBAK/blastrepair/ids_tab"
-use.suppTable = T
+use.suppTable = F
 
 Do.BuildDB <- T
 Do.RunBlast <- T
@@ -225,7 +229,8 @@ if(Do.ProcessBlast == T) {
     if(length(Dups>0) )Blast <- Blast[-Dups,]
 
     # Match to IMG
-    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable, by.contig)
+    Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable, by.contig,
+                                            data.header.pattern, set.taxid.as.accession)
 
     Time <- proc.time() - Time1
     write(paste("Blast analysis of file",BlastFiles[i],"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
