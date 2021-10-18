@@ -1,0 +1,7 @@
+library(plyr)
+library(VennDiagram)
+source("FUNGI_DATA_CUR/src/fungi-taxonomy.R")
+source("FUNGI_DATA_CUR/src/fungi-fctions.R")
+source("FUNGI_DATA_CUR/src/fungi-resolve.R")
+#source("FUNGI_DATA_CUR/src/fungi-load.R")
+source("FUNGI_DATA_CUR/src/fungi-process.R")
