@@ -24,22 +24,25 @@ TotalTrainingReadNumber <- 2e07
 TotalValidationReadNumber <- 25e05
 TotalTestReadNumber <- 25e05
 Proportional2GenomeSize <- T
+LogTransform <- F
 
 pairedEnd <- F
 test.pairedEnd <- T
 
-FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_assembled"
-test.FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_test"
-TrainingTargetDirectory <- "~/SCRATCH_NOBAK/ALL/trainingReads"
-ValidationTargetDirectory <- "~/SCRATCH_NOBAK/ALL/validationReads"
-TestTargetDirectory <- "~/SCRATCH_NOBAK/ALL/testReads"
-FastaExtension <- "fa"
-FilenamePostfixPattern <- "\\."
+FastaFileLocation <- "~/SCRATCH_NOBAK/fun_trainval"
+test.FastaFileLocation <- "~/SCRATCH_NOBAK/fun_test"
+TrainingTargetDirectory <- "~/SCRATCH_NOBAK/FUN/trainingReads"
+ValidationTargetDirectory <- "~/SCRATCH_NOBAK/FUN/validationReads"
+TestTargetDirectory <- "~/SCRATCH_NOBAK/FUN/testReads"
+FastaExtension <- "fna"
+FilenamePostfixPattern <- "_"
+# for the viral dataset
+#FilenamePostfixPattern <- "\\."
 
 HomeFolder <- "~/"
 ProjectFolder <- "folddata/"
-IMGFile <- "VHDB_1_folds_all_nhuman.rds"
-IMGFile.new <- "VHDB_1_folds_all_nhuman_sizes.rds"
+IMGFile <- "IMG_1_folds_fungi.rds"
+IMGFile.new <- "IMG_1_folds_fungi_sizes.rds"
 
 if (Do.Clean){
 
@@ -121,7 +124,11 @@ if (Do.GetSizes) {
         else{
             file.loc <- FastaFileLocation
         }
-        return (as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T)))
+        if (LogTransform) {
+            return (log10(as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T))))
+        } else {
+            return (as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T)))
+        }
     }
 
     IMGdata$Genome.Size <- sapply(1:nrow(IMGdata), function(i){calcSize(IMGdata[i,c("assembly_accession", "fold1")])})
