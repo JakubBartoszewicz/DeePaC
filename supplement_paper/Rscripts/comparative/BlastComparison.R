@@ -174,7 +174,7 @@ sink(file = file.path(Path2TestFiles,"Blast",MappingFolder,"ScreenOutput.txt"), 
 if(Do.RunBlast ==T) {
 
   # find all read files
-  ReadFiles <- list.files(Path2TestFiles,pattern="fa$",full.names = T)
+  ReadFiles <- list.files(Path2TestFiles,pattern="fa$|fna$",full.names = T)
 
   write(paste("Starting blast alignment on",Sys.time()),file = LogFile, append = F)
   print(paste("New run on",date()))
@@ -191,7 +191,7 @@ if(Do.RunBlast ==T) {
     print(paste("Processing item",i,":",ReadFiles[i]))
 
     InFile <- ReadFiles[i]
-    OutFile <- file.path(Path2TestFiles,"Blast",MappingFolder,sub("fa","blast",tail(strsplit(ReadFiles[i],"[/]")[[1]],1)) )
+    OutFile <- file.path(Path2TestFiles,"Blast",MappingFolder,sub("fa$|fna$","blast",tail(strsplit(ReadFiles[i],"[/]")[[1]],1)) )
 
     Time <- system.time( system(paste("blastn -outfmt 6 -max_target_seqs 1 -num_threads ",Cores, " ", Options,"-db",DBOutput,"-query",InFile,"-out",OutFile) ) )
     write(paste("Blast alignment of file",InFile,"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
