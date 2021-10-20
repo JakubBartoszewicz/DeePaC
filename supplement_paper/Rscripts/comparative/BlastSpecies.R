@@ -18,38 +18,38 @@ get.performance <- function (prediction, y, P=0, N=0) {
     FP <- sum(prediction==T & y==F, na.rm = TRUE)    
     FN <- sum(prediction==F & y==T, na.rm = TRUE)
     
-    if (P<0) P = TP + FN
-    if (N<0) N = TN + FP
+    if (P<0) P <- TP + FN
+    if (N<0) N <- TN + FP
     
     # sensitivity or true positive rate / recall (TPR)
-    sensitivity = TP/(TP+FN)
+    sensitivity <- TP/(TP+FN)
     # specificity
-    specificity = TN/(TN+FP)
+    specificity <- TN/(TN+FP)
     # precision
-    precision = TP/(TP+FP)
+    precision <- TP/(TP+FP)
     # accuracy (ACC)
-    ACC = (TP + TN) / (TP + FP + FN + TN)
+    ACC <- (TP + TN) / (TP + FP + FN + TN)
     # F1 score
-    F1 = 2 * precision * sensitivity / (precision + sensitivity)
+    F1 <- 2 * precision * sensitivity / (precision + sensitivity)
     # MCC
     MCC_denominator <- sqrt( ( as.numeric(TP)+ FP) * (as.numeric(TP) +  FN ) * (  as.numeric(TN) +  FP ) * (  as.numeric(TN) +  FN ) )
     if(MCC_denominator == 0) MCC_denominator <- 1
-    MCC = (as.numeric(TP) * TN - as.numeric(FP) * FN) / MCC_denominator
+    MCC <- (as.numeric(TP) * TN - as.numeric(FP) * FN) / MCC_denominator
     
     # sensitivity or true positive rate / recall (TPR)
-    total.sensitivity = TP/P
+    total.sensitivity <- TP/P
     # specificity
-    total.specificity = TN/N
+    total.specificity <- TN/N
     # precision
-    total.precision = precision
+    total.precision <- precision
     # accuracy (ACC)
-    total.ACC = (TP + TN) / (P + N)
+    total.ACC <- (TP + TN) / (P + N)
     # F1 score
-    total.F1 = 2 * total.precision * total.sensitivity / (total.precision + total.sensitivity)
+    total.F1 <- 2 * total.precision * total.sensitivity / (total.precision + total.sensitivity)
     # MCC
-    total.MCC = MCC
+    total.MCC <- MCC
     
-    predictions = length(prediction)/(P+N)
+    predictions <- length(prediction)/(P+N)
     
     return(data.frame(TP=TP,TN=TN,FP=FP,FN=FN,TPR = sensitivity, TNR=specificity, PPV = precision, ACC = ACC, F1 = F1, MCC = MCC, total.TPR = total.sensitivity, total.TNR=total.specificity, total.PPV = total.precision, total.ACC = total.ACC, total.F1 = total.F1, total.MCC = total.MCC, predictions = predictions))
 }

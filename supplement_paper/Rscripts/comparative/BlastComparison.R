@@ -8,31 +8,38 @@
 require(stringr, quietly = T)
 options(warn=1)
 MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F, suppTable=NULL, byContig=FALSE,
-                                  header.pattern="\\|.*", taxid.as.accession=F){
+                                  header.pattern="\\|.*", id.as.accession=F, gb.accession.from.filename=F){
 
   if(groundTruth == T){
     if (byContig == F){
       query_acc <- sapply(strsplit(as.character(Blast$Query),"[/]"), function(x) tail(x,1))
       query_acc <- str_replace(string=query_acc, pattern="\\.fq.*", replacement="")
+      if (gb.accession.from.filename) {
+        query_acc <- sapply(strsplit(query_acc,"_"), function(x) paste(head(x,2), collapse="_"))
+      }
       # map to IMG and extract species and label
       Query2IMG <- match(query_acc,as.character(IMGdata$assembly_accession))
       Query_Species <- as.character(IMGdata$Species)[Query2IMG]
       Query_Label <- IMGdata$Pathogenic[Query2IMG]
     } else {
-      query_acc <- as.character(Blast$Query)
+      query_acc <- str_replace(string=as.character(Blast$Query), pattern=header.pattern, replacement="")
 
       if(use.suppTable){
         reptable <- read.table(suppTable)
-        ids_right = as.character(reptable$V2)
+        ids_right <- as.character(reptable$V2)
         names(ids_right) <- as.character(reptable$V1)
         query_new <- ids_right[query_acc]
         names(query_new) <- NULL
         if (!isTRUE(all.equal(query_new, query_acc))){
-          query_acc = query_new
+          query_acc <- query_new
         }
       }
       # map to IMG and extract species and label
-      queries <- sapply(query_acc, function(q){grepl(pattern = q, x=IMGdata$refseq.id, fixed=TRUE)})
+      if (id.as.accession){
+        queries <- sapply(query_acc, function(q){grepl(pattern = q, x=IMGdata$refseq.id, fixed=TRUE)})
+      } else {
+        queries <- sapply(query_acc, function(q){grepl(pattern = q, x=IMGdata$assembly_accession, fixed=TRUE)})
+      }
       if(ncol(queries) > 1) {
         queries <- rowSums(queries) > 0
       }
@@ -45,11 +52,11 @@ MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F,
   myReferences <- str_replace(string=as.character(Blast$Target), pattern=header.pattern, replacement="")
   if(use.suppTable){
     reptable <- read.table(suppTable)
-    ids_right = as.character(reptable$V2)
+    ids_right <- as.character(reptable$V2)
     names(ids_right) <- as.character(reptable$V1)
     myReferences <- ids_right[myReferences]
   }
-  if (taxid.as.accession){
+  if (id.as.accession){
     myReferences_acc <- sapply(1:length(myReferences), function(x){IMGdata[grepl(pattern = myReferences[x], x = IMGdata$refseq.id, fixed = T),"assembly_accession"]})
   } else {
     myReferences_acc <- myReferences
@@ -82,21 +89,23 @@ by.contig <- FALSE
 # data.header.pattern <- "^._"
 # for the fungal and bacterial datasets
 data.header.pattern <- "\\|.*"
-# true for viruses
-set.taxid.as.accession <- FALSE
+# true for the viral dataset
+set.id.as.accession <- FALSE
+# false for the viral dataset
+accession.from.filename <- TRUE
 
-IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"fungi_all.rds") )
-suppTable = "~/SCRATCH_NOBAK/blastrepair/ids_tab"
-use.suppTable = F
+IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"IMG_1_folds_fungi.rds") )
+suppTable <- "~/SCRATCH_NOBAK/blastrepair/ids_tab"
+use.suppTable <- F
 
-Do.BuildDB <- T
-Do.RunBlast <- T
+Do.BuildDB <- F
+Do.RunBlast <- F
 Do.ProcessBlast <- T
 # Switch for All Strain DB
 Do.AllStrains <- F
 
 # multi core
-Cores = 100
+Cores <- 1
 
 
 # load libraries functions and databases
@@ -184,7 +193,6 @@ if(Do.RunBlast ==T) {
   # Options <- "-task blastn" # the traditional program used for inter-species comparisons
 
   # loop over all read files
-
   StartTime <- proc.time()
 
   Check <-  foreach(i = 1:length(ReadFiles)) %do% {
@@ -230,7 +238,7 @@ if(Do.ProcessBlast == T) {
 
     # Match to IMG
     Blast_matched <- MatchBlastResults2IMG (Blast= Blast,IMGdata = IMGdata, T, use.suppTable, suppTable, by.contig,
-                                            data.header.pattern, set.taxid.as.accession)
+                                            data.header.pattern, set.id.as.accession, accession.from.filename)
 
     Time <- proc.time() - Time1
     write(paste("Blast analysis of file",BlastFiles[i],"took",paste(round(summary(Time),1),collapse=";"),"s"),file = LogFile, append = T)
