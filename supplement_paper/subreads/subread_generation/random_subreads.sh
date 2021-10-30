@@ -30,3 +30,7 @@ bioawk -c fastx -v min=25 -v max=250 -v seed=13 'BEGIN{srand(seed);} {print ">"$
 
 bioawk -c fastx -v min=25 -v max=250 -v seed=14 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_train24_fungi.fasta > pathogenic_rn_train24_fungi.fasta
 
+bioawk -c fastx -v min=25 -v max=250 -v seed=15 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' nonpathogenic_trainlog_fungi.fasta > nonpathogenic_rn_trainlog_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=16 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_trainlog_fungi.fasta > pathogenic_rn_trainlog_fungi.fasta
+
