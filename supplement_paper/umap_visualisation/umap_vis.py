@@ -213,7 +213,7 @@ def parse_and_run(args):
     parser.add_argument('-c', '--highlight-classes', dest='highlight_classes', type=str, default=None)
     parser.add_argument('-C', '--class-names', dest='class_names', type=str, default=None)
     parser.add_argument('--style', dest='style', type=str, default="seaborn")
-    parser.add_argument('--no-legend', dest='no_legend', type=bool, default=False, action="store_true")
+    parser.add_argument('--no-legend', dest='no_legend', default=False, action="store_true")
     parser.add_argument('--alpha', dest='alpha', type=float, default=0.8)
     parser.add_argument('--size', dest='size', type=float, default=3)
 
