@@ -45,25 +45,24 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, metric,
     return embedding
 
 
-def get_mcd_colors(palette_name):
-    if palette_name == "xkcd":
+def get_mcd_colors(palette):
+    if palette == "xkcd":
         return list(mcd.XKCD_COLORS.keys())
-
-    if palette_name == "base":
+    elif palette == "base":
         return list(mcd.BASE_COLORS.keys())
-
-    if palette_name == "css4":
+    elif palette == "css4":
         return list(mcd.CSS4_COLORS.keys())
-
-    if palette_name == "tableau":
+    elif palette == "tableau":
         return list(mcd.TABLEAU_COLORS.keys())
+    else:
+        return palette.split(";")
 
 
 def get_color_kwargs(ccol, i, zero_color=None):
     if i == 0 and zero_color is not None:
         return {'color': zero_color}
     if ccol is not None:
-        return {'color': ccol[i]}
+        return {'color': ccol[i if zero_color is None else i+1]}
     else:
         return {}
 
