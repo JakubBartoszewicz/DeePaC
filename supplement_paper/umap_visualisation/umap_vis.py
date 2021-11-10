@@ -47,7 +47,7 @@ def run_umap(path, file_name, data, n_components, min_dist, n_neighbors, metric,
 
 def get_mcd_colors(palette):
     if palette == "xkcd":
-        return list(mcd.XKCD_COLORS.keys())
+        return list(mcd.XKCD_COLORS.keys())[::-1]
     elif palette == "base":
         return list(mcd.BASE_COLORS.keys())
     elif palette == "css4":
