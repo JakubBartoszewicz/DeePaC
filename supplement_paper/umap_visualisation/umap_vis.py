@@ -58,11 +58,9 @@ def get_mcd_colors(palette):
         return palette.split(";")
 
 
-def get_color_kwargs(ccol, i, zero_color=None):
-    if i == 0 and zero_color is not None:
-        return {'color': zero_color}
+def get_color_kwargs(ccol, i):
     if ccol is not None:
-        return {'color': ccol[i if zero_color is None else i+1]}
+        return {'color': ccol[i]}
     else:
         return {}
 
@@ -74,7 +72,10 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
     print("Creating plots...")
     plt.style.use(style)
     if custom_colors is not None:
-        ccol = get_mcd_colors(custom_colors)
+        if zero_color is None:
+            ccol = get_mcd_colors(custom_colors)
+        else:
+            ccol = [zero_color] + get_mcd_colors(custom_colors)
     else:
         ccol = None
     fig = plt.figure()
@@ -84,18 +85,18 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
         ax = fig.add_subplot(111)
         for cs in classes:
             ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=size,
-                       alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs, zero_color)))
+                       alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs)))
     if n_components == 2:
         ax = fig.add_subplot(111)
         for cs in classes:
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
-                       s=size, alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs, zero_color)))
+                       s=size, alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs)))
     if n_components == 3:
         ax = fig.add_subplot(111, projection='3d')
         for cs in classes:
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=size, alpha=alpha, label=cs,
-                       **(get_color_kwargs(ccol, cs, zero_color)))
+                       **(get_color_kwargs(ccol, cs)))
 
     plot_name = "_".join(["scatter_plot", file_name, parameters]) + ".png"
     # plt.gca().set_aspect('equal', 'datalim')
@@ -116,16 +117,16 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
         if n_components == 1:
             ax = fig.add_subplot(111)
             ax.scatter(embedding[np.isclose(labels, cs), 0], range(len(embedding[np.isclose(labels, cs), 0])), s=size,
-                       alpha=alpha, **(get_color_kwargs(ccol, cs, zero_color)))
+                       alpha=alpha, **(get_color_kwargs(ccol, cs)))
         if n_components == 2:
             ax = fig.add_subplot(111)
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
-                       s=size, alpha=alpha, **(get_color_kwargs(ccol, cs, zero_color)))
+                       s=size, alpha=alpha, **(get_color_kwargs(ccol, cs)))
         if n_components == 3:
             ax = fig.add_subplot(111, projection='3d')
             ax.scatter(embedding[np.isclose(labels, cs), 0], embedding[np.isclose(labels, cs), 1],
                        embedding[np.isclose(labels, cs), 2], s=size, alpha=alpha,
-                       **(get_color_kwargs(ccol, cs, zero_color)))
+                       **(get_color_kwargs(ccol, cs)))
 
         plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs)]))
         # plt.title(plot_name_temp.replace(".png", ""), fontsize=12)
@@ -140,7 +141,10 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
 
     plt.style.use(style)
     if custom_colors is not None:
-        ccol = get_mcd_colors(custom_colors)
+        if zero_color is None:
+            ccol = get_mcd_colors(custom_colors)
+        else:
+            ccol = [zero_color] + get_mcd_colors(custom_colors)
     else:
         ccol = None
 
@@ -157,18 +161,18 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
             ax = fig.add_subplot(111)
             for cs in set(temp_labels):
                 ax.scatter(embedding[temp_labels == cs, 0], range(len(embedding[temp_labels == cs, 0])), s=size,
-                           alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs, zero_color)))
+                           alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs)))
         if n_components == 2:
             ax = fig.add_subplot(111)
             for cs in set(temp_labels):
                 ax.scatter(embedding[temp_labels == cs, 0], embedding[temp_labels == cs, 1],
-                           s=size, alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs, zero_color)))
+                           s=size, alpha=alpha, label=cs, **(get_color_kwargs(ccol, cs)))
         if n_components == 3:
             ax = fig.add_subplot(111, projection='3d')
             for cs in set(temp_labels):
                 ax.scatter(embedding[temp_labels == cs, 0], embedding[temp_labels == cs, 1],
                            embedding[temp_labels == cs, 2], s=size, alpha=alpha, label=cs,
-                           **(get_color_kwargs(ccol, cs, zero_color)))
+                           **(get_color_kwargs(ccol, cs)))
 
         plot_name = "hl_class" + str(ind) + "_" + file_name + ".png"
         plot_name = "_".join(["scatter_plot", plot_name])
