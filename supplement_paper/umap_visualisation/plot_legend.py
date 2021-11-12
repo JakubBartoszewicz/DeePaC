@@ -40,12 +40,12 @@ def run_plot_legend(args):
     parser.add_argument('--style', dest='style', type=str, default="seaborn")
     parser.add_argument('--custom-color-palette', dest='custom_colors', type=str, default=None)
     parser.add_argument('--zeroth-class-color', dest='zero_color', type=str, default=None)
-    parser.add_argument('--no-columns', dest='no_columns', type=int, default=1)
+    parser.add_argument('--legend-columns', dest='legend_columns', type=int, default=1)
     parser.add_argument('-x', '--width', dest='width', type=float, default=None)
     parser.add_argument('-y', '--height', dest='height', type=float, default=None)
     params = parser.parse_args(args)
     plot_legend(params.class_names_file, params.out_file, params.style, params.custom_colors, params.zero_color,
-                params.no_columns, params.width, params.height)
+                params.legend_columns, params.width, params.height)
 
 
 if __name__ == "__main__":

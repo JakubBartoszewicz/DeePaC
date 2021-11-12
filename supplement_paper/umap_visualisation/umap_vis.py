@@ -10,6 +10,7 @@ import pickle
 import argparse
 import sys
 import os
+from pandas import read_csv
 
 
 # reshape the data - flatten reads from 3 to 2 dimensions
@@ -67,7 +68,7 @@ def get_color_kwargs(ccol, i):
 
 def create_scatter_plot(file_name, path, parameters, labels, classes, n_components, embedding,
                         style="seaborn", no_legend=False, class_names=None, alpha=0.8, size=3,
-                        custom_colors=None, zero_color=None, format="png"):
+                        custom_colors=None, zero_color=None, fileformat="png", legend_columns=1, legend_loc=None):
 
     print("Creating plots...")
     plt.style.use(style)
@@ -98,7 +99,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
                        embedding[np.isclose(labels, cs), 2], s=size, alpha=alpha, label=cs,
                        **(get_color_kwargs(ccol, cs)))
 
-    plot_name = "_".join(["scatter_plot", file_name, parameters]) + "." + format
+    plot_name = "_".join(["scatter_plot", file_name, parameters]) + "." + fileformat
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     if not no_legend:
@@ -136,8 +137,8 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
 
 # generates plots that highlight given classes
 def highlight_classes(file_name, path, labels, hl_classes, n_components, embedding,
-                      style="seaborn", no_legend=False, class_names=None, alpha=0.8, size=3,
-                      custom_colors=None, zero_color=None, format="png"):
+                      style="seaborn", no_legend=False, class_names_file=None, alpha=0.8, size=3,
+                      custom_colors=None, zero_color=None, fileformat="png", legend_columns=1, legend_loc=None):
 
     plt.style.use(style)
     if custom_colors is not None:
@@ -174,24 +175,24 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
                            embedding[temp_labels == cs, 2], s=size, alpha=alpha, label=cs,
                            **(get_color_kwargs(ccol, cs)))
 
-        plot_name = "hl_class" + str(ind) + "_" + file_name + "." + format
+        plot_name = "hl_class" + str(ind) + "_" + file_name + "." + fileformat
         plot_name = "_".join(["scatter_plot", plot_name])
         # plt.gca().set_aspect('equal', 'datalim')
         # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
         if not no_legend:
-            if class_names is not None:
-                cust_labels = class_names.split(";")
-                plt.legend(labels=cust_labels, markerscale=5.0)
+            if class_names_file is not None:
+                cust_labels = read_csv(class_names_file).iloc[:, 0].tolist()
+                plt.legend(labels=cust_labels, markerscale=1.0, ncol=legend_columns, loc=legend_loc)
             else:
-                plt.legend(markerscale=5.0)
+                plt.legend(markerscale=1.0, ncol=legend_columns, loc=legend_loc)
         # plt.title(plot_name.replace(".png", ""), fontsize=12)
         plt.savefig(os.path.join(path, plot_name), dpi=300)
         plt.close()
 
 
 def run_workflow(dataset_filename, embedding_filename, label_filename, n_components, min_dist, n_neighbors, metric,
-                 seed, do_highlight_classes, style, no_legend, class_names, alpha, size, custom_colors, zero_color,
-                 format):
+                 seed, do_highlight_classes, style, no_legend, class_names_file, alpha, size, custom_colors, zero_color,
+                 fileformat, legend_columns, legend_loc=None):
 
     file_name, path = utils.get_data_name(dataset_filename)
 
@@ -230,11 +231,13 @@ def run_workflow(dataset_filename, embedding_filename, label_filename, n_compone
     if do_highlight_classes is not None:  # plot highlight classes
         hl_classes = do_highlight_classes.split(";")
         highlight_classes(f_name, path, labels, hl_classes, n_components, embedding,
-                          style, no_legend, class_names, alpha, size, custom_colors, zero_color, format)
+                          style, no_legend, class_names_file, alpha, size, custom_colors, zero_color, fileformat,
+                          legend_columns, legend_loc)
     else:  # plot all and separate class plots
         parameters = "_".join([str(min_dist).replace(".", ""), str(n_neighbors), str(metric), str(n_components) + "d"])
         create_scatter_plot(f_name, path, parameters, labels, classes, n_components, embedding,
-                            style, no_legend, class_names, alpha, size, custom_colors, zero_color, format)
+                            style, no_legend, class_names_file, alpha, size, custom_colors, zero_color, fileformat,
+                            legend_columns, legend_loc)
 
 
 def parse_and_run(args):
@@ -251,7 +254,7 @@ def parse_and_run(args):
     parser.add_argument('-t', '--metric', dest="metric", type=str, default='euclidean')
     parser.add_argument('-s', '--seed', dest="seed", type=int, default=None)
     parser.add_argument('-c', '--highlight-classes', dest='highlight_classes', type=str, default=None)
-    parser.add_argument('-C', '--class-names', dest='class_names', type=str, default=None)
+    parser.add_argument('--class-names-file', dest='class_names_file', type=str, default=None)
     parser.add_argument('--style', dest='style', type=str, default="seaborn")
     parser.add_argument('--no-legend', dest='no_legend', action="store_true")
     parser.add_argument('--alpha', dest='alpha', type=float, default=0.8)
@@ -259,13 +262,15 @@ def parse_and_run(args):
     parser.add_argument('--custom-color-palette', dest='custom_colors', type=str, default=None)
     parser.add_argument('--zeroth-class-color', dest='zero_color', type=str, default=None)
     parser.add_argument('--format', dest='format', type=str, default="png")
+    parser.add_argument('--legend-columns', dest='legend_columns', type=int, default=1)
+    parser.add_argument('--legend-loc', dest='legend_loc', type=str, default="best")
 
     params = parser.parse_args(args)
 
     run_workflow(params.dataset_filename, params.embedding_filename, params.label_filename, params.n_components,
                  params.min_dist, params.n_neighbors, params.metric, params.seed, params.highlight_classes,
                  params.style, params.no_legend, params.class_names, params.alpha, params.size, params.custom_colors,
-                 params.zero_color, params.format)
+                 params.zero_color, params.format, params.legend_columns)
 
 
 if __name__ == "__main__":
