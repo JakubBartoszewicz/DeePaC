@@ -67,7 +67,7 @@ def get_color_kwargs(ccol, i):
 
 
 def create_scatter_plot(file_name, path, parameters, labels, classes, n_components, embedding,
-                        style="seaborn", no_legend=False, class_names=None, alpha=0.8, size=3,
+                        style="seaborn", no_legend=False, class_names_file=None, alpha=0.8, size=3,
                         custom_colors=None, zero_color=None, fileformat="png", legend_columns=1, legend_loc=None):
 
     print("Creating plots...")
@@ -103,11 +103,11 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     if not no_legend:
-        if class_names is not None:
-            cust_labels = class_names.split(";")
-            plt.legend(labels=cust_labels, markerscale=5.0)
+        if class_names_file is not None:
+            cust_labels = read_csv(class_names_file).iloc[:, 0].tolist()
+            plt.legend(labels=cust_labels, markerscale=1.0, ncol=legend_columns, loc=legend_loc)
         else:
-            plt.legend(markerscale=5.0)
+            plt.legend(markerscale=1.0, ncol=legend_columns, loc=legend_loc)
     # plt.title(plot_name.replace(".png", ""), fontsize=12)
     plt.savefig(os.path.join(path, plot_name), dpi=300)
     plt.close()
