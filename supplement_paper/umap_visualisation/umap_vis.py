@@ -269,8 +269,8 @@ def parse_and_run(args):
 
     run_workflow(params.dataset_filename, params.embedding_filename, params.label_filename, params.n_components,
                  params.min_dist, params.n_neighbors, params.metric, params.seed, params.highlight_classes,
-                 params.style, params.no_legend, params.class_names, params.alpha, params.size, params.custom_colors,
-                 params.zero_color, params.format, params.legend_columns)
+                 params.style, params.no_legend, params.class_names_file, params.alpha, params.size,
+                 params.custom_colors, params.zero_color, params.format, params.legend_columns)
 
 
 if __name__ == "__main__":
