@@ -25,7 +25,7 @@ def plot_legend(class_names_file, out_file, style='seaborn', custom_colors=None,
     figlegend = pylab.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     f = lambda m, c: ax.plot([], [], marker=m, color=c, ls="none")[0]
-    handles = [f("s", ccol[i]) for i in range(len(labels))]
+    handles = [f("o", ccol[i]) for i in range(len(labels))]
 
     figlegend.legend(handles, labels, ncol=no_columns)
     bbox = figlegend.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
