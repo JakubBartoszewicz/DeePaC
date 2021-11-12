@@ -67,7 +67,7 @@ def get_color_kwargs(ccol, i):
 
 def create_scatter_plot(file_name, path, parameters, labels, classes, n_components, embedding,
                         style="seaborn", no_legend=False, class_names=None, alpha=0.8, size=3,
-                        custom_colors=None, zero_color=None):
+                        custom_colors=None, zero_color=None, format="png"):
 
     print("Creating plots...")
     plt.style.use(style)
@@ -98,7 +98,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
                        embedding[np.isclose(labels, cs), 2], s=size, alpha=alpha, label=cs,
                        **(get_color_kwargs(ccol, cs)))
 
-    plot_name = "_".join(["scatter_plot", file_name, parameters]) + ".png"
+    plot_name = "_".join(["scatter_plot", file_name, parameters]) + "." + format
     # plt.gca().set_aspect('equal', 'datalim')
     # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
     if not no_legend:
@@ -108,7 +108,7 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
         else:
             plt.legend(markerscale=5.0)
     # plt.title(plot_name.replace(".png", ""), fontsize=12)
-    plt.savefig(os.path.join(path, plot_name))
+    plt.savefig(os.path.join(path, plot_name), dpi=300)
     plt.close()
 
     print("Creating single-class plots...")
@@ -130,14 +130,14 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
 
         plot_name_temp = plot_name.replace("scatter_plot", "_".join(["scatter_plot", str(cs)]))
         # plt.title(plot_name_temp.replace(".png", ""), fontsize=12)
-        plt.savefig(os.path.join(path, plot_name_temp))
+        plt.savefig(os.path.join(path, plot_name_temp), dpi=300)
         plt.close()
 
 
 # generates plots that highlight given classes
 def highlight_classes(file_name, path, labels, hl_classes, n_components, embedding,
                       style="seaborn", no_legend=False, class_names=None, alpha=0.8, size=3,
-                      custom_colors=None, zero_color=None):
+                      custom_colors=None, zero_color=None, format="png"):
 
     plt.style.use(style)
     if custom_colors is not None:
@@ -174,7 +174,7 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
                            embedding[temp_labels == cs, 2], s=size, alpha=alpha, label=cs,
                            **(get_color_kwargs(ccol, cs)))
 
-        plot_name = "hl_class" + str(ind) + "_" + file_name + ".png"
+        plot_name = "hl_class" + str(ind) + "_" + file_name + "." + format
         plot_name = "_".join(["scatter_plot", plot_name])
         # plt.gca().set_aspect('equal', 'datalim')
         # plt.colorbar(boundaries=np.arange(3)-0.5).set_ticks(np.arange(2))
@@ -185,12 +185,13 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
             else:
                 plt.legend(markerscale=5.0)
         # plt.title(plot_name.replace(".png", ""), fontsize=12)
-        plt.savefig(os.path.join(path, plot_name))
+        plt.savefig(os.path.join(path, plot_name), dpi=300)
         plt.close()
 
 
 def run_workflow(dataset_filename, embedding_filename, label_filename, n_components, min_dist, n_neighbors, metric,
-                 seed, do_highlight_classes, style, no_legend, class_names, alpha, size, custom_colors, zero_color):
+                 seed, do_highlight_classes, style, no_legend, class_names, alpha, size, custom_colors, zero_color,
+                 format):
 
     file_name, path = utils.get_data_name(dataset_filename)
 
@@ -229,11 +230,11 @@ def run_workflow(dataset_filename, embedding_filename, label_filename, n_compone
     if do_highlight_classes is not None:  # plot highlight classes
         hl_classes = do_highlight_classes.split(";")
         highlight_classes(f_name, path, labels, hl_classes, n_components, embedding,
-                          style, no_legend, class_names, alpha, size, custom_colors, zero_color)
+                          style, no_legend, class_names, alpha, size, custom_colors, zero_color, format)
     else:  # plot all and separate class plots
         parameters = "_".join([str(min_dist).replace(".", ""), str(n_neighbors), str(metric), str(n_components) + "d"])
         create_scatter_plot(f_name, path, parameters, labels, classes, n_components, embedding,
-                            style, no_legend, class_names, alpha, size, custom_colors, zero_color)
+                            style, no_legend, class_names, alpha, size, custom_colors, zero_color, format)
 
 
 def parse_and_run(args):
@@ -257,13 +258,14 @@ def parse_and_run(args):
     parser.add_argument('--size', dest='size', type=float, default=3)
     parser.add_argument('--custom-color-palette', dest='custom_colors', type=str, default=None)
     parser.add_argument('--zeroth-class-color', dest='zero_color', type=str, default=None)
+    parser.add_argument('--format', dest='format', type=str, default="png")
 
     params = parser.parse_args(args)
 
     run_workflow(params.dataset_filename, params.embedding_filename, params.label_filename, params.n_components,
                  params.min_dist, params.n_neighbors, params.metric, params.seed, params.highlight_classes,
                  params.style, params.no_legend, params.class_names, params.alpha, params.size, params.custom_colors,
-                 params.zero_color)
+                 params.zero_color, params.format)
 
 
 if __name__ == "__main__":
