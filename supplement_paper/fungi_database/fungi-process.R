@@ -376,9 +376,6 @@ all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ward
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_an, wardeh.citation, "animal.pathogen")
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_pl, wardeh.citation, "plant.pathogen")
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_pl, wardeh.citation, "plant.host")
-# all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_hp, wardeh.citation, "putative.human.host")
-# all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_an, wardeh.citation, "putative.animal.host")
-# all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_pl, wardeh.citation, "putative.plant.host")
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_hp, pureatlas.citation, "human.pathogen")
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_an, pureatlas.citation, "animal.pathogen")
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_wardeh_pl, pureatlas.citation, "plant.pathogen")
@@ -404,7 +401,7 @@ genbank.matched.final <- merge(genbank_cl, all.w.tax.confirmed.syn[is.na(all.w.t
 # get "clear" pathogens
 genbank.pathogens <- genbank.matched.final[genbank.matched.final$human.pathogen | genbank.matched.final$animal.pathogen | genbank.matched.final$plant.pathogen,]
 # get confirmed plant hosts
-genbank.supplementary.strict <- genbank.matched.final[!(genbank.matched.final$species_taxid %in% genbank.pathogens$species_taxid) & 
+genbank.supplementary.strict <- genbank.matched.final[!(genbank.matched.final$species_taxid %in% genbank.pathogens$species_taxid) &
                                                         genbank.matched.final$plant.host,]
 # get suspected negatives without any suggestions of having a human host
 genbank.supplementary.wide <- genbank.matched.final[!(genbank.matched.final$species_taxid %in% genbank.pathogens$species_taxid) &
@@ -423,10 +420,8 @@ genbank.not.matched.final <- merge(genbank.not.matched.final, all.w.tax.confirme
 # get final positive species with genomes
 final.hp.species <- genbank.pathogens$species_taxid[genbank.pathogens$human.pathogen]
 # get final negative species with genomes
-#final.np.species <- genbank.pathogens$species_taxid[!genbank.pathogens$human.pathogen]
 final.np.species <- genbank.pathogens$species_taxid[genbank.pathogens$plant.pathogen | genbank.pathogens$animal.pathogen]
 # get final negative species with genomes + species with plant hosts and genomes
-#final.npe.species <- c(final.np.species, genbank.supplementary.strict$species_taxid)
 final.npe.species  <- c(genbank.pathogens$species_taxid[genbank.pathogens$plant.pathogen | genbank.pathogens$animal.pathogen | genbank.pathogens$plant.host],
                         genbank.supplementary.strict$species_taxid)
 # get final negative species with genomes + species with plant hosts and genomes + suspected negatives from EID2 with genomes
@@ -436,42 +431,41 @@ final.npe.wide.species <- c(final.npe.species, genbank.supplementary.wide$specie
 # suspected positives from EID2
 wardeh.hp.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.human.host]
 # suspected non-positives form EID2
-#wardeh.np.species <- genbank.wardeh$species_taxid[!genbank.wardeh$putative.human.host]
 wardeh.np.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.plant.host | genbank.wardeh$putative.animal.host]
 
 # Plot Venn diagrams
 grid.newpage()
-venn.plot <- venn.diagram(list("HP"=final.hp.species, 
-                               "NHP"=final.np.species, 
-                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+venn.plot <- venn.diagram(list("HP"=final.hp.species,
+                               "NHP"=final.np.species,
+                               "HH (Wardeh et al.)"=wardeh.hp.species,
                                "NHH (Wardeh et al.)"=wardeh.np.species),
                                 fill = c("orange", "blue", "white", "white"),
-                                filename = "FUNGI_DATA_CUR/venn_inclusive/core.svg",
+                                filename = "FUNGI_DATA_CUR/venn_inclusive/core.png",
                                 resolution=300,
-                                imagetype="svg",
+                                imagetype="png",
                                 width=3130,
                                 height=2060,
                                 cex = 2,
                                 cat.cex = 2,)
 #grid.draw(venn.plot)
 grid.newpage()
-venn.plot <- venn.diagram(list("HP"=final.hp.species, 
-                               "NHH"=final.npe.species, 
-                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+venn.plot <- venn.diagram(list("HP"=final.hp.species,
+                               "NHH"=final.npe.species,
+                               "HH (Wardeh et al.)"=wardeh.hp.species,
                                "NHH (Wardeh et al.)"=wardeh.np.species),
-                               fill = c("orange", "green", "white", "white"),
-                               filename = "FUNGI_DATA_CUR/venn_inclusive/assoc.svg",
+                               fill = c("orange", "darkgreen", "white", "white"),
+                               filename = "FUNGI_DATA_CUR/venn_inclusive/assoc.png",
                                resolution=300,
-                               imagetype="svg",
+                               imagetype="png",
                                width=3130,
                                height=2060,
                                cex = 2,
                                cat.cex = 2,)
 #grid.draw(venn.plot)
 grid.newpage()
-venn.plot <- venn.diagram(list("HP"=final.hp.species, 
-                               "pNHH"=final.npe.wide.species, 
-                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+venn.plot <- venn.diagram(list("HP"=final.hp.species,
+                               "pNHH"=final.npe.wide.species,
+                               "HH (Wardeh et al.)"=wardeh.hp.species,
                                "NHH (Wardeh et al.)"=wardeh.np.species), filename = NULL)
 grid.draw(venn.plot)
 
@@ -486,10 +480,19 @@ everything.nas$putative.human.host[!everything.nas$putative.human.host] <- NA
 everything.nas$putative.animal.host[!everything.nas$putative.animal.host] <- NA
 everything.nas$putative.plant.host[!everything.nas$putative.plant.host] <- NA
 
+genbank.pathogens.nas <- genbank.pathogens
+genbank.pathogens.nas$human.pathogen[!genbank.pathogens.nas$human.pathogen] <- NA
+genbank.pathogens.nas$animal.pathogen[!genbank.pathogens.nas$animal.pathogen] <- NA
+genbank.pathogens.nas$plant.pathogen[!genbank.pathogens.nas$plant.pathogen] <- NA
+genbank.pathogens.nas$plant.host[!genbank.pathogens.nas$plant.host] <- NA
+genbank.pathogens.nas$putative.human.host[!genbank.pathogens.nas$putative.human.host] <- NA
+genbank.pathogens.nas$putative.animal.host[!genbank.pathogens.nas$putative.animal.host] <- NA
+genbank.pathogens.nas$putative.plant.host[!genbank.pathogens.nas$putative.plant.host] <- NA
+
 saveRDS(object = everything.nas, file = "FUNGI_DATA_CUR/release/all_data.rds")
 write.csv(x = everything.nas, file = "FUNGI_DATA_CUR/release/all_data.csv")
-saveRDS(object = genbank.pathogens, file = "FUNGI_DATA_CUR/release/fungal_pathogens.rds")
-write.csv(x = genbank.pathogens, file = "FUNGI_DATA_CUR/release/fungal_pathogens.csv")
+saveRDS(object = genbank.pathogens.nas, file = "FUNGI_DATA_CUR/release/core_fungal_pathogens.rds")
+write.csv(x = genbank.pathogens.nas, file = "FUNGI_DATA_CUR/release/core_fungal_pathogens.csv")
 saveRDS(object = genbank.supplementary.final, file = "FUNGI_DATA_CUR/release/fungal_supplementary.rds")
 write.csv(x = genbank.supplementary.final, file = "FUNGI_DATA_CUR/release/fungal_supplementary.csv")
 colnames(genbank.pathogens)[14] <- "Pathogenic"
