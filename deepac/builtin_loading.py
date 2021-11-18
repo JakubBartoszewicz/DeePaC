@@ -11,12 +11,55 @@ import wget
 import hashlib
 
 
-class RemoteLoader:
-    def __init__(self, remote_repo_url):
-        if remote_repo_url is None:
-            self.remote_repo_url = "https://zenodo.org/api/records/4456008"
+def fetch_from_url(repo_url, fetch_dir, out_dir, do_compile=True, n_cpus=None, n_gpus=None, log_path="logs",
+                   training_mode=False, tpu_resolver=None, timeout=15.):
+
+    r = requests.get(repo_url, timeout=timeout)
+    model_dict = {}
+
+    if r.ok:
+        js = json.loads(r.text)
+        files = js['files']
+        for f in files:
+            link = f['links']['self']
+            size = f['size'] / 2 ** 10
+            filename = os.path.basename(urlparse(link).path)
+
+            remote_md5 = get_checksum_md5(f['checksum'])
+            local_md5 = get_file_md5(os.path.join(fetch_dir, filename))
+
+            if remote_md5 == local_md5:
+                print(f'Found: {filename} size: {get_human_readable_size(size)}')
+            else:
+                if os.path.exists(os.path.join(fetch_dir, filename)):
+                    print(f'Found: {filename} (incorrect md5 checksum). Deleting...')
+                    os.remove(os.path.join(fetch_dir, filename))
+                print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
+                wget.download(link, out=os.path.join(fetch_dir, filename))
+                print()
+
+            if filename.lower().endswith(".h5"):
+                pre, ext = os.path.splitext(filename)
+                model_dict[os.path.join(fetch_dir, filename)] = os.path.join(fetch_dir, pre + ".ini")
         else:
-            self.remote_repo_url = remote_repo_url
+            print('Downloading finished.')
+            if do_compile:
+                print('Building downloaded models...')
+                for w in model_dict.keys():
+                    model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
+                    model.summary()
+                    save_path = os.path.basename(w)
+                    model.save(os.path.join(out_dir, save_path))
+    else:
+        print('HTTP error: {}'.format(r.status_code))
+
+
+class RemoteLoader:
+    def __init__(self, remote_repo_url=None):
+        if remote_repo_url is None:
+            self.remote_repo_urls = ["https://zenodo.org/api/records/4456008", "https://zenodo.org/api/records/5711877"]
+        else:
+            self.remote_repo_urls = [remote_repo_url]
 
     def fetch_models(self, out_dir, do_compile=True, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
                      tpu_resolver=None, timeout=15.):
@@ -24,44 +67,9 @@ class RemoteLoader:
         if not os.path.exists(fetch_dir):
             os.mkdir(fetch_dir)
 
-        r = requests.get(self.remote_repo_url, timeout=timeout)
-        model_dict = {}
-
-        if r.ok:
-            js = json.loads(r.text)
-            files = js['files']
-            for f in files:
-                link = f['links']['self']
-                size = f['size'] / 2 ** 10
-                filename = os.path.basename(urlparse(link).path)
-
-                remote_md5 = get_checksum_md5(f['checksum'])
-                local_md5 = get_file_md5(os.path.join(fetch_dir, filename))
-
-                if remote_md5 == local_md5:
-                    print(f'Found: {filename} size: {get_human_readable_size(size)}')
-                else:
-                    if os.path.exists(os.path.join(fetch_dir, filename)):
-                        print(f'Found: {filename} (incorrect md5 checksum). Deleting...')
-                        os.remove(os.path.join(fetch_dir, filename))
-                    print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
-                    wget.download(link, out=os.path.join(fetch_dir, filename))
-                    print()
-
-                if filename.lower().endswith(".h5"):
-                    pre, ext = os.path.splitext(filename)
-                    model_dict[os.path.join(fetch_dir, filename)] = os.path.join(fetch_dir, pre + ".ini")
-            else:
-                print('Downloading finished.')
-                if do_compile:
-                    print('Building downloaded models...')
-                    for w in model_dict.keys():
-                        model = load_model(model_dict[w], w, n_cpus, n_gpus, log_path, training_mode, tpu_resolver)
-                        model.summary()
-                        save_path = os.path.basename(w)
-                        model.save(os.path.join(out_dir, save_path))
-        else:
-            print('HTTP error: {}'.format(r.status_code))
+        for repo in self.remote_repo_urls:
+            fetch_from_url(repo, fetch_dir, out_dir, do_compile, n_cpus, n_gpus,
+                           log_path, training_mode, tpu_resolver, timeout)
 
 
 class BuiltinLoader:

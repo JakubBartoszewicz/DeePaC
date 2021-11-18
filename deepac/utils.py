@@ -150,7 +150,7 @@ def config_cpus(n_cpus):
     return n_cpus
 
 
-def config_gpus(gpus):
+def config_gpus(gpus, set_memory_growth=True):
     physical_devices = tf.config.list_physical_devices('GPU')
     if gpus is None:
         used_devices = tf.config.get_visible_devices('GPU')
@@ -170,6 +170,8 @@ def config_gpus(gpus):
     else:
         print("Used GPUs: None")
     n_gpus = len(used_devices)
+    if set_memory_growth:
+        set_mem_growth()
     return n_gpus
 
 

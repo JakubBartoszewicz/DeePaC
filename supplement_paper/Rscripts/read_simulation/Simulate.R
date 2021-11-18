@@ -24,22 +24,25 @@ TotalTrainingReadNumber <- 2e07
 TotalValidationReadNumber <- 25e05
 TotalTestReadNumber <- 25e05
 Proportional2GenomeSize <- T
+LogTransform <- F
 
 pairedEnd <- F
 test.pairedEnd <- T
 
-FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_assembled"
-test.FastaFileLocation <- "~/SCRATCH_NOBAK/vhdb_test"
-TrainingTargetDirectory <- "~/SCRATCH_NOBAK/ALL/trainingReads"
-ValidationTargetDirectory <- "~/SCRATCH_NOBAK/ALL/validationReads"
-TestTargetDirectory <- "~/SCRATCH_NOBAK/ALL/testReads"
-FastaExtension <- "fa"
-FilenamePostfixPattern <- "\\."
+FastaFileLocation <- "~/SCRATCH_NOBAK/fun_trainval"
+test.FastaFileLocation <- "~/SCRATCH_NOBAK/fun_test"
+TrainingTargetDirectory <- "~/SCRATCH_NOBAK/FUN/trainingReads"
+ValidationTargetDirectory <- "~/SCRATCH_NOBAK/FUN/validationReads"
+TestTargetDirectory <- "~/SCRATCH_NOBAK/FUN/testReads"
+FastaExtension <- "fna"
+FilenamePostfixPattern <- "_"
+# for the viral dataset
+#FilenamePostfixPattern <- "\\."
 
 HomeFolder <- "~/"
 ProjectFolder <- "folddata/"
-IMGFile <- "VHDB_1_folds_all_nhuman.rds"
-IMGFile.new <- "VHDB_1_folds_all_nhuman_sizes.rds"
+IMGFile <- "IMG_1_folds_fungi.rds"
+IMGFile.new <- "IMG_1_folds_fungi_sizes.rds"
 
 if (Do.Clean){
 
@@ -121,7 +124,11 @@ if (Do.GetSizes) {
         else{
             file.loc <- FastaFileLocation
         }
-        return (as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T)))
+        if (LogTransform) {
+            return (log10(as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T))))
+        } else {
+            return (as.numeric(system(paste0("find ", file.loc, " -type f -name '", x$assembly_accession, "*' | xargs grep -v \">\" | wc | awk '{print $3-$1}'"), intern=T)))
+        }
     }
 
     IMGdata$Genome.Size <- sapply(1:nrow(IMGdata), function(i){calcSize(IMGdata[i,c("assembly_accession", "fold1")])})
@@ -153,7 +160,8 @@ if (Do.Balance.test) {
     test.Fix.Coverage <- T
 }
 
-Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, TargetDirectory, MeanFragmentSize = 600, FragmentStdDev = 60, Workers = 1, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FastaExtension = ".fna", FilenamePostfixPattern = "_", ReadMargin = 10, AllowNsFromGenome = F){
+Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, TargetDirectory, MeanFragmentSize = 600, FragmentStdDev = 60, Workers = 1, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FastaExtension = ".fna", FilenamePostfixPattern = "_", ReadMargin = 10, AllowNsFromGenome = F,
+                             RelativeGenomeSizes=F){
 
     dir.create(file.path(TargetDirectory), showWarnings = FALSE)
 
@@ -162,10 +170,12 @@ Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.C
     GroupMembers_HP <- which(GroupMembers$Pathogenic)
     GroupMembers_NP <- which(!GroupMembers$Pathogenic)
     if (length(GroupMembers_HP) > 0 ){
-        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members = GroupMembers_HP, TotalReadNumber = ReadNumber, Proportional2GenomeSize = Proportional2GenomeSize, Fix.Coverage = Fix.Coverage, ReadLength = ReadLength, pairedEnd = pairedEnd, FastaFileLocation = FastaFileLocation, IMGdata = GroupMembers, TargetDirectory = file.path(TargetDirectory, "pathogenic"), FastaExtension = FastaExtension, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome)
+        Check.train_HP <- Simulate.Reads.fromMultipleGenomes (Members = GroupMembers_HP, TotalReadNumber = ReadNumber, Proportional2GenomeSize = Proportional2GenomeSize, Fix.Coverage = Fix.Coverage, ReadLength = ReadLength, pairedEnd = pairedEnd, FastaFileLocation = FastaFileLocation, IMGdata = GroupMembers, TargetDirectory = file.path(TargetDirectory, "pathogenic"), FastaExtension = FastaExtension, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome,
+                                                              RelativeGenomeSizes=RelativeGenomeSizes)
     }
     if (length(GroupMembers_NP) > 0 ){
-        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members = GroupMembers_NP, TotalReadNumber = ReadNumber, Proportional2GenomeSize = Proportional2GenomeSize, Fix.Coverage = Fix.Coverage, ReadLength = ReadLength, pairedEnd = pairedEnd, FastaFileLocation = FastaFileLocation, IMGdata = GroupMembers, TargetDirectory = file.path(TargetDirectory, "nonpathogenic"), FastaExtension = FastaExtension, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome)
+        Check.train_NP <- Simulate.Reads.fromMultipleGenomes (Members = GroupMembers_NP, TotalReadNumber = ReadNumber, Proportional2GenomeSize = Proportional2GenomeSize, Fix.Coverage = Fix.Coverage, ReadLength = ReadLength, pairedEnd = pairedEnd, FastaFileLocation = FastaFileLocation, IMGdata = GroupMembers, TargetDirectory = file.path(TargetDirectory, "nonpathogenic"), FastaExtension = FastaExtension, MeanFragmentSize = MeanFragmentSize, FragmentStdDev = FragmentStdDev, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome,
+                                                              RelativeGenomeSizes=RelativeGenomeSizes)
     }
 }
 
@@ -173,7 +183,8 @@ Simulate.Dataset <- function(SetName, ReadNumber, Proportional2GenomeSize, Fix.C
 # Simulate test reads
 if(Do.TestData == T){
     cat("###Simulating test data...###")
-    Simulate.Dataset("test", TestReadNumber, Proportional2GenomeSize, test.Fix.Coverage, ReadLength, test.pairedEnd, test.FastaFileLocation, IMGdata, TestTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome)
+    Simulate.Dataset("test", TestReadNumber, Proportional2GenomeSize, test.Fix.Coverage, ReadLength, test.pairedEnd, test.FastaFileLocation, IMGdata, TestTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome,
+                     RelativeGenomeSizes=LogTransform)
     cat("###Done!###")
 }
 
@@ -181,7 +192,8 @@ if(Do.TestData == T){
 # simulate for each class
 if(Do.ValidationData == T){
     cat("###Simulating validation data...###")
-    Simulate.Dataset("val", ValidationReadNumber, Proportional2GenomeSize, validation.Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, ValidationTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome)
+    Simulate.Dataset("val", ValidationReadNumber, Proportional2GenomeSize, validation.Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, ValidationTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome,
+                     RelativeGenomeSizes=LogTransform)
     cat("###Done!###")
 }
 
@@ -189,6 +201,7 @@ if(Do.ValidationData == T){
 # simulate for each class
 if(Do.TrainingData == T){
     cat("###Simulating training data...###")
-    Simulate.Dataset("train", TrainingReadNumber, Proportional2GenomeSize, training.Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, TrainingTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome)
+    Simulate.Dataset("train", TrainingReadNumber, Proportional2GenomeSize, training.Fix.Coverage, ReadLength, pairedEnd, FastaFileLocation, IMGdata, TrainingTargetDirectory, Workers = Workers, Simulator = Simulator, Cleaned = Cleaned, FastaExtension = FastaExtension, FilenamePostfixPattern = FilenamePostfixPattern, ReadMargin = ReadMargin, AllowNsFromGenome = AllowNsFromGenome,
+                     RelativeGenomeSizes=LogTransform)
     cat("###Done!###")
 }

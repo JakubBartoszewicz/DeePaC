@@ -1,5 +1,7 @@
 # heatmap -----
 library(tidyverse)
+library(cowplot)
+library(grid)
 
 plot_heatmap <- function(data,metric,limits_scale){
   # plots a heatmap of a metric on different readlength comb 
@@ -18,7 +20,8 @@ plot_heatmap <- function(data,metric,limits_scale){
     geom_tile(data = data,
               mapping = aes(subread_length, 
                             subread_length_2, 
-                            fill = 100*get(metric))) +
+                            fill = 100*get(metric)) #,show.legend = TRUE
+                            ) +
     scale_fill_gradientn(colours = c("red3","red" ,"yellow","green","darkgreen"),
                          values = c(0,0.25,.50,.75,1),
                          limits = limits_scale,
@@ -58,23 +61,23 @@ add_line_heatmap <- function(heatmap,data,metric,threshold,color,linetype,name){
     arrange(subread_length, subread_length_2) %>%
     group_by(subread_length) %>%
     mutate(borderBottom = ifelse((get(metric) >= threshold & lag(get(metric)) < threshold) |
-                                   (get(metric) < threshold & lag(get(metric)) >= threshold), 
-                                 TRUE, 
+                                   (get(metric) < threshold & lag(get(metric)) >= threshold),
+                                 TRUE,
                                  FALSE)) %>%
     arrange(subread_length_2, subread_length) %>%
     group_by(subread_length_2) %>%
-    mutate(borderLeft = ifelse((get(metric) >= threshold & lag(get(metric)) <  threshold) | 
+    mutate(borderLeft = ifelse((get(metric) >= threshold & lag(get(metric)) <  threshold) |
                                  (get(metric) <  threshold & lag(get(metric)) >= threshold) ,
-                               TRUE, 
+                               TRUE,
                                FALSE)) %>%
     ungroup()
-  
+
   x_borderBottom <- as.integer(data$subread_length[which(data$borderBottom)])
   y_borderBottom <- as.integer(data$subread_length_2[which(data$borderBottom)])
   x_borderLeft <- as.integer(data$subread_length[which(data$borderLeft)])
   y_borderLeft <- as.integer(data$subread_length_2[which(data$borderLeft)])
-  
-  
+
+
   # draw lines
   if(length(x_borderBottom) > 0 ){
     heatmap <- heatmap +
@@ -88,7 +91,7 @@ add_line_heatmap <- function(heatmap,data,metric,threshold,color,linetype,name){
         show.legend = TRUE
       )
   }
-  
+
   if(length(x_borderLeft) > 0){
     heatmap <- heatmap +
       geom_segment(aes(
@@ -102,8 +105,8 @@ add_line_heatmap <- function(heatmap,data,metric,threshold,color,linetype,name){
       )
   }
   # add color and linetype
-  heatmap <- heatmap + 
-    scale_color_manual(name="thresholds",values = color) + 
+  heatmap <- heatmap +
+    scale_color_manual(name="thresholds",values = color) +
     scale_linetype_manual(name="thresholds",values = linetype)
   
   return(heatmap)
@@ -141,6 +144,13 @@ for(train in trainings){
                                color = c("black","red"),linetype = c("solid","dashed"),name = "baseline",metric = metric)
   
   ggsave(filename = paste0("plots/", train, "_",metric,".png"),
-         plot = heatmap,width = 5, height = 5)
+         plot = heatmap, width = 5, height = 5)
+  ggsave(filename = paste0("plots/", train, "_",metric,".eps"),
+         plot = heatmap, width = 5, height = 5, device="eps")
+}
 
-} 
+# legend <- cowplot::get_legend(heatmap)
+# grid.newpage()
+# grid.draw(legend)
+# ggsave(filename = paste0("plots/", "legend_heatmap_color.png"), plot = legend, width = 0.75, height = 2)
+# ggsave(filename = paste0("plots/", "legend_heatmap_color.eps"), plot = legend, width = 0.75, height = 2, device = "eps")

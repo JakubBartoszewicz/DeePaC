@@ -144,7 +144,11 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
 
 }
 
-Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10, AllowNsFromGenome = F) {
+Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F,
+                                               ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL,
+                                               TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize,
+                                               FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T,
+                                               FilenamePostfixPattern="_", ReadMargin = 10, AllowNsFromGenome = F, RelativeGenomeSizes=F) {
 
     if(any(c(is.null(Members), is.null(TotalReadNumber),is.null(Proportional2GenomeSize ),is.null(FastaFileLocation  ),is.null(IMGdata ),is.null(TargetDirectory ) ))) stop("Please submit valid variables to function Simulate.Reads.fromMultipleGenomes")
 
@@ -203,7 +207,12 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
         MeanFragmentSizes <- rep(MeanFragmentSize, length(Members))
         FragmentStdDevs <- rep(FragmentStdDev, length(Members))
     }
-    ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
+
+    if (RelativeGenomeSizes){
+        ReadLengths <- rep(ReadLength, length(Members))
+    } else {
+        ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
+    }
 
     Check <- foreach(i = 1:length(Members) ) %dopar% {
 

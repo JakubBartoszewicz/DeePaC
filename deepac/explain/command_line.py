@@ -19,10 +19,8 @@ def add_explain_parser(xparser):
     parser_maxact = explain_subparsers.add_parser('maxact', help='Get DeepBind-like max-activation scores.')
     parser_maxact.add_argument("-m", "--model", required=True, help="Model file (.h5)")
     parser_maxact.add_argument("-t", "--test-data", required=True, help="Test data (.npy)")
-    parser_maxact.add_argument("-N", "--nonpatho-test", required=True,
-                               help="Nonpathogenic reads of the test data set (.fasta)")
-    parser_maxact.add_argument("-P", "--patho-test", required=True, help="Pathogenic reads of"
-                                                                         " the test data set (.fasta)")
+    parser_maxact.add_argument("-N", "--nonpatho-test", help="Nonpathogenic reads of the test data set (.fasta)")
+    parser_maxact.add_argument("-P", "--patho-test", help="Pathogenic reads of the test data set (.fasta)")
     parser_maxact.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_maxact.add_argument("-n", "--n-cpus", dest="n_cpus", type=int, help="Number of CPU cores. Default: all.")
     parser_maxact.add_argument("-R", "--recurrent", dest="do_lstm", action="store_true",
@@ -31,6 +29,13 @@ def add_explain_parser(xparser):
                                help="Perform calculations for this intermediate layer")
     parser_maxact.add_argument("-c", "--seq-chunk", dest="chunk_size", default=500, type=int,
                                   help="Sequence chunk size. Decrease for lower memory usage.")
+    parser_maxact.add_argument("--save-activs", dest="save_activs_and_maxact", action="store_true",
+                               help="Save raw activations in .npy format (and find max activating motifs).")
+    parser_maxact.add_argument("--save-activs-only", dest="save_activs_only", action="store_true",
+                               help="Do not search for max activating motifs (only save raw activations)."
+                                    " Overrides --save-activs.")
+    parser_maxact.add_argument("--merge-activs", dest="save_activs_merge", default="sum",
+                               help="RC merging function to use (sum/max/mul/avg). Default: sum")
     parser_maxact.set_defaults(func=run_maxact)
 
     parser_fcontribs = explain_subparsers.add_parser('fcontribs', help='Get DeepLIFT/SHAP filter contribution scores.')
@@ -69,6 +74,8 @@ def add_explain_parser(xparser):
     partial_group.add_argument("-e", "--easy-partial", dest="easy_partial", action="store_true",
                                help="Calculate easy partial nucleotide contributions per filter. "
                                     "Works for the first convolutional layer only; disables all-occurences mode.")
+    parser_fcontribs.add_argument("-T", "--target-class", dest="target_class", type=int,
+                                  help="Target class ID. Leave unset for binary classification")
     parser_fcontribs.set_defaults(func=run_fcontribs)
 
     parser_franking = explain_subparsers.add_parser('franking', help='Generate filter rankings.')
@@ -81,6 +88,8 @@ def add_explain_parser(xparser):
     parser_franking.add_argument("-y", "--true-label", required=True, help="File with true read labels (.npy)")
     parser_franking.add_argument("-p", "--pred-label", required=True, help="File with predicted read labels (.npy)")
     parser_franking.add_argument("-o", "--out-dir", required=True, help="Output directory")
+    parser_franking.add_argument("-T", "--target-class", dest="target_class", type=int,
+                                 help="Target class ID. Leave unset for binary classification")
     parser_franking.set_defaults(func=run_franking)
 
     parser_fa2transfac = explain_subparsers.add_parser('fa2transfac', help='Calculate transfac from fasta files.')

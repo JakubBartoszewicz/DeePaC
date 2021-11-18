@@ -13,8 +13,9 @@ import os
 import shutil
 import multiprocessing
 
-from deepac.predict import predict_fasta, predict_npy, filter_fasta
+from deepac.predict import predict_fasta, predict_npy, filter_fasta, filter_paired_fasta
 from deepac.nn_train import RCNet, RCConfig
+from tensorflow.keras.utils import get_custom_objects
 from deepac.preproc import preproc
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_species import evaluate_species
@@ -28,6 +29,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 
 def main():
@@ -51,9 +53,22 @@ def run_filter(args):
     if args.precision <= 0:
         raise argparse.ArgumentTypeError("%s is an invalid precision value" % args.precision)
     if args.output is None:
-        args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
-    filter_fasta(args.input, args.predictions, args.output, args.threshold, args.potentials, args.precision,
-                 pred_uncertainty=args.std)
+        if args.n_classes == 2:
+            args.output = os.path.splitext(args.input)[0] + "_filtered_{}.fasta".format(args.threshold)
+        else:
+            args.output = os.path.splitext(args.input)[0] + "_filtered_multiclass.fasta"
+    if args.paired_predictions is None:
+        filter_fasta(args.input, args.predictions, args.output,
+                     threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                     confidence_thresh=args.c_thresh,
+                     pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
+    else:
+        if args.paired_fasta is None:
+            args.paired_fasta = args.input
+        filter_paired_fasta(args.input, args.predictions, args.output, args.paired_fasta, args.paired_predictions,
+                            threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
+                            confidence_thresh=args.c_thresh,
+                            pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
 
 
 def run_preproc(args):
@@ -89,14 +104,19 @@ def run_templates(args):
     modulepath = os.path.dirname(__file__)
     extra_templates_path = os.path.join(modulepath, "builtin", "config_templates")
     training_templates_path = os.path.join(modulepath, "builtin", "config")
+    test_templates_path = os.path.join(modulepath, "tests", "configs", "nn-test-L.ini")
     shutil.copytree(training_templates_path, os.path.join(os.getcwd(), "deepac_training_configs"))
     shutil.copytree(extra_templates_path, os.path.join(os.getcwd(), "deepac_extra_configs"))
+    shutil.copyfile(test_templates_path, os.path.join(os.getcwd(), "deepac_training_configs", "nn-test-L.ini"))
 
 
 def global_setup(args):
     tpu_resolver = None
+    precision_policy = None
     if args.tpu:
         tpu_resolver = config_tpus(args.tpu)
+    if args.dtype_policy != "":
+        precision_policy = args.dtype_policy
     if args.no_eager:
         print("Disabling eager mode...")
         tf.compat.v1.disable_v2_behavior()
@@ -108,7 +128,7 @@ def global_setup(args):
     default_verbosity = '3' if args.subparser == 'test' else '2'
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = str(args.debug_tf) if args.debug_tf is not None else default_verbosity
 
-    return tpu_resolver
+    return tpu_resolver, precision_policy
 
 
 def add_global_parser(gparser):
@@ -123,6 +143,7 @@ def add_global_parser(gparser):
     gparser.add_argument('--force-cpu', dest="force_cpu", help="Use a CPU even if GPUs are available.",
                          default=False, action="store_true")
     gparser.add_argument('--tpu', help="TPU name: 'colab' for Google Colab, or name of your TPU on GCE.")
+    gparser.add_argument('--dtype-policy', default="", help="Set dtype precision policy.")
 
     return gparser
 
@@ -134,12 +155,17 @@ class MainRunner:
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
         self.rloader = RemoteLoader(remote_repo_url)
         self.tpu_resolver = None
+        self.precision_policy = None
 
     def run_train(self, args):
         """Parse the config file and train the NN on Illumina reads."""
         if args.tpu is None:
             config_cpus(args.n_cpus)
             config_gpus(args.gpus)
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         if args.sensitive:
             paprconfig = self.bloader.get_sensitive_training_config()
         elif args.rapid:
@@ -173,6 +199,10 @@ class MainRunner:
         if args.tpu is None:
             config_cpus(args.n_cpus)
             config_gpus(args.gpus)
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         if args.output is None:
             args.output = os.path.splitext(args.input)[0] + "_predictions.npy"
 
@@ -184,18 +214,19 @@ class MainRunner:
             if self.tpu_resolver is not None:
                 tpu_strategy = tf.distribute.experimental.TPUStrategy(self.tpu_resolver)
                 with tpu_strategy.scope():
-                    model = tf.keras.models.load_model(args.custom)
+                    model = tf.keras.models.load_model(args.custom, custom_objects=get_custom_objects())
             else:
-                model = tf.keras.models.load_model(args.custom)
+                model = tf.keras.models.load_model(args.custom, custom_objects=get_custom_objects())
 
         if args.rc_check:
             compare_rc(model, args.input, args.output, args.plot_kind, args.alpha, replicates=args.replicates,
                        batch_size=args.batch_size)
         elif args.array:
-            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size)
+            predict_npy(model, args.input, args.output, replicates=args.replicates, batch_size=args.batch_size,
+                        get_logits=args.get_logits)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
-                          batch_size=args.batch_size)
+                          batch_size=args.batch_size, get_logits=args.get_logits)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -234,15 +265,20 @@ class MainRunner:
         """Run tests."""
         if args.tpu is None:
             n_cpus = config_cpus(args.n_cpus)
-            n_gpus = config_gpus(args.gpus)
+            # Setting memory growth before preprocessing TFDatasets hangs the TFRecordWriter
+            n_gpus = config_gpus(args.gpus, set_memory_growth=False)
             scale = args.scale * max(1, n_gpus)
         else:
             n_cpus = multiprocessing.cpu_count()
             scale = args.scale
+        if self.precision_policy is not None:
+            print("Using {} policy.".format(self.precision_policy))
+            policy = mixed_precision.Policy(self.precision_policy)
+            mixed_precision.set_policy(policy)
         tester = Tester(n_cpus, self.builtin_configs, self.builtin_weights,
                         args.explain, args.gwpa, args.all, args.quick, args.keep, scale,
                         tpu_resolver=self.tpu_resolver, input_modes=args.input_modes,
-                        additivity_check=(not args.no_check), large=args.large)
+                        additivity_check=(not args.no_check), large=args.large, offline=args.offline)
         tester.run_tests()
 
     def parse(self):
@@ -271,6 +307,8 @@ class MainRunner:
                                     help='Check RC-constraint compliance (requires .npy input).')
         parser_predict.add_argument('-b', '--batch-size', dest="batch_size", default=512, type=int,
                                     help='Batch size.')
+        parser_predict.add_argument('--get-logits', dest="get_logits", action='store_true',
+                                    help='Return logits instead of the final predictions.')
         parser_predict.add_argument('--plot-kind', dest="plot_kind", default="scatter",
                                     help='Plot kind for the RC-constraint compliance check.')
         parser_predict.add_argument('--alpha', default=1.0, type=float,
@@ -284,12 +322,25 @@ class MainRunner:
 
         parser_filter.add_argument('input',  help="Input file path [.fasta].")
         parser_filter.add_argument('predictions', help="Predictions in matching order [.npy].")
-        parser_filter.add_argument('-t', '--threshold', help="Threshold [default=0.5].", default=0.5, type=float)
-        parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
-                                   default=False, action="store_true")
+        parser_filter.add_argument('-r', '--paired-fasta', dest="paired_fasta",
+                                   help="Second mate input file path [.fasta].")
+        parser_filter.add_argument('-R', '--paired-predictions', dest="paired_predictions",
+                                   help="Second mate predictions in matching order [.npy].")
+        parser_filter.add_argument('-t', '--threshold', help="Threshold for binary classification [default=0.5].",
+                                   default=0.5, type=float)
+        parser_filter.add_argument('-c', '--confidence-threshold', dest="c_thresh",
+                                   help="Confidence threshold [default=None].", type=float)
         parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
         parser_filter.add_argument('-s', '--std', dest="std",
                                    help="Standard deviations of predictions if MC dropout used.")
+        parser_filter.add_argument('-n', '--n-classes', dest="n_classes",
+                                   help="Format pathogenic potentials to given precision "
+                                   "[default=2].", default=2, type=int)
+        parser_filter.add_argument('-P', '--positive-classes', dest="positive_classes",
+                                   help="Format pathogenic potentials to given precision "
+                                   "[default=1].", nargs='+', default=[1], type=int)
+        parser_filter.add_argument('-p', '--potentials', help="Print pathogenic potential values in .fasta headers.",
+                                   default=False, action="store_true")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
         parser_filter.set_defaults(func=run_filter)
@@ -369,6 +420,8 @@ class MainRunner:
                                  default=1, type=int)
         parser_test.add_argument('-L', '--large', help="Test a larger, more complex custom model.",
                                  default=False, action="store_true")
+        parser_test.add_argument('-o', "--offline", dest="offline", action="store_true",
+                                 help="Perform offline tests (don't fetch the pretrained models).")
         parser_test.add_argument("--input-modes", nargs='*', dest="input_modes",
                                  help="Input modes to test: memory, sequence and/or tfdata. Default: all.")
         parser_test.add_argument("--no-check", dest="no_check", action="store_true",
@@ -388,7 +441,7 @@ class MainRunner:
 
         args = parser.parse_args()
 
-        self.tpu_resolver = global_setup(args)
+        self.tpu_resolver, self.precision_policy = global_setup(args)
 
         if args.version:
             print(__version__)

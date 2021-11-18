@@ -1,8 +1,10 @@
 import tensorflow as tf
-from deepac.predict import predict_fasta, filter_fasta
+from deepac.predict import predict_fasta, filter_fasta, filter_paired_fasta, predict_array
 from deepac.nn_train import RCConfig, RCNet
+from tensorflow.keras.utils import get_custom_objects
 from deepac.eval.eval import evaluate_reads
 from deepac.eval.eval_ens import evaluate_ensemble
+from deepac.eval.eval_species import evaluate_species
 from deepac.convert import convert_cudnn
 from deepac import preproc
 from deepac.tests import datagen
@@ -11,13 +13,16 @@ from deepac.builtin_loading import BuiltinLoader
 from deepac import __file__
 from deepac.explain.tests import ExplainTester
 from deepac.gwpa.tests import GWPATester
+from deepac.utils import set_mem_growth
+from deepac.builtin_loading import RemoteLoader
 from multiprocessing import Process
 import configparser
 import os
+from termcolor import colored
+import numpy as np
 
 
 class Tester:
-
     """
     Tester class.
 
@@ -25,7 +30,7 @@ class Tester:
 
     def __init__(self, n_cpus=8, builtin_configs=None, builtin_weights=None, explain=False, gwpa=False, do_all=False,
                  do_quick=False, keep=False, scale=1, tpu_resolver=None, input_modes=None, additivity_check=False,
-                 large=False):
+                 large=False, offline=False):
         self.n_cpus = n_cpus
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
@@ -39,6 +44,8 @@ class Tester:
         self.tpu_resolver = tpu_resolver
         self.additivity_check = additivity_check
         self.do_large = large
+        self.multiclass = large
+        self.offline = offline
         self.test_config = "nn-test-L.ini" if self.do_large else "nn-test.ini"
         # all by default, unless using a TPU when it defaults to memory
         self.input_modes = ["memory"] if tpu_resolver is not None and input_modes is None else input_modes
@@ -53,7 +60,12 @@ class Tester:
 
     def run_datagen(self, npy=True, tfrec=True):
         print("TEST: Generating data...")
-        datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
+        if self.multiclass:
+            datagen.generate_multiclass_sample_data(n_train=2048 * self.scale, n_val=2048 * self.scale)
+            print("TEST: Preprocessing multiclass data...")
+            self.test_preproc(npy, tfrec, multiclass=self.multiclass)
+        else:
+            datagen.generate_sample_data(n_train=1024 * self.scale, n_val=1024 * self.scale)
         print("TEST: Preprocessing data...")
         self.test_preproc(npy, tfrec)
 
@@ -72,6 +84,10 @@ class Tester:
         if not self.keep:
             self.run_datagen(npy=True,
                              tfrec=self.input_modes_dict["tfdata"])
+        set_mem_growth()
+        if not self.offline:
+            print("TEST: Fetching models...")
+            self.test_fetch()
         print("TEST: Training...")
         self.test_train(quick)
         print("TEST: Predicting...")
@@ -82,11 +98,13 @@ class Tester:
         self.test_convert()
         print("TEST: Continuing training...")
         self.test_train(quick=True, epoch_start=2, epoch_end=4)
+        print("TEST: Transfer learning...")
+        self.test_train(quick=True, transfer=True)
         print("TEST: Filtering...")
         self.test_filter()
 
         if self.do_all or self.gwpa:
-            gwpatester = GWPATester(self.n_cpus, self.additivity_check)
+            gwpatester = GWPATester(self.n_cpus, self.additivity_check, target_class=1 if self.multiclass else None)
             print("X-TEST: gff2genome...")
             gwpatester.test_gff2genome()
             print("X-TEST: Fragmenting genomes...")
@@ -101,7 +119,8 @@ class Tester:
             gwpatester.test_fenrichment()
 
         if self.do_all or self.explain:
-            explaintester = ExplainTester(self.n_cpus, self.additivity_check)
+            explaintester = ExplainTester(self.n_cpus, self.additivity_check,
+                                          target_class=1 if self.multiclass else None)
             print("X-TEST: Maxact (DeepBind)...")
             explaintester.test_maxact()
             # SHAP
@@ -124,92 +143,150 @@ class Tester:
             print("X-TEST: Nucleotide contribution map...")
             gwpatester.test_ntcontribs()
 
-        print("TEST: OK")
+        print(colored("TEST: OK", "green"))
 
-    def test_preproc(self, npy=True, tfrec=True):
+    def test_fetch(self):
+        """Test fetching."""
+        out_dir = os.path.join("deepac-tests", "deepac_builtin_models")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        rloader = RemoteLoader()
+        rloader.fetch_models(out_dir, True)
+        assert (os.path.isfile(os.path.join(out_dir, "latest_weights_configs/",
+                                            "nano-vir-res18.h5"))), "Model fetching failed."
+        assert (os.path.isfile(os.path.join(out_dir, "nano-vir-res18.h5"))), "Model fetching failed."
+
+    def test_preproc(self, npy=True, tfrec=True, multiclass=False):
         """Test preprocessing."""
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train.ini"))
+        if multiclass:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train-multi.ini"))
+        else:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-train.ini"))
         if npy:
             config['Options']['Use_TFData'] = "False"
             preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), "Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_data.npy"))), \
+                    "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_labels.npy"))), \
+                    "Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data.npy"))), "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_labels.npy"))), \
+                    "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
             config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
-                                                "sample_train_data_0-{}.tfrec".format(128*self.scale-1)))),\
-                "TFData Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_multi_data",
+                                                    "sample_train_multi_data_0-{}.tfrec".format(
+                                                        1024 * self.scale - 1)))), \
+                    "TFData Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_train_data",
+                                                    "sample_train_data_0-{}.tfrec".format(512 * self.scale - 1)))), \
+                    "TFData Preprocessing failed."
 
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
+        if multiclass:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val-multi.ini"))
+        else:
+            config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "preproc-val.ini"))
         if npy:
             config['Options']['Use_TFData'] = "False"
             preproc.preproc(config)
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data.npy"))), \
+                    "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_labels.npy"))), \
+                    "Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data.npy"))), "Preprocessing failed."
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_labels.npy"))), "Preprocessing failed."
         if tfrec:
             config['Options']['Use_TFData'] = "True"
             config['Options']['Do_shuffle'] = "True"
             p = Process(target=preproc.preproc, args=(config,))
             p.start()
             p.join()
-            assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
-                                                "sample_val_data_0-{}.tfrec".format(128*self.scale-1)))),\
-                "TFData Preprocessing failed."
+            if multiclass:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_multi_data",
+                                                    "sample_val_multi_data_0-{}.tfrec".format(
+                                                        1024 * self.scale - 1)))), \
+                    "TFData Preprocessing failed."
+            else:
+                assert (os.path.isfile(os.path.join("deepac-tests", "sample_val_data",
+                                                    "sample_val_data_0-{}.tfrec".format(512 * self.scale - 1)))), \
+                    "TFData Preprocessing failed."
 
-    def test_train(self, quick=False, epoch_start=0, epoch_end=2):
+    def test_train(self, quick=False, epoch_start=0, epoch_end=2, transfer=False):
         """Test training."""
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
+        runname = "deepac-test"
+        if transfer:
+            config['Architecture']['N_Conv'] = "0"
+            config['Architecture']['N_Recurrent'] = "0"
+            config['ArchitectureExtras']['Tformer_Blocks'] = "0"
+            runname = "deepac-test-transfer"
+            config['Paths']['RunName'] = runname
+            config['TransferEmbeddings']['EmbeddingModel'] = os.path.join("deepac-tests",
+                                                                          "deepac-test-logs",
+                                                                          "deepac-test-e002.h5")
 
         if self.input_modes_dict["memory"]:
             print("TEST: Training (custom - .npy in memory)...")
             config['DataLoad']['Use_TFData'] = "False"
             config['DataLoad']['LoadTrainingByBatch'] = "False"
             paprconfig = RCConfig(config)
-            self.__config_train(paprconfig, epoch_start, epoch_end).train()
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_start+1)))),\
+            self._config_train(paprconfig, epoch_start, epoch_end, multiclass=self.multiclass).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_start + 1)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_end)))),\
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_end)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "training-deepac-test.csv"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "training-{runname}.csv".format(runname=runname)))), "Training failed."
 
         if self.input_modes_dict["sequence"]:
             print("TEST: Training (custom - keras sequence)...")
             config['DataLoad']['Use_TFData'] = "False"
             config['DataLoad']['LoadTrainingByBatch'] = "True"
             paprconfig = RCConfig(config)
-            self.__config_train(paprconfig, epoch_start, epoch_end).train()
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_start+1)))),\
+            self._config_train(paprconfig, epoch_start, epoch_end, multiclass=self.multiclass).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_start + 1)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_end)))),\
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_end)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "training-deepac-test.csv"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "training-{runname}.csv".format(runname=runname)))), "Training failed."
 
         if self.input_modes_dict["tfdata"]:
             print("TEST: Training (custom - tfrecord)...")
             config['DataLoad']['Use_TFData'] = "True"
             paprconfig = RCConfig(config)
-            self.__config_train(paprconfig, epoch_start, epoch_end).train()
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_start+1)))),\
+            self._config_train(paprconfig, epoch_start, epoch_end, multiclass=self.multiclass).train()
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_start + 1)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-e{epoch:03d}.h5".format(epoch=epoch_end)))),\
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "{runname}-e{epoch:03d}.h5".format(runname=runname,
+                                                                                   epoch=epoch_end)))), \
                 "Training failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "training-deepac-test.csv"))), "Training failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
+                                                "training-{runname}.csv".format(runname=runname)))), "Training failed."
 
         if not quick:
             if self.input_modes_dict["memory"]:
@@ -217,15 +294,15 @@ class Tester:
                 paprconfig = self.bloader.get_rapid_training_config()
                 paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = False
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
@@ -234,15 +311,15 @@ class Tester:
                 paprconfig = self.bloader.get_rapid_training_config()
                 paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = True
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
@@ -251,15 +328,15 @@ class Tester:
                 print("TEST: Training (rapid - tfrecord)...")
                 paprconfig = self.bloader.get_rapid_training_config()
                 paprconfig.use_tf_data = True
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
@@ -269,15 +346,15 @@ class Tester:
                 paprconfig = self.bloader.get_sensitive_training_config()
                 paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = False
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
@@ -287,15 +364,15 @@ class Tester:
                 paprconfig = self.bloader.get_sensitive_training_config()
                 paprconfig.use_tf_data = False
                 paprconfig.use_generators_keras = True
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
@@ -304,31 +381,35 @@ class Tester:
                 print("TEST: Training (sensitive - tfrecord)...")
                 paprconfig = self.bloader.get_sensitive_training_config()
                 paprconfig.use_tf_data = True
-                self.__config_train(paprconfig, epoch_start, epoch_end).train()
+                self._config_train(paprconfig, epoch_start, epoch_end).train()
                 runname = paprconfig.runname
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_start+1)))),\
+                                                                                       epoch=epoch_start + 1)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{runname}-logs".format(runname=runname),
                                                     "{runname}-e{epoch:03d}.h5".format(runname=runname,
-                                                                                       epoch=epoch_end)))),\
+                                                                                       epoch=epoch_end)))), \
                     "Training failed."
                 assert (os.path.isfile(os.path.join("deepac-tests", "{}-logs".format(runname),
                                                     "training-{}.csv".format(runname)))), "Training failed."
 
-    def __config_train(self, paprconfig, epoch_start=0, epoch_end=2):
+    def _config_train(self, paprconfig, epoch_start=0, epoch_end=2, multiclass=False):
         """Set sample data paths and compile."""
-        if paprconfig.use_tf_data and tf.executing_eagerly():
-            paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train_data")
-            paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train_labels")
-            paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val_data")
-            paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val_labels")
+        if multiclass:
+            infix = "_multi_"
         else:
-            paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train_data.npy")
-            paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train_labels.npy")
-            paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val_data.npy")
-            paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val_labels.npy")
+            infix = "_"
+        if paprconfig.use_tf_data and tf.executing_eagerly():
+            paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train{}data".format(infix))
+            paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train{}labels".format(infix))
+            paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val{}data".format(infix))
+            paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val{}labels".format(infix))
+        else:
+            paprconfig.x_train_path = os.path.join("deepac-tests", "sample_train{}data.npy".format(infix))
+            paprconfig.y_train_path = os.path.join("deepac-tests", "sample_train{}labels.npy".format(infix))
+            paprconfig.x_val_path = os.path.join("deepac-tests", "sample_val{}data.npy".format(infix))
+            paprconfig.y_val_path = os.path.join("deepac-tests", "sample_val{}labels.npy".format(infix))
         paprconfig.epoch_start = epoch_start
         paprconfig.epoch_end = epoch_end
         paprconfig.log_superpath = "deepac-tests"
@@ -343,12 +424,25 @@ class Tester:
     def test_pred(self, quick=False):
         """Test predicting."""
         print("TEST: Predicting (custom)...")
-        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"))
-        compare_rc(model, os.path.join("deepac-tests", "sample_val_data.npy"),
-                   os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002-predictions-sample_val.npy"),
+        model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
+                                           custom_objects=get_custom_objects())
+        print(model.summary())
+        val_data = "sample_val_multi" if self.multiclass else "sample_val"
+        compare_rc(model, os.path.join("deepac-tests", "{}_data.npy".format(val_data)),
+                   os.path.join("deepac-tests", "deepac-test-logs",
+                                "deepac-test-e002-predictions-{}.npy".format(val_data)),
                    replicates=1)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test-e002-predictions-sample_val.npy"))), "Prediction failed."
+                                            "deepac-test-e002-predictions-{}.npy".format(val_data)))), \
+            "Prediction failed."
+
+        predict_array(model, np.load(os.path.join("deepac-tests", "{}_data.npy".format(val_data))),
+                      os.path.join("deepac-tests", "deepac-test-logs",
+                                   "deepac-test-e002-predictions-logits-{}.npy".format(val_data)),
+                      replicates=1, get_logits=True)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-e002-predictions-logits-{}.npy".format(val_data)))), \
+            "Prediction failed."
 
         if not quick:
             print("TEST: Predicting (rapid)...")
@@ -371,25 +465,91 @@ class Tester:
 
     def test_eval(self):
         """Test evaluating."""
+        print("TEST: Evaluating reads...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval-test.ini"))
+        if self.multiclass:
+            config['Data']['DataSet'] = 'sample_val_multi'
+            config['Data']['PairedSet'] = 'sample_val_multi'
+            config['Data']['N_Classes'] = '4'
+            config['Options']['Do_plots'] = 'False'
+        evaluate_reads(config)
+        config['Data']['TargetClass'] = '1'
         evaluate_reads(config)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-metrics.csv"))), "Evaluation failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test_2_sample_val_auc.png"))), "Evaluation failed."
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test_2_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test_2_sample_val_aupr.png"))), "Evaluation failed."
 
+        print("TEST: Evaluating ensembles...")
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_ens-test.ini"))
+        if self.multiclass:
+            config['Data']['DataSet'] = 'sample_val_multi'
+            config['Data']['PairedSet'] = 'sample_val_multi'
+            config['Data']['N_Classes'] = '4'
+            config['Options']['Do_plots'] = 'False'
         evaluate_ensemble(config)
         assert (os.path.isfile(os.path.join("deepac-tests",
                                             "ens01-metrics.csv"))), "Evaluation failed."
-        assert (os.path.isfile(os.path.join("deepac-tests",
-                                            "ens01_sample_val_auc.png"))), "Evaluation failed."
-        assert (os.path.isfile(os.path.join("deepac-tests",
-                                            "ens01_sample_val_aupr.png"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests",
+                                                "ens01_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests",
+                                                "ens01_sample_val_aupr.png"))), "Evaluation failed."
+
+        print("TEST: Evaluating species...")
+        config = configparser.ConfigParser()
+        config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", "eval_species-test.ini"))
+        if self.multiclass:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-sample_val_multi.npy'
+            config['Data']['N_Classes'] = '4'
+            config['Options']['Do_plots'] = 'False'
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species_sample_val_aupr.png"))), "Evaluation failed."
+
+        config['Options']['Agg_logits'] = 'True'
+        config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit'
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-logit-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit_sample_val_auc.png"))), "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit_sample_val_aupr.png"))), "Evaluation failed."
+
+        config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit-in'
+        config['Options']['Agg_logits'] = 'False'
+        config['Options']['Add_activ'] = 'True'
+        if self.multiclass:
+            config['Data']['DataPredictions'] = \
+                'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+            config['Data']['PairedPredictions'] = \
+                'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val_multi.npy'
+        else:
+            config['Data']['DataPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
+            config['Data']['PairedPredictions'] = 'deepac-test-logs/deepac-test-e002-predictions-logits-sample_val.npy'
+        evaluate_species(config)
+        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                            "deepac-test-species-logit-in-metrics.csv"))), "Evaluation failed."
+        if not self.multiclass:
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit-in_sample_val_auc.png"))),\
+                "Evaluation failed."
+            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
+                                                "deepac-test-species-logit-in_sample_val_aupr.png"))),\
+                "Evaluation failed."
 
     def test_convert(self):
         """Test converting."""
@@ -397,13 +557,15 @@ class Tester:
         config.read(os.path.join(os.path.dirname(__file__), "tests", "configs", self.test_config))
         config['Devices']['DistStrategy'] = "OneDeviceStrategy"
         config['Devices']['Device_build'] = "CPU:0"
-        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"), False)
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002.h5"),
+                      False, verbose=False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_weights.h5"))), "Conversion failed."
         config['Architecture']['MC_Dropout'] = 'True'
-        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"), False)
+        convert_cudnn(config, os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5"),
+                      False, verbose=False)
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                             "deepac-test-e002_converted_converted.h5"))), "Conversion failed."
         assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
@@ -411,20 +573,51 @@ class Tester:
 
     def test_filter(self):
         """Test filtering."""
+        if self.multiclass:
+            n_classes = 4
+            positive_classes = (1, 3,)
+        else:
+            n_classes = 2
+            positive_classes = (1,)
+
         model = tf.keras.models.load_model(os.path.join("deepac-tests", "deepac-test-logs",
-                                                        "deepac-test-e002_converted_converted.h5"))
+                                                        "deepac-test-e002_converted_converted.h5"),
+                                           custom_objects=get_custom_objects())
+        predict_fasta(model, os.path.join("deepac-tests", "sample-val-all.fasta"),
+                      os.path.join("deepac-tests", "deepac-test-logs",
+                                   "deepac-test-e002-predictions-sample_val.npy"),
+                      replicates=5)
+        filter_fasta(input_fasta=os.path.join("deepac-tests", "sample-val-all.fasta"),
+                     predictions=os.path.join("deepac-tests", "deepac-test-logs",
+                                              "deepac-test-e002-predictions-sample_val.npy"),
+                     output=os.path.join("deepac-tests", "sample-val-filtered-pos.fasta"),
+                     print_potentials=True,
+                     output_neg=os.path.join("deepac-tests", "sample-val-filtered-neg.fasta"),
+                     confidence_thresh=None,
+                     output_undef=os.path.join("deepac-tests", "sample-val-filtered-undef.fasta"),
+                     pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
+                                                   "deepac-test-e002-predictions-sample_val-std.npy"),
+                     n_classes=n_classes,
+                     positive_classes=positive_classes)
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-filtered-pos.fasta"))), "Filtering failed."
+
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
                                    "deepac-test-e002-predictions-sample_test.npy"),
                       replicates=5)
-        filter_fasta(os.path.join("deepac-tests", "sample-test.fasta"),
-                     os.path.join("deepac-tests", "deepac-test-logs",
-                                  "deepac-test-e002-predictions-sample_test.npy"),
-                     os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"),
-                     print_potentials=True,
-                     output_neg=os.path.join("deepac-tests", "sample-test-filtered-neg.fasta"),
-                     confidence_thresh=0.65,
-                     output_undef=os.path.join("deepac-tests", "sample-test-filtered-undef.fasta"),
-                     pred_uncertainty=os.path.join("deepac-tests", "deepac-test-logs",
-                                                   "deepac-test-e002-predictions-sample_test-std.npy"))
-        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-pos.fasta"))), "Filtering failed."
+        filter_paired_fasta(input_fasta_1=os.path.join("deepac-tests", "sample-test.fasta"),
+                            predictions_1=os.path.join("deepac-tests", "deepac-test-logs",
+                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                            output_pos=os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"),
+                            input_fasta_2=os.path.join("deepac-tests", "sample-test.fasta"),
+                            predictions_2=os.path.join("deepac-tests", "deepac-test-logs",
+                                                       "deepac-test-e002-predictions-sample_test.npy"),
+                            print_potentials=True,
+                            output_neg=os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"),
+                            confidence_thresh=0.65,
+                            output_undef=os.path.join("deepac-tests", "sample-test-filtered-paired-undef.fasta"),
+                            n_classes=n_classes,
+                            positive_classes=positive_classes)
+
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"))), \
+            "Filtering failed."

@@ -6,8 +6,8 @@ paths to input files and how should be the model trained.
 
 """
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 import re
 import os
 import sys
@@ -15,6 +15,7 @@ import errno
 import warnings
 from contextlib import redirect_stdout
 import math
+from tensorflow.keras.utils import get_custom_objects
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Dropout, Activation, Input, Lambda, Masking
@@ -30,7 +31,10 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.initializers import orthogonal
 from tensorflow.keras.models import load_model
 
-from deepac.utils import ReadSequence, CSVMemoryLogger, set_mem_growth, DatasetParser
+from deepac.utils import ReadSequence, CSVMemoryLogger, DatasetParser
+from deepac.tformers import add_transformer_block, PositionEmbedding, add_siam_transformer_block,\
+    add_rc_transformer_block, scale_input_dim
+from functools import partial
 
 
 class RCConfig:
@@ -115,7 +119,6 @@ class RCConfig:
                 self.initializers["dense"] = self._initializer_dict[config['Architecture']['WeightInit_Dense']]
                 self.initializers["out"] = self._initializer_dict[config['Architecture']['WeightInit_Out']]
             else:
-
                 self.initializers["conv"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["merge"] = self._initializer_dict[config['Architecture']['WeightInit']]
                 self.initializers["lstm"] = self._initializer_dict[config['Architecture']['WeightInit']]
@@ -124,16 +127,36 @@ class RCConfig:
             self.ortho_gain = config['Architecture'].getfloat('OrthoGain')
 
             # Define the network architecture
+            try:
+                self.n_classes = config['Architecture'].getint('N_Classes', fallback=2)
+            except KeyError:
+                self.n_classes = 2
+            if self.n_classes < 2:
+                raise ValueError("Number of classes must be greater or equal to 2")
             self.rc_mode = config['Architecture']['RC_Mode']
             self.n_conv = config['Architecture'].getint('N_Conv')
             try:
-                self.skip_size = config['Architecture'].getint('Skip_Size')
+                self.skip_size = config['Architecture'].getint('Skip_Size', fallback=0)
             except KeyError:
                 self.skip_size = 0
+            try:
+                self.bottlenecks = config['Architecture'].getboolean('Bottlenecks', fallback=False)
+            except KeyError:
+                self.bottlenecks = False
+            try:
+                self.cardinality = config['Architecture'].getint('Cardinality', fallback=1)
+            except KeyError:
+                self.cardinality = 1
+            if self.cardinality > 1 and not self.bottlenecks:
+                raise ValueError("Cardinality > 1 requires bottlenecks.")
             self.n_recurrent = config['Architecture'].getint('N_Recurrent')
             self.n_dense = config['Architecture'].getint('N_Dense')
             self.input_dropout = config['Architecture'].getfloat('Input_Dropout')
             self.conv_units = [int(u) for u in config['Architecture']['Conv_Units'].split(',')]
+            try:
+                self.conv_bottle_units = [int(u) for u in config['Architecture']['Conv_Bottleneck_Units'].split(',')]
+            except KeyError:
+                self.conv_bottle_units = 0
             self.conv_filter_size = [int(s) for s in config['Architecture']['Conv_FilterSize'].split(',')]
             self.conv_dilation = [int(s) for s in config['Architecture']['Conv_Dilation'].split(',')]
             self.conv_stride = [int(s) for s in config['Architecture']['Conv_Stride'].split(',')]
@@ -145,6 +168,32 @@ class RCConfig:
             self.conv_bn = config['Architecture'].getboolean('Conv_BN')
             self.conv_pooling = config['Architecture']['Conv_Pooling']
             self.conv_dropout = config['Architecture'].getfloat('Conv_Dropout')
+
+            try:
+                self.embedding_model = config['TransferEmbeddings'].get('EmbeddingModel', fallback="none")
+                if self.embedding_model == "none" or self.embedding_model == "None":
+                    self.embedding_model = None
+                self.freeze_embeddings = config['TransferEmbeddings'].getboolean('FreezeEmbeddings', fallback=False)
+                self.embedding_remove_top_n = config['TransferEmbeddings'].getint('RemoveTopN', fallback=0)
+            except KeyError:
+                self.embedding_model, self.freeze_embeddings, self.embedding_remove_top_n = None, None, None
+
+            try:
+                self.input_scale = config['ArchitectureExtras'].getint('Scale_Input_Dim', fallback=1)
+            except KeyError:
+                self.input_scale = 1
+            try:
+                self.full_rc_att = config['ArchitectureExtras'].getboolean('Full_RC_Attention')
+                self.full_rc_ffn = config['ArchitectureExtras'].getboolean('Full_RC_FFN')
+                self.n_tformer = config['ArchitectureExtras'].getint('Tformer_Blocks')
+                self.tformer_heads = [int(u) for u in config['ArchitectureExtras']['Tformer_Heads'].split(',')]
+                self.tformer_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Dim'].split(',')]
+                self.tformer_edim = [int(u) for u in config['ArchitectureExtras']['Tformer_EDim'].split(',')]
+                self.tformer_perf_dim = [int(u) for u in config['ArchitectureExtras']['Tformer_Performer_Dim'].split(',')]
+                self.tformer_dropout = config['ArchitectureExtras'].getfloat('Tformer_Dropout')
+                self.tformer_keep_edim = config['ArchitectureExtras'].getboolean('Tformer_Keep_Edim')
+            except KeyError:
+                self.n_tformer = 0
             self.recurrent_units = [int(u) for u in config['Architecture']['Recurrent_Units'].split(',')]
             self.recurrent_bn = config['Architecture'].getboolean('Recurrent_BN')
             if self.n_recurrent == 1 and self.recurrent_bn:
@@ -246,7 +295,6 @@ class RCConfig:
         # If no GPUs, use CPUs
         if self._n_gpus == 0:
             self.model_build_device = '/cpu:0'
-        set_mem_growth()
 
     def set_n_gpus(self):
         self._n_gpus = len(tf.config.get_visible_devices('GPU'))
@@ -315,7 +363,7 @@ class RCNet:
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
             with self.get_device_strategy_scope():
-                self.model = load_model(model_file)
+                self.model = load_model(model_file, custom_objects=get_custom_objects())
         else:
             # Build the model using the CPU or GPU or TPU
             with self.get_device_strategy_scope():
@@ -422,6 +470,8 @@ class RCNet:
                                    kernel_regularizer=self.config.regularizer,
                                    return_sequences=return_sequences,
                                    recurrent_activation='sigmoid'))(inputs)
+
+        self._current_recurrent = self._current_recurrent + 1
         return x
 
     def _add_siam_lstm(self, inputs_fwd, inputs_rc, return_sequences, units):
@@ -446,11 +496,12 @@ class RCNet:
 
         x_fwd = shared_lstm(inputs_fwd)
         x_rc = shared_lstm(inputs_rc)
+        self._current_recurrent = self._current_recurrent + 1
         return x_fwd, x_rc
 
     def _add_rc_lstm(self, inputs, return_sequences, units):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent+1))
+                            name="reverse_complement_lstm_input_{n}".format(n=self._current_recurrent))
         inputs_rc = revcomp_in(inputs)
         x_fwd, x_rc = self._add_siam_lstm(inputs, inputs_rc, return_sequences, units)
         if return_sequences:
@@ -458,31 +509,104 @@ class RCNet:
         else:
             rev_axes = 1
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=rev_axes), output_shape=x_rc.shape[1:],
-                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent + 1))
+                             name="reverse_lstm_output_{n}".format(n=self._current_recurrent))
         x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
 
-    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1):
-        shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
-                             padding=self.config.padding,
-                             kernel_initializer=self.config.initializers["conv"],
-                             kernel_regularizer=self.config.regularizer,
-                             strides=stride)
-        x_fwd = shared_conv(inputs_fwd)
-        x_rc = shared_conv(inputs_rc)
+    def _add_siam_conv1d(self, inputs_fwd, inputs_rc, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+        if cardinality == 1:
+            shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                 padding=self.config.padding,
+                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_regularizer=self.config.regularizer,
+                                 strides=stride,
+                                 name="conv1d_{n}".format(n=self._current_conv))
+            x_fwd = shared_conv(inputs_fwd)
+            x_rc = shared_conv(inputs_rc)
+        else:
+            fwd_group = []
+            rc_group = []
+            grouped_units = int(units/cardinality)
+            assert units <= inputs_fwd.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                                  "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                                    total=units,
+                                                                                    in_size=inputs_fwd.shape[-1])
+            assert units <= inputs_rc.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                                 "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                                   total=units,
+                                                                                   in_size=inputs_rc.shape[-1])
+            for c in range(cardinality):
+                card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
+                shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                     padding=self.config.padding,
+                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_regularizer=self.config.regularizer,
+                                     strides=stride,
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
+                c_fwd = card_split(inputs_fwd)
+                c_rc = card_split(inputs_rc)
+                c_fwd = shared_conv(c_fwd)
+                c_rc = shared_conv(c_rc)
+                fwd_group.append(c_fwd)
+                rc_group.append(c_rc)
+            x_fwd = concatenate(fwd_group, axis=-1)
+            x_rc = concatenate(rc_group, axis=-1)
+        self._current_conv = self._current_conv + 1
         return x_fwd, x_rc
 
-    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1):
+    def _add_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
+        if cardinality == 1:
+            shared_conv = Conv1D(filters=units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                 padding=self.config.padding,
+                                 kernel_initializer=self.config.initializers["conv"],
+                                 kernel_regularizer=self.config.regularizer,
+                                 strides=stride,
+                                 name="conv1d_{n}".format(n=self._current_conv))
+            x_out = shared_conv(inputs)
+        else:
+            x_group = []
+            grouped_units = int(units/cardinality)
+            assert units <= inputs.shape[-1], "Invalid dimension for grouped convolution: {C}x{d}d={total} " \
+                                              "(input size: {in_size})". format(C=cardinality, d=grouped_units,
+                                                                                total=units, in_size=inputs.shape[-1])
+            for c in range(cardinality):
+                card_split = Lambda(lambda x: x[:, :, c*grouped_units:(c+1)*grouped_units])
+                shared_conv = Conv1D(filters=grouped_units, kernel_size=kernel_size, dilation_rate=dilation_rate,
+                                     padding=self.config.padding,
+                                     kernel_initializer=self.config.initializers["conv"],
+                                     kernel_regularizer=self.config.regularizer,
+                                     strides=stride,
+                                     name="conv1d_{n}_gmember_{gm}".format(n=self._current_conv, gm=c))
+                c_x = card_split(inputs)
+                c_x = shared_conv(c_x)
+                x_group.append(c_x)
+            x_out = concatenate(x_group, axis=-1)
+        self._current_conv = self._current_conv + 1
+        return x_out
+
+    def _add_rc_conv1d(self, inputs, units, kernel_size, dilation_rate=1, stride=1, cardinality=1):
         revcomp_in = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=inputs.shape[1:],
-                            name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv+1))
+                            name="reverse_complement_conv1d_input_{n}".format(n=self._current_conv))
         inputs_rc = revcomp_in(inputs)
-        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride)
+        x_fwd, x_rc = self._add_siam_conv1d(inputs, inputs_rc, units, kernel_size, dilation_rate, stride, cardinality)
         revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv + 1))
+                             name="reverse_complement_conv1d_output_{n}".format(n=self._current_conv-1))
         x_rc = revcomp_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
+
+    def _add_bottleneck(self, inputs, units, cardinality=1):
+        x = self._add_conv1d(inputs, units=units, kernel_size=1, cardinality=cardinality)
+        return x
+
+    def _add_siam_bottleneck(self, inputs_fwd, inputs_rc, units, cardinality=1):
+        x_fwd, x_rc = self._add_siam_conv1d(inputs_fwd, inputs_rc, units=units, kernel_size=1, cardinality=cardinality)
+        return x_fwd, x_rc
+
+    def _add_rc_bottleneck(self, inputs, units, cardinality=1):
+        x = self._add_rc_conv1d(inputs, units=units, kernel_size=1, cardinality=cardinality)
+        return x
 
     def _add_siam_batchnorm(self, inputs_fwd, inputs_rc):
         input_shape = inputs_rc.shape
@@ -494,12 +618,13 @@ class RCNet:
         split_shape = out.shape[1] // 2
         new_shape = [split_shape, input_shape[2]]
         fwd_out = Lambda(lambda x: x[:, :split_shape, :], output_shape=new_shape,
-                         name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn+1))
+                         name="split_batchnorm_fwd_output_{n}".format(n=self._current_bn))
         rc_out = Lambda(lambda x: x[:, split_shape:, :], output_shape=new_shape,
-                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_rc_output1_{n}".format(n=self._current_bn))
 
         x_fwd = fwd_out(out)
         x_rc = rc_out(out)
+        self._current_bn = self._current_bn + 1
         return x_fwd, x_rc
 
     def _add_rc_batchnorm(self, inputs):
@@ -510,14 +635,14 @@ class RCNet:
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_fwd_input_{n}".format(n=self._current_bn))
         rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
-                       name="split_batchnorm_rc_input_{n}".format(n=self._current_bn+1))
+                       name="split_batchnorm_rc_input_{n}".format(n=self._current_bn))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd, x_rc = self._add_siam_batchnorm(inputs_fwd, inputs_rc)
         rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
-                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn+1))
+                        name="split_batchnorm_rc_output2_{n}".format(n=self._current_bn-1))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
         return out
@@ -547,9 +672,8 @@ class RCNet:
         stride = int(round(source.shape[1] / residual.shape[1]))
 
         if (source.shape[1] != residual.shape[1]) or (source.shape[-1] != residual.shape[-1]):
-            source = Conv1D(filters=residual.shape[-1], kernel_size=1, strides=stride, padding=self.config.padding,
-                            kernel_initializer=self.config.initializer,
-                            kernel_regularizer=self.config.regularizer)(source)
+            source = self._add_conv1d(source, units=residual.shape[-1],
+                                      kernel_size=1, stride=stride)
 
         return add([source, residual])
 
@@ -580,23 +704,23 @@ class RCNet:
             new_shape_res = [residual.shape[1], split_shape_res]
             fwd_src_in = Lambda(lambda x: x[:, :, :split_shape_src],
                                 output_shape=new_shape_src,
-                                name="forward_skip_src_in_{n}".format(n=self._current_conv + 1))
+                                name="forward_skip_src_in_{n}".format(n=self._current_conv))
             rc_src_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_src:], axes=(1, 2)),
                                output_shape=new_shape_src,
-                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv + 1))
+                               name="reverse_complement_skip_src_in_{n}".format(n=self._current_conv))
             fwd_res_in = Lambda(lambda x: x[:, :, :split_shape_res],
                                 output_shape=new_shape_res,
-                                name="forward_skip_res_in_{n}".format(n=self._current_conv + 1))
+                                name="forward_skip_res_in_{n}".format(n=self._current_conv))
             rc_res_in = Lambda(lambda x: K.reverse(x[:, :, split_shape_res:], axes=(1, 2)),
                                output_shape=new_shape_res,
-                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv + 1))
+                               name="reverse_complement_skip_res_in{n}".format(n=self._current_conv))
             source_fwd = fwd_src_in(source)
             residual_fwd = fwd_res_in(residual)
             source_rc = rc_src_in(source)
             residual_rc = rc_res_in(residual)
             x_fwd, x_rc = self._add_siam_skip(source_fwd, source_rc, residual_fwd, residual_rc)
             revcomp_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape[1:],
-                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv + 1))
+                                 name="reverse_complement_skip_output_{n}".format(n=self._current_conv))
             x_rc = revcomp_out(x_rc)
             out = concatenate([x_fwd, x_rc], axis=-1)
             return out
@@ -605,21 +729,22 @@ class RCNet:
         input_shape = inputs.shape
         if len(input_shape) != 3:
             raise ValueError("Intended for RC layers with 2D output. Use RC-Conv1D or RC-LSTM returning sequences."
-                             "Expected dimension: 3, but got: " + str(len(input_shape)))
+                             "Expected dimensions: 3, but got: " + str(len(input_shape)))
         split_shape = inputs.shape[-1] // 2
         new_shape = [input_shape[1], split_shape]
         fwd_in = Lambda(lambda x: x[:, :, :split_shape], output_shape=new_shape,
-                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool+1))
+                        name="split_pooling_fwd_input_{n}".format(n=self._current_pool))
         rc_in = Lambda(lambda x: K.reverse(x[:, :, split_shape:], axes=(1, 2)), output_shape=new_shape,
-                       name="split_pooling_rc_input_{n}".format(n=self._current_pool+1))
+                       name="split_pooling_rc_input_{n}".format(n=self._current_pool))
         inputs_fwd = fwd_in(inputs)
         inputs_rc = rc_in(inputs)
         x_fwd = pooling_layer(inputs_fwd)
         x_rc = pooling_layer(inputs_rc)
         rc_out = Lambda(lambda x: K.reverse(x, axes=(1, 2)), output_shape=x_rc.shape,
-                        name="split_pooling_rc_output_{n}".format(n=self._current_pool+1))
+                        name="split_pooling_rc_output_{n}".format(n=self._current_pool))
         x_rc = rc_out(x_rc)
         out = concatenate([x_fwd, x_rc], axis=-1)
+        self._current_pool = self._current_pool + 1
         return out
 
     def _build_simple_model(self):
@@ -627,34 +752,49 @@ class RCNet:
         print("Building model...")
         # Number of added recurrent layers
         self._current_recurrent = 0
+        self._current_conv = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x = Masking()(inputs)
+        if self.config.input_scale > 1:
+            x = scale_input_dim(inputs, self.config.input_scale)
         else:
             x = inputs
+        if self.config.mask_zeros:
+            x = Masking()(x)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-        else:
-            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
-                       padding=self.config.padding,
-                       kernel_initializer=self.config.initializers["conv"],
-                       kernel_regularizer=self.config.regularizer,
-                       strides=self.config.conv_stride[0])(x)
+            x = self._add_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
+                                 dilation_rate=self.config.conv_dilation[0],
+                                 stride=self.config.conv_stride[0], cardinality=1)
             if self.config.conv_bn:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add activation
             x = Activation(self.config.conv_activation)(x)
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                      position_embedding=position_embedding,
+                                      num_heads=self.config.tformer_heads[0],
+                                      ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
+                                      perf_dim=self.config.tformer_perf_dim[0],
+                                      training=self.config.dropout_training_mode)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -663,25 +803,32 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
-                                                                              training=self.config.dropout_training_mode)
+            x = Dropout(self.config.recurrent_dropout,
+                        seed=self.config.seed)(x, training=self.config.dropout_training_mode)
             # First recurrent layer already added
             self._current_recurrent = 1
+        elif self.config.embedding_model is not None:
+            submodel = load_model(self.config.embedding_model)
+            submodel = tf.keras.models.Model(inputs=submodel.input,
+                                             outputs=submodel.get_layer(
+                                                 index=self.config.embedding_remove_top_n).get_output_at(0))
+            if self.config.freeze_embeddings:
+                submodel.trainable = False
+            x = submodel(x, training=False)
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
-        if self.config.skip_size > 0:
-            start = x
-        else:
-            start = None
+        start = None
         # For next convolutional layers
-        for i in range(1, self.config.n_conv):
+        for i in range(self._current_conv, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = MaxPooling1D()(x)
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                x = MaxPooling1D()(x)
             elif self.config.conv_pooling == 'average':
                 x = AveragePooling1D()(x)
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
@@ -689,19 +836,35 @@ class RCNet:
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x,
                                                                              training=self.config.dropout_training_mode)
+            # Add bottleneck
+            if self.config.skip_size > 0 and i == 1:
+                start = x
+                if self.config.bottlenecks:
+                    x = self._add_bottleneck(x, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
             # Add layer
             # Standard convolutional layer
-            x = Conv1D(filters=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
-                       padding=self.config.padding,
-                       kernel_initializer=self.config.initializers["conv"],
-                       kernel_regularizer=self.config.regularizer,
-                       strides=self.config.conv_stride[i])(x)
+            x = self._add_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
+                                 dilation_rate=self.config.conv_dilation[i],
+                                 stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
+
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_skip(start, end)
-                    start = x
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottlenecks:
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_bottleneck(x, self.config.conv_bottle_units[i])
+                end = x
+                x = self._add_skip(start, end)
+                start = x
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
+                    if self.config.conv_bn:
+                        x = BatchNormalization()(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_bottleneck(x, self.config.conv_units[i + 1])
             # Add batch norm
             if self.config.conv_bn:
                 # Standard batch normalization layer
@@ -709,8 +872,26 @@ class RCNet:
             # Add activation
             x = Activation(self.config.conv_activation)(x)
 
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x.shape[-1]):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
+            x = add_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                      position_embedding=position_embedding,
+                                      num_heads=self.config.tformer_heads[i],
+                                      ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
+                                      initializer=self.config.initializers["dense"],
+                                      current_tformer=self._current_tformer,
+                                      seed=self.config.seed,
+                                      perf_dim=self.config.tformer_perf_dim[i],
+                                      training=self.config.dropout_training_mode)
+            self._current_tformer = self._current_tformer + 1
+
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -718,7 +899,8 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = MaxPooling1D()(x)
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average' or \
+                    self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
@@ -750,8 +932,8 @@ class RCNet:
                 # Standard batch normalization layer
                 x = BatchNormalization()(x)
             # Add dropout
-            x = Dropout(self.config.recurrent_dropout, seed=self.config.seed)(x,
-                                                                              training=self.config.dropout_training_mode)
+            x = Dropout(self.config.recurrent_dropout,
+                        seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Dense layers
         for i in range(0, self.config.n_dense):
@@ -765,11 +947,18 @@ class RCNet:
             x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x,
                                                                           training=self.config.dropout_training_mode)
 
-        # Output layer for binary classification
-        x = Dense(1,
-                  kernel_initializer=self.config.initializers["out"],
-                  kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+        if self.config.n_classes == 2:
+            # Output layer for binary classification
+            x = Dense(1,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            # Output layer for binary classification
+            x = Dense(self.config.n_classes,
+                      kernel_initializer=self.config.initializers["out"],
+                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -782,32 +971,51 @@ class RCNet:
         self._current_conv = 0
         self._current_bn = 0
         self._current_pool = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x = Masking()(inputs)
+        if self.config.input_scale > 1:
+            x = scale_input_dim(inputs, self.config.input_scale)
         else:
             x = inputs
+        if self.config.mask_zeros:
+            x = Masking()(x)
         # The last recurrent layer should return the output for the last unit only.
         #  Previous layers must return output for all units
         return_sequences = True if self.config.n_recurrent > 1 else False
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x = Dropout(self.config.input_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-        else:
-            x = inputs
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
             x = self._add_rc_conv1d(x, units=self.config.conv_units[0], kernel_size=self.config.conv_filter_size[0],
                                     dilation_rate=self.config.conv_dilation[0],
-                                    stride=self.config.conv_stride[0])
+                                    stride=self.config.conv_stride[0], cardinality=1)
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self._current_conv = self._current_conv + 1
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed,
+                                                   growing_rc=(not self.config.tformer_keep_edim))
+
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[0],
+                                         position_embedding=position_embedding,
+                                         num_heads=self.config.tformer_heads[0],
+                                         ff_dim=self.config.tformer_dim[0], dropout_rate=self.config.tformer_dropout,
+                                         initializer=self.config.initializers["dense"],
+                                         current_tformer=self._current_tformer,
+                                         seed=self.config.seed,
+                                         keep_edim_fction=None,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
+                                         perf_dim=self.config.tformer_perf_dim[0],
+                                         training=self.config.dropout_training_mode)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -815,57 +1023,110 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout,
-                            seed=self.config.seed)(x,
-                                                   training=self.config.dropout_training_mode)
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             # First recurrent layer already added
             self._current_recurrent = self._current_recurrent + 1
+        elif self.config.embedding_model is not None:
+            submodel = load_model(self.config.embedding_model)
+            submodel = tf.keras.models.Model(inputs=submodel.input,
+                                             outputs=submodel.get_layer(
+                                                 index=-1-self.config.embedding_remove_top_n).get_output_at(0))
+            if self.config.freeze_embeddings:
+                submodel.trainable = False
+            x = submodel(x, training=False)
         else:
-            raise ValueError('First layer should be convolutional or recurrent')
+            raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
-        if self.config.skip_size > 0:
-            start = x
-        else:
-            start = None
+        start = None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
             if self.config.conv_pooling == 'max':
                 x = self._add_rc_pooling(x, MaxPooling1D())
-                self._current_pool = self._current_pool + 1
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                x = self._add_rc_pooling(x, MaxPooling1D())
             elif self.config.conv_pooling == 'average':
                 x = self._add_rc_pooling(x, AveragePooling1D())
-                self._current_pool = self._current_pool + 1
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x,
-                                                                             training=self.config.dropout_training_mode)
+                x = Dropout(self.config.conv_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+            # Add bottleneck
+            if self.config.skip_size > 0 and i == 1:
+                start = x
+                if self.config.bottlenecks:
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
+
             # Add layer
             x = self._add_rc_conv1d(x, units=self.config.conv_units[i], kernel_size=self.config.conv_filter_size[i],
                                     dilation_rate=self.config.conv_dilation[i],
-                                    stride=self.config.conv_stride[i])
+                                    stride=self.config.conv_stride[i], cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end = x
-                    x = self._add_rc_skip(start, end)
-                    start = x
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottlenecks:
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_rc_bottleneck(x, self.config.conv_bottle_units[i])
+                end = x
+                x = self._add_rc_skip(start, end)
+                start = x
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
+                    if self.config.conv_bn:
+                        x = self._add_rc_batchnorm(x)
+                    x = Activation(self.config.conv_activation)(x)
+                    x = self._add_rc_bottleneck(x, self.config.conv_units[i + 1])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             x = Activation(self.config.conv_activation)(x)
-            self._current_conv = self._current_conv + 1
+
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x.shape[-1]//2):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=(not self.config.tformer_keep_edim))
+
+            embed_dim = self.config.tformer_edim[0]
+            # Maintain embedding dimension
+            if self.config.tformer_keep_edim:
+                if embed_dim % 2 != 0:
+                    raise ValueError("Constant embedding dimension in full RC Transformers must be divisible by 2. "
+                                     "Received: {}".format(embed_dim))
+                edim_compressor = partial(self._add_rc_conv1d, units=embed_dim//2, kernel_size=1)
+            else:
+                edim_compressor = None
+
+            x = add_rc_transformer_block(x, embed_dim=self.config.tformer_edim[i],
+                                         position_embedding=position_embedding,
+                                         num_heads=self.config.tformer_heads[i],
+                                         ff_dim=self.config.tformer_dim[i], dropout_rate=self.config.tformer_dropout,
+                                         initializer=self.config.initializers["dense"],
+                                         current_tformer=self._current_tformer,
+                                         seed=self.config.seed,
+                                         keep_edim_fction=edim_compressor,
+                                         full_rc_att=self.config.full_rc_att,
+                                         full_rc_ffn=self.config.full_rc_ffn,
+                                         perf_dim=self.config.tformer_perf_dim[i],
+                                         training=self.config.dropout_training_mode)
+
+            self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -873,15 +1134,14 @@ class RCNet:
                 else:
                     # for recurrent layers, use normal pooling
                     x = self._add_rc_pooling(x, MaxPooling1D())
-                    self._current_pool = self._current_pool + 1
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average' or \
+                    self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     x = GlobalAveragePooling1D()(x)
                 else:
                     # for recurrent layers, use normal pooling
                     x = self._add_rc_pooling(x, AveragePooling1D())
-                    self._current_pool = self._current_pool + 1
             elif self.config.conv_pooling == 'none':
                 if self.config.n_recurrent == 0:
                     x = Flatten()(x)
@@ -893,8 +1153,8 @@ class RCNet:
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
-                x = Dropout(self.config.conv_dropout, seed=self.config.seed)(x,
-                                                                             training=self.config.dropout_training_mode)
+                x = Dropout(self.config.conv_dropout,
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Recurrent layers
         for i in range(self._current_recurrent, self.config.n_recurrent):
@@ -906,12 +1166,11 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x = self._add_rc_batchnorm(x)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x = Dropout(self.config.recurrent_dropout,
-                            seed=self.config.seed)(x,
-                                                   training=self.config.dropout_training_mode)
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             self._current_recurrent = self._current_recurrent + 1
 
         # Dense layers
@@ -927,17 +1186,28 @@ class RCNet:
             x = Activation(self.config.dense_activation)(x)
             if not np.isclose(self.config.dense_dropout, 0.0):
                 x = Dropout(self.config.dense_dropout,
-                            seed=self.config.seed)(x,
-                                                   training=self.config.dropout_training_mode)
+                            seed=self.config.seed)(x, training=self.config.dropout_training_mode)
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            x = self._add_rc_merge_dense(x, 1)
+            if self.config.n_classes == 2:
+                x = self._add_rc_merge_dense(x, 1)
+            else:
+                x = self._add_rc_merge_dense(x, self.config.n_classes)
         else:
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+            if self.config.n_classes == 2:
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs, x)
@@ -949,14 +1219,18 @@ class RCNet:
         self._current_recurrent = 0
         self._current_conv = 0
         self._current_bn = 0
+        self._current_tformer = 0
+        position_embedding = None
         # Initialize input
         inputs_fwd = Input(shape=(self.config.seq_length, self.config.seq_dim))
-        if self.config.mask_zeros:
-            x_fwd = Masking()(inputs_fwd)
+        if self.config.input_scale > 1:
+            x_fwd = scale_input_dim(inputs_fwd, self.config.input_scale)
         else:
             x_fwd = inputs_fwd
+        if self.config.mask_zeros:
+            x_fwd = Masking()(x_fwd)
         revcomp_in = Lambda(lambda _x: K.reverse(_x, axes=(1, 2)), output_shape=inputs_fwd.shape[1:],
-                            name="reverse_complement_input_{n}".format(n=self._current_recurrent+1))
+                            name="reverse_complement_input_{n}".format(n=self._current_recurrent))
         x_rc = revcomp_in(x_fwd)
         # The last recurrent layer should return the output for the last unit only.
         # Previous layers must return output for all units
@@ -964,11 +1238,10 @@ class RCNet:
         # Input dropout
         if not np.isclose(self.config.input_dropout, 0.0):
             x_fwd = Dropout(self.config.input_dropout,
-                            seed=self.config.seed)(x_fwd,
-                                                   training=self.config.dropout_training_mode)
+                            seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
             x_rc = Dropout(self.config.input_dropout,
-                           seed=self.config.seed)(x_rc,
-                                                  training=self.config.dropout_training_mode)
+                           seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
+
         # First convolutional/recurrent layer
         if self.config.n_conv > 0:
             # Convolutional layers will always be placed before recurrent ones
@@ -976,16 +1249,32 @@ class RCNet:
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[0],
                                                 kernel_size=self.config.conv_filter_size[0],
                                                 dilation_rate=self.config.conv_dilation[0],
-                                                stride=self.config.conv_stride[0])
+                                                stride=self.config.conv_stride[0],
+                                                cardinality=1)
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add activation
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
-            self._current_conv = self._current_conv + 1
+        # Transformer blocks
+        elif self.config.n_tformer > 0:
+            position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                   seed=self.config.seed)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
+                                                     embed_dim=self.config.tformer_edim[0],
+                                                     num_heads=self.config.tformer_heads[0],
+                                                     ff_dim=self.config.tformer_dim[0],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
+                                                     perf_dim=self.config.tformer_perf_dim[0],
+                                                     training=self.config.dropout_training_mode)
+            self._current_tformer = self._current_tformer + 1
         elif self.config.n_recurrent > 0:
             # If no convolutional layers, the first layer is recurrent.
             # CuDNNLSTM requires a GPU and tensorflow with cuDNN
@@ -995,26 +1284,25 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout,
-                                seed=self.config.seed)(x_fwd,
-                                                       training=self.config.dropout_training_mode)
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
                 x_rc = Dropout(self.config.recurrent_dropout,
-                               seed=self.config.seed)(x_rc,
-                                                      training=self.config.dropout_training_mode)
-            # First recurrent layer already added
-            self._current_recurrent = 1
-        else:
-            raise ValueError('First layer should be convolutional or recurrent')
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
+            elif self.config.embedding_model is not None:
+                submodel = load_model(self.config.embedding_model)
+                submodel = tf.keras.models.Model(inputs=submodel.input,
+                                                 outputs=submodel.get_layer(
+                                                     index=self.config.embedding_remove_top_n).get_output_at(0))
+                if self.config.freeze_embeddings:
+                    submodel.trainable = False
+                x_fwd = submodel(x_fwd, training=False)
+                x_rc = submodel(x_rc, training=False)
+            else:
+                raise ValueError('First layer should convolutional, recurrent, transformer or an embedding submodel')
 
-        if self.config.skip_size > 0:
-            start_fwd = x_fwd
-            start_rc = x_rc
-        else:
-            start_fwd = None
-            start_rc = None
+        start_fwd, start_rc = None, None
         # For next convolutional layers
         for i in range(1, self.config.n_conv):
             # Add pooling first
@@ -1022,48 +1310,95 @@ class RCNet:
                 pool = MaxPooling1D()
                 x_fwd = pool(x_fwd)
                 x_rc = pool(x_rc)
+            elif self.config.conv_pooling == 'first_max_last_average' and i == 1:
+                pool = MaxPooling1D()
+                x_fwd = pool(x_fwd)
+                x_rc = pool(x_rc)
             elif self.config.conv_pooling == 'average':
                 pool = AveragePooling1D()
                 x_fwd = pool(x_fwd)
                 x_rc = pool(x_rc)
-            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none']):
+            elif not (self.config.conv_pooling in ['last_max', 'last_average', 'none', 'first_max_last_average']):
                 # Skip pooling if it should be applied to the last conv layer or skipped altogether.
                 # Throw a ValueError if the pooling method is unrecognized.
                 raise ValueError('Unknown pooling method')
             # Add dropout (drops whole features)
             if not np.isclose(self.config.conv_dropout, 0.0):
                 x_fwd = Dropout(self.config.conv_dropout,
-                                seed=self.config.seed)(x_fwd,
-                                                       training=self.config.dropout_training_mode)
+                                seed=self.config.seed)(x_fwd, training=self.config.dropout_training_mode)
                 x_rc = Dropout(self.config.conv_dropout,
-                               seed=self.config.seed)(x_rc,
-                                                      training=self.config.dropout_training_mode)
+                               seed=self.config.seed)(x_rc, training=self.config.dropout_training_mode)
+
             # Add layer
+            if self.config.skip_size > 0 and i == 1:
+                start_fwd = x_fwd
+                start_rc = x_rc
+                if self.config.bottlenecks:
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i])
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
             # Reverse-complement convolutional layer
             x_fwd, x_rc = self._add_siam_conv1d(x_fwd, x_rc, units=self.config.conv_units[i],
                                                 kernel_size=self.config.conv_filter_size[i],
                                                 dilation_rate=self.config.conv_dilation[i],
-                                                stride=self.config.conv_stride[i])
+                                                stride=self.config.conv_stride[i],
+                                                cardinality=self.config.cardinality)
             # Pre-activation skip connections https://arxiv.org/pdf/1603.05027v2.pdf
-            if self.config.skip_size > 0:
-                if i % self.config.skip_size == 0:
-                    end_fwd = x_fwd
-                    end_rc = x_rc
-                    x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
-                    start_fwd = x_fwd
-                    start_rc = x_rc
+            if self.config.skip_size > 0 and i % self.config.skip_size == 0:
+                if self.config.bottlenecks:
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc,
+                                                            self.config.conv_bottle_units[i])
+                end_fwd = x_fwd
+                end_rc = x_rc
+                x_fwd, x_rc = self._add_siam_skip(start_fwd, start_rc, end_fwd, end_rc)
+                start_fwd = x_fwd
+                start_rc = x_rc
+                if self.config.bottlenecks and i < self.config.n_conv - 1:
+                    if self.config.conv_bn:
+                        x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
+                    act = Activation(self.config.conv_activation)
+                    x_fwd = act(x_fwd)
+                    x_rc = act(x_rc)
+                    x_fwd, x_rc = self._add_siam_bottleneck(x_fwd, x_rc, self.config.conv_units[i + 1])
             if self.config.conv_bn:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add activation
             act = Activation(self.config.conv_activation)
             x_fwd = act(x_fwd)
             x_rc = act(x_rc)
-            self._current_conv = self._current_conv + 1
+
+        # Transformer blocks
+        for i in range(self._current_tformer, self.config.n_tformer):
+            if position_embedding is None or \
+                    (position_embedding.input_shape[-1] != x_fwd.shape[-1]):
+                position_embedding = PositionEmbedding(max_depth=self.config.n_tformer,
+                                                       seed=self.config.seed,
+                                                       growing_rc=False)
+            x_fwd, x_rc = add_siam_transformer_block(x_fwd, x_rc, position_embedding=position_embedding,
+                                                     embed_dim=self.config.tformer_edim[i],
+                                                     num_heads=self.config.tformer_heads[i],
+                                                     ff_dim=self.config.tformer_dim[i],
+                                                     dropout_rate=self.config.tformer_dropout,
+                                                     initializer=self.config.initializers["dense"],
+                                                     current_tformer=self._current_tformer,
+                                                     seed=self.config.seed,
+                                                     full_rc_att=self.config.full_rc_att,
+                                                     full_rc_ffn=self.config.full_rc_ffn,
+                                                     perf_dim=self.config.tformer_perf_dim[i],
+                                                     training=self.config.dropout_training_mode)
+            self._current_tformer = self._current_tformer + 1
 
         # Pooling layer
-        if self.config.n_conv > 0:
+        if self.config.n_conv > 0 or self.config.n_tformer > 0:
             if self.config.conv_pooling == 'max' or self.config.conv_pooling == 'last_max':
                 if self.config.n_recurrent == 0:
                     # If no recurrent layers, use global pooling
@@ -1075,7 +1410,8 @@ class RCNet:
                     pool = MaxPooling1D()
                     x_fwd = pool(x_fwd)
                     x_rc = pool(x_rc)
-            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average':
+            elif self.config.conv_pooling == 'average' or self.config.conv_pooling == 'last_average'\
+                    or self.config.conv_pooling == 'first_max_last_average':
                 if self.config.n_recurrent == 0:
                     # if no recurrent layers, use global pooling
                     pool = GlobalAveragePooling1D()
@@ -1115,7 +1451,6 @@ class RCNet:
             if self.config.recurrent_bn and return_sequences:
                 # Reverse-complemented batch normalization layer
                 x_fwd, x_rc = self._add_siam_batchnorm(x_fwd, x_rc)
-                self._current_bn = self._current_bn + 1
             # Add dropout
             if not np.isclose(self.config.recurrent_dropout, 0.0):
                 x_fwd = Dropout(self.config.recurrent_dropout,
@@ -1125,8 +1460,11 @@ class RCNet:
 
         # Output layer for binary classification
         if self.config.n_dense == 0:
-            # Output layer for binary classification
-            x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = self._add_siam_merge_dense(x_fwd, x_rc, 1)
+            else:
+                x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.n_classes)
         else:
             # Dense layers
             x = self._add_siam_merge_dense(x_fwd, x_rc, self.config.dense_units[0])
@@ -1134,8 +1472,8 @@ class RCNet:
                 # Batch normalization layer
                 x = BatchNormalization()(x)
             x = Activation(self.config.dense_activation)(x)
-            x = Dropout(self.config.dense_dropout,
-                        seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+            x = Dropout(self.config.dense_dropout, seed=self.config.seed)(x, training=self.config.dropout_training_mode)
+
             for i in range(1, self.config.n_dense):
                 x = Dense(self.config.dense_units[i],
                           kernel_initializer=self.config.initializers["dense"],
@@ -1146,11 +1484,20 @@ class RCNet:
                 x = Activation(self.config.dense_activation)(x)
                 x = Dropout(self.config.dense_dropout,
                             seed=self.config.seed)(x, training=self.config.dropout_training_mode)
-            # Output layer for binary classification
-            x = Dense(1,
-                      kernel_initializer=self.config.initializers["out"],
-                      kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
-        x = Activation('sigmoid')(x)
+
+            if self.config.n_classes == 2:
+                # Output layer for binary classification
+                x = Dense(1,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+            else:
+                x = Dense(self.config.n_classes,
+                          kernel_initializer=self.config.initializers["out"],
+                          kernel_regularizer=self.config.regularizer, bias_initializer=self.config.output_bias)(x)
+        if self.config.n_classes == 2:
+            x = Activation('sigmoid', dtype='float32')(x)
+        else:
+            x = Activation('softmax', dtype='float32')(x)
 
         # Initialize the model
         self.model = Model(inputs_fwd, x)
@@ -1159,7 +1506,11 @@ class RCNet:
         """Compile model and save model summaries"""
         if float(tf.__version__[:3]) < 2.2 or self.config.epoch_start == 0:
             print("Compiling...")
-            self.model.compile(loss='binary_crossentropy',
+            if self.config.n_classes == 2:
+                loss = 'binary_crossentropy'
+            else:
+                loss = 'sparse_categorical_crossentropy'
+            self.model.compile(loss=loss,
                                optimizer=self.config.optimizer,
                                metrics=['accuracy'])
 

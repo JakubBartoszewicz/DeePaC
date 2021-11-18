@@ -11,6 +11,7 @@ from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
 from deepac.gwpa.command_line import run_gff2genome
+from tensorflow.keras.utils import get_custom_objects
 
 
 class GWPATester:
@@ -19,11 +20,12 @@ class GWPATester:
 
     """
 
-    def __init__(self, n_cpus=8, additivity_check=False):
+    def __init__(self, n_cpus=8, additivity_check=False, target_class=None):
         self.n_cpus = n_cpus
         self.model = os.path.join("deepac-tests", "deepac-test-logs", "deepac-test-e002_converted.h5")
         self.outpath = os.path.join("deepac-tests", "gwpa")
         self.additivity_check = additivity_check
+        self.target_class = target_class
         self.__gen_data()
 
     def __gen_data(self):
@@ -52,7 +54,7 @@ class GWPATester:
         df = pd.DataFrame([["SAMPLE{i}1.1".format(i=s_id), "Genbank", "region", "1", contigs[0], ".", "+", ".",
                             "ID=SAMPLE{i}1.1".format(i=s_id)],
                            ["SAMPLE{i}1.1".format(i=s_id), "Genbank", "gene", "51", contigs[0] - 50, ".", "+", ".",
-                            "ID=gene-EXP1;gene=EXP1;product=EXP1"],
+                            "ID=gene-EXP1;gene=EXP1;product=EXP1;Note= This is a region coding for a gene"],
                            ["SAMPLE{i}2.1".format(i=s_id), "Genbank", "region", "1", contigs[1], ".", "+", ".",
                             "ID=SAMPLE{i}2.1".format(i=s_id)],
                            ["SAMPLE{i}3.1".format(i=s_id), "Genbank", "region", "1", contigs[2], ".", "+", ".",
@@ -60,7 +62,8 @@ class GWPATester:
                            ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "region", "1", contigs[3], ".", "+", ".",
                             "ID=SAMPLE{i}4.1".format(i=s_id)],
                            ["SAMPLE{i}4.1".format(i=s_id), "Genbank", "gene", "51", contigs[3] - 50, ".", "+", ".",
-                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i}".format(i=s_id)]])
+                            "ID=gene-OUT{i};gene=OUT{i};product=OUT{i};"
+                            "Note= This is a region coding for a gene".format(i=s_id)]])
         df.to_csv(os.path.join(self.outpath, "genome_gff3", "sample_genome{i}.gff3".format(i=s_id)), sep="\t",
                   header=False, index=False)
 
@@ -76,7 +79,7 @@ class GWPATester:
 
     def test_genomemap(self):
         """Test genome-wide phenotype potential map generation."""
-        model = load_model(self.model)
+        model = load_model(self.model, custom_objects=get_custom_objects())
 
         if not os.path.exists(os.path.join(self.outpath, "genome_frag_pred")):
             os.makedirs(os.path.join(self.outpath, "genome_frag_pred"))
@@ -90,7 +93,8 @@ class GWPATester:
         args = Namespace(dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          dir_fragmented_genomes_preds=os.path.join(self.outpath, "genome_frag_pred"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
-                         out_dir=os.path.join(self.outpath, "bedgraph"))
+                         out_dir=os.path.join(self.outpath, "bedgraph"),
+                         target_class=self.target_class)
         genome_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_pathogenicity.bedgraph"))), \
@@ -108,7 +112,8 @@ class GWPATester:
         args = Namespace(model=self.model, dir_fragmented_genomes=os.path.join(self.outpath, "genome_frag"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          out_dir=os.path.join(self.outpath, "bedgraph"), ref_mode="N", read_length=250,
-                         chunk_size=500, gradient=False, no_check=(not self.additivity_check))
+                         chunk_size=500, gradient=False, no_check=(not self.additivity_check),
+                         target_class=self.target_class)
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \
@@ -118,7 +123,8 @@ class GWPATester:
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          train_data=os.path.join("deepac-tests", "sample_train_data.npy"),
                          out_dir=os.path.join(self.outpath, "bedgraph_gc"), ref_mode="GC", read_length=250,
-                         chunk_size=100, gradient=False, no_check=(not self.additivity_check))
+                         chunk_size=100, gradient=False, no_check=(not self.additivity_check),
+                         target_class=self.target_class)
         nt_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph_gc",
                                             "sample_genome2_fragmented_genomes_nt_contribs_map.bedgraph"))), \

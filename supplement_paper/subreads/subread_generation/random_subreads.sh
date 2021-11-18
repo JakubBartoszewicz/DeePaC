@@ -18,3 +18,19 @@ bioawk -c fastx -v min=25 -v max=250 -v seed=7 'BEGIN{srand(seed);} {print ">"$n
 
 bioawk -c fastx -v min=25 -v max=250 -v seed=8 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_val_hum.fasta > pathogenic_rn_val_hum.fasta
 
+bioawk -c fastx -v min=25 -v max=250 -v seed=9 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' nonpathogenic_train_fungi.fasta > nonpathogenic_rn_train_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=10 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_train_fungi.fasta > pathogenic_rn_train_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=11 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' nonpathogenic_val_fungi.fasta > nonpathogenic_rn_val_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=12 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_val_fungi.fasta > pathogenic_rn_val_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=13 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' nonpathogenic_train24_fungi.fasta > nonpathogenic_rn_train24_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=14 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_train24_fungi.fasta > pathogenic_rn_train24_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=15 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' nonpathogenic_trainlog_fungi.fasta > nonpathogenic_rn_trainlog_fungi.fasta
+
+bioawk -c fastx -v min=25 -v max=250 -v seed=16 'BEGIN{srand(seed);} {print ">"$name; print substr($seq,0,int(min+rand()*(max-min+1)))}' pathogenic_trainlog_fungi.fasta > pathogenic_rn_trainlog_fungi.fasta
+
