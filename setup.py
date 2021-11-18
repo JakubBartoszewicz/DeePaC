@@ -42,7 +42,7 @@ setup(name='deepac',
           'pybedtools>=0.8.1',
           'statsmodels>=0.11.0',
           'seaborn>=0.11',
-          'termcolor>=1.1.0'
+          'termcolor>=1.1.0',
           'tqdm>=4.49'
       ],
       entry_points={
