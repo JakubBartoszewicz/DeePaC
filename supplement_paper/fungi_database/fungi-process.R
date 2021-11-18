@@ -423,21 +423,56 @@ genbank.not.matched.final <- merge(genbank.not.matched.final, all.w.tax.confirme
 # get final positive species with genomes
 final.hp.species <- genbank.pathogens$species_taxid[genbank.pathogens$human.pathogen]
 # get final negative species with genomes
-final.np.species <- genbank.pathogens$species_taxid[!genbank.pathogens$human.pathogen]
+#final.np.species <- genbank.pathogens$species_taxid[!genbank.pathogens$human.pathogen]
+final.np.species <- genbank.pathogens$species_taxid[genbank.pathogens$plant.pathogen | genbank.pathogens$animal.pathogen]
 # get final negative species with genomes + species with plant hosts and genomes
-final.npe.species <- c(final.np.species, genbank.supplementary.strict$species_taxid)
+#final.npe.species <- c(final.np.species, genbank.supplementary.strict$species_taxid)
+final.npe.species  <- c(genbank.pathogens$species_taxid[genbank.pathogens$plant.pathogen | genbank.pathogens$animal.pathogen | genbank.pathogens$plant.host],
+                        genbank.supplementary.strict$species_taxid)
 # get final negative species with genomes + species with plant hosts and genomes + suspected negatives from EID2 with genomes
 final.npe.wide.species <- c(final.npe.species, genbank.supplementary.wide$species_taxid)
 
+# update Wardeh
+# suspected positives from EID2
+wardeh.hp.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.human.host]
+# suspected non-positives form EID2
+#wardeh.np.species <- genbank.wardeh$species_taxid[!genbank.wardeh$putative.human.host]
+wardeh.np.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.plant.host | genbank.wardeh$putative.animal.host]
+
 # Plot Venn diagrams
 grid.newpage()
-venn.plot <- venn.diagram(list(final.hp=final.hp.species, final.np=final.np.species, wardeh.hp=wardeh.hp.species, wardeh.np=wardeh.np.species), filename = NULL)
-grid.draw(venn.plot)
+venn.plot <- venn.diagram(list("HP"=final.hp.species, 
+                               "NHP"=final.np.species, 
+                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+                               "NHH (Wardeh et al.)"=wardeh.np.species),
+                                fill = c("orange", "blue", "white", "white"),
+                                filename = "FUNGI_DATA_CUR/venn_inclusive/core.svg",
+                                resolution=300,
+                                imagetype="svg",
+                                width=3130,
+                                height=2060,
+                                cex = 2,
+                                cat.cex = 2,)
+#grid.draw(venn.plot)
 grid.newpage()
-venn.plot <- venn.diagram(list(final.hp=final.hp.species, final.npe=final.npe.species, wardeh.hp=wardeh.hp.species, wardeh.np=wardeh.np.species), filename = NULL)
-grid.draw(venn.plot)
+venn.plot <- venn.diagram(list("HP"=final.hp.species, 
+                               "NHH"=final.npe.species, 
+                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+                               "NHH (Wardeh et al.)"=wardeh.np.species),
+                               fill = c("orange", "green", "white", "white"),
+                               filename = "FUNGI_DATA_CUR/venn_inclusive/assoc.svg",
+                               resolution=300,
+                               imagetype="svg",
+                               width=3130,
+                               height=2060,
+                               cex = 2,
+                               cat.cex = 2,)
+#grid.draw(venn.plot)
 grid.newpage()
-venn.plot <- venn.diagram(list(final.hp=final.hp.species, final.npe.wide=final.npe.wide.species, wardeh.hp=wardeh.hp.species, wardeh.np=wardeh.np.species), filename = NULL)
+venn.plot <- venn.diagram(list("HP"=final.hp.species, 
+                               "pNHH"=final.npe.wide.species, 
+                               "HH (Wardeh et al.)"=wardeh.hp.species, 
+                               "NHH (Wardeh et al.)"=wardeh.np.species), filename = NULL)
 grid.draw(venn.plot)
 
 # bring them all, and in the darkness bind them
