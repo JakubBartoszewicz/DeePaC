@@ -105,9 +105,9 @@ def create_scatter_plot(file_name, path, parameters, labels, classes, n_componen
     if not no_legend:
         if class_names_file is not None:
             cust_labels = read_csv(class_names_file).iloc[:, 0].tolist()
-            plt.legend(labels=cust_labels, markerscale=1.0, ncol=legend_columns, loc=legend_loc)
+            plt.legend(labels=cust_labels, markerscale=2.0, ncol=legend_columns, loc=legend_loc)
         else:
-            plt.legend(markerscale=1.0, ncol=legend_columns, loc=legend_loc)
+            plt.legend(markerscale=2.0, ncol=legend_columns, loc=legend_loc)
     # plt.title(plot_name.replace(".png", ""), fontsize=12)
     plt.savefig(os.path.join(path, plot_name), dpi=300)
     plt.close()
@@ -182,9 +182,9 @@ def highlight_classes(file_name, path, labels, hl_classes, n_components, embeddi
         if not no_legend:
             if class_names_file is not None:
                 cust_labels = read_csv(class_names_file).iloc[:, 0].tolist()
-                plt.legend(labels=cust_labels, markerscale=1.0, ncol=legend_columns, loc=legend_loc)
+                plt.legend(labels=cust_labels, markerscale=2.0, ncol=legend_columns, loc=legend_loc)
             else:
-                plt.legend(markerscale=1.0, ncol=legend_columns, loc=legend_loc)
+                plt.legend(markerscale=2.0, ncol=legend_columns, loc=legend_loc)
         # plt.title(plot_name.replace(".png", ""), fontsize=12)
         plt.savefig(os.path.join(path, plot_name), dpi=300)
         plt.close()
