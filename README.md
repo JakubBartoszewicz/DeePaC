@@ -43,16 +43,17 @@ conda config --add channels conda-forge
 
 We recommend setting up an isolated `conda` environment:
 ```
-# python 3.6, 3.7 and 3.8 are supported
-conda create -n my_env python=3.8
+# python 3.7-3.9 are supported
+conda create -n my_env python=3.9
 conda activate my_env
 ```
 
 and then:
 ```
-# For GPU support (recommended)
-conda install tensorflow-gpu deepac
-# Basic installation (CPU-only)
+# For GPU support (recommended) - install tensorflow-gpu from the defaults channel
+conda install -c defaults tensorflow-gpu
+conda install deepac
+# Or: basic installation (CPU-only)
 conda install deepac
 ```
 
@@ -344,24 +345,45 @@ If you find DeePaC useful, please cite:
     author = {Bartoszewicz, Jakub M and Seidel, Anja and Rentzsch, Robert and Renard, Bernhard Y},
     title = "{DeePaC: predicting pathogenic potential of novel DNA with reverse-complement neural networks}",
     journal = {Bioinformatics},
-    year = {2019},
-    month = {07},
+    volume = {36},
+    number = {1},
+    pages = {81-89},
+    year = {2020},
+    month = {01},
     issn = {1367-4803},
     doi = {10.1093/bioinformatics/btz541},
     url = {https://doi.org/10.1093/bioinformatics/btz541},
-    eprint = {http://oup.prod.sis.lan/bioinformatics/advance-article-pdf/doi/10.1093/bioinformatics/btz541/28971344/btz541.pdf},
+    eprint = {https://academic.oup.com/bioinformatics/article-pdf/36/1/81/31813920/btz541.pdf},
 }
 
-@article {Bartoszewicz2020.01.29.925354,
-    author = {Bartoszewicz, Jakub M. and Seidel, Anja and Renard, Bernhard Y.},
-    title = {Interpretable detection of novel human viruses from genome sequencing data},
-    elocation-id = {2020.01.29.925354},
-    year = {2020},
-    doi = {10.1101/2020.01.29.925354},
-    publisher = {Cold Spring Harbor Laboratory},
-    URL = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354},
-    eprint = {https://www.biorxiv.org/content/early/2020/02/01/2020.01.29.925354.full.pdf},
-    journal = {bioRxiv}
+@article{10.1093/nargab/lqab004,
+    author = {Bartoszewicz, Jakub M and Seidel, Anja and Renard, Bernhard Y},
+    title = "{Interpretable detection of novel human viruses from genome sequencing data}",
+    journal = {NAR Genomics and Bioinformatics},
+    volume = {3},
+    number = {1},
+    year = {2021},
+    month = {02},
+    issn = {2631-9268},
+    doi = {10.1093/nargab/lqab004},
+    url = {https://doi.org/10.1093/nargab/lqab004},
+    note = {lqab004},
+    eprint = {https://academic.oup.com/nargab/article-pdf/3/1/lqab004/36165658/lqab004.pdf},
+}
+
+@article{10.1093/bib/bbab269,
+    author = {Bartoszewicz, Jakub M and Genske, Ulrich and Renard, Bernhard Y},
+    title = "{Deep learning-based real-time detection of novel pathogens during sequencing}",
+    journal = {Briefings in Bioinformatics},
+    volume = {22},
+    number = {6},
+    year = {2021},
+    month = {07},
+    issn = {1477-4054},
+    doi = {10.1093/bib/bbab269},
+    url = {https://doi.org/10.1093/bib/bbab269},
+    note = {bbab269},
+    eprint = {https://academic.oup.com/bib/article-pdf/22/6/bbab269/41088711/bbab269.pdf},
 }
 
 ```
