@@ -386,4 +386,15 @@ If you find DeePaC useful, please cite:
     eprint = {https://academic.oup.com/bib/article-pdf/22/6/bbab269/41088711/bbab269.pdf},
 }
 
+@article {10.1101/2021.11.30.470625,
+	author = {Bartoszewicz, Jakub M and Nasri, Ferdous and Nowicka, Melania and Renard, Bernhard Y},
+	title = {Pathogenic potential prediction for novel fungal DNA based on a curated fungi-hosts data collection},
+	year = {2021},
+	doi = {10.1101/2021.11.30.470625},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2021/12/01/2021.11.30.470625},
+	eprint = {https://www.biorxiv.org/content/early/2021/12/01/2021.11.30.470625.full.pdf},
+	journal = {bioRxiv}
+}
+
 ```
