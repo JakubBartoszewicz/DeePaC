@@ -6,7 +6,7 @@ dfvf_pl$plant.pathogen <- TRUE
 dfvf_pl$plant.host<- TRUE
 dfvf.citation <- 'Tao Lu, Bo Yao, Chi Zhang, DFVF: database of fungal virulence factors, Database, Volume 2012, 2012, bas032, https://doi.org/10.1093/database/bas032'
 dfvf_all <- dfvf_hp
-dfvf_all[dfvf_all$human.pathogen, "human.pathogen.source"] <- dfvf.citation 
+dfvf_all[dfvf_all$human.pathogen, "human.pathogen.source"] <- dfvf.citation
 dfvf_all <- add_single_label_resource(dfvf_all, dfvf_an, dfvf.citation , "animal.pathogen")
 dfvf_all <- add_single_label_resource(dfvf_all, dfvf_pl, dfvf.citation , "plant.pathogen")
 dfvf_all <- add_single_label_resource(dfvf_all, dfvf_pl, dfvf.citation , "plant.host")
@@ -216,7 +216,7 @@ grin_manual$plant.host <- F
 grin_manual$putative.human.host <- F
 grin_manual$putative.animal.host <- F
 grin_manual$putative.plant.host <- F
-grin_manual$human.pathogen.source <- "" 
+grin_manual$human.pathogen.source <- ""
 grin_manual$animal.pathogen.source <- ""
 grin_manual$plant.pathogen.source <- ""
 grin_manual$plant.host.source <- ""
@@ -231,7 +231,7 @@ grin_manual_pl <- grin_manual_pl[!(grin_manual_pl$species_taxid %in% all.w.tax$s
 grin_manual_pl$source.taxid <- grin_manual_pl$species_taxid
 grin_manual_pl$plant.pathogen <- T
 grin_manual_pl$plant.host <- T
-grin_manual_pl$plant.pathogen.source <- puregrin_pl2.citation 
+grin_manual_pl$plant.pathogen.source <- puregrin_pl2.citation
 grin_manual_pl$plant.host.source <- puregrin_pl2.citation
 
 # extract the appropriate columns for species with a specified disease and an animal host
@@ -240,7 +240,7 @@ grin_manual_an.old  <- grin_manual_an[grin_manual_an$species_taxid %in% all.w.ta
 grin_manual_an <- grin_manual_an[!(grin_manual_an$species_taxid %in% all.w.tax$species_taxid),]
 grin_manual_an$source.taxid <- grin_manual_an$species_taxid
 grin_manual_an$animal.pathogen <- T
-grin_manual_an$animal.pathogen.source <- puregrin_pl2.citation 
+grin_manual_an$animal.pathogen.source <- puregrin_pl2.citation
 
 # extract the appropriate columns for species without a specified disease and a plant host
 grin_manual_ple <- grin_manual[grin_manual$disease=="" & !is.na(grin_manual$plant.host.grin), c(1:3,9:23)]
@@ -248,7 +248,7 @@ grin_manual_ple.old <- grin_manual_ple[grin_manual_ple$species_taxid %in% all.w.
 grin_manual_ple <- grin_manual_ple[!(grin_manual_ple$species_taxid %in% all.w.tax$species_taxid),]
 grin_manual_ple$source.taxid <- grin_manual_ple$species_taxid
 grin_manual_ple$plant.host <- T
-grin_manual_ple$plant.host.source <- puregrin_pl2.citation 
+grin_manual_ple$plant.host.source <- puregrin_pl2.citation
 
 # bind papers and grin together
 all.w.tax.man <- rbind(all.w.tax, grin_manual_pl, grin_manual_an, grin_manual_ple)
@@ -266,7 +266,7 @@ wardeh_an$putative.animal.host <- TRUE
 wardeh_pl$putative.plant.host <- TRUE
 all.wardeh <- wardeh_hp
 # add suspected, auto-extracted hosts
-all.wardeh[all.wardeh$human.pathogen, "putative.human.host.source"] <- wardeh.citation 
+all.wardeh[all.wardeh$human.pathogen, "putative.human.host.source"] <- wardeh.citation
 all.wardeh <- add_single_label_resource(all.wardeh, wardeh_an, wardeh.citation, "putative.animal.host")
 all.wardeh <- add_single_label_resource(all.wardeh, wardeh_pl, wardeh.citation, "putative.plant.host")
 
@@ -319,7 +319,7 @@ write.csv(x=puregrin_hp[,c("source.name", "species_taxid", "Species")], file = "
 write.csv(x=taxgrin[,c("source.name", "species_taxid", "Species")], file = "FUNGI_DATA_CUR/src/taxgrin.csv", row.names = FALSE)
 write.csv(x=purewardeh[,c("source.name", "species_taxid", "Species")], file = "FUNGI_DATA_CUR/src/purewardeh.csv", row.names = FALSE)
 
-## Atlas manual search 
+## Atlas manual search
 
 all.w.tax.confirmed <- all.w.tax.combined.unconfirmed
 pureatlas.citation <- 'de Hoog GS, Guarro J, Gené J, Ahmed S, Al-Hatmi AMS, Figueras MJ & Vitale RG (2020) Atlas of Clinical Fungi, 4th edition. Hilversum.'
@@ -357,9 +357,9 @@ atlas_wardeh_pl <- atlas_wardeh_pl[!(atlas_wardeh_pl$species_taxid %in% confirme
 # add curated human pathogens
 all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ours_hp, pureatlas.citation, "human.pathogen")
 # update citations for records, for which a human host was suggested based on Taxonomy or GRIN
-all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ours_hp[atlas_ours_hp$species_taxid %in% tax_hp$species_taxid,], 
+all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ours_hp[atlas_ours_hp$species_taxid %in% tax_hp$species_taxid,],
                                                  puretax.citation, "human.pathogen")
-all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ours_hp[atlas_ours_hp$species_taxid %in% grin_hp.w.tax$species_taxid,], 
+all.w.tax.confirmed <- add_single_label_resource(all.w.tax.confirmed, atlas_ours_hp[atlas_ours_hp$species_taxid %in% grin_hp.w.tax$species_taxid,],
                                                  puregrin_hp.citation, "human.pathogen")
 
 # add found negatives
@@ -433,7 +433,7 @@ wardeh.hp.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.human.
 # suspected non-positives form EID2
 wardeh.np.species <- genbank.wardeh$species_taxid[genbank.wardeh$putative.plant.host | genbank.wardeh$putative.animal.host]
 
-# Plot Venn diagrams
+# Plot Venn diagrams (COUNTING SYNONYMS IN EID2 AS SEPARATE RECORDS - not present in our DB)
 grid.newpage()
 venn.plot <- venn.diagram(list("HP"=final.hp.species,
                                "NHP"=final.np.species,
