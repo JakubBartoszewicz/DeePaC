@@ -78,7 +78,7 @@ MatchBlastResults2IMG <- function(Blast,IMGdata, groundTruth=F, use.suppTable=F,
   return(myData)
 }
 
-HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_fungi"
+HomeFolder <- "~/SCRATCH_NOBAK/Benchmark_multi"
 ProjectFolder <-  "PathogenReads"
 WorkingDirectory <- "HP_NHP"
 # Choose test folder
@@ -94,7 +94,7 @@ set.id.as.accession <- FALSE
 # false for the viral dataset
 accession.from.filename <- TRUE
 
-IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"IMG_1_folds_fungi.rds") )
+IMGdata <- readRDS(file.path(HomeFolder,ProjectFolder,"all_classes.rds") )
 suppTable <- "~/SCRATCH_NOBAK/blastrepair/ids_tab"
 use.suppTable <- F
 
@@ -105,7 +105,7 @@ Do.ProcessBlast <- T
 Do.AllStrains <- F
 
 # multi core
-Cores <- 1
+Cores <- 256
 
 
 # load libraries functions and databases
@@ -256,10 +256,3 @@ if(Do.ProcessBlast == T) {
 }
 warnings()
 sink()
-
-
-
-
-
-
-
