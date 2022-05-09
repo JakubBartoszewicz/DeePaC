@@ -97,7 +97,7 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
                 # remove contigs smaller than fragment length + create temp fasta
                 tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)
                 if (pairedEnd | Simulator == "Mason2"){
-" ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">"                    system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ) )
+		    system(paste("bioawk -cfastx '{if(length($seq) > ", MeanFragmentSize + 6 * FragmentStdDev + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ) )
                 } else {
                     system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ) )
                 }
@@ -164,24 +164,24 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
 	    dir.create(fasta_folder_split)
         system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (","\"",fasta_folder_split,"\"","$name\".fasta\")}' ",InputFastaFile))
 	    # simulate reads (output from the contigs is combined into one fasta again)
-	    output_fasta = file.path(TargetDirectory,basename(InputFastaFile)) 
+	    output_fasta = file.path(TargetDirectory,basename(InputFastaFile))
 	    file.create(output_fasta)
 	    total_seq_length = as.numeric(system(paste("bioawk -cfastx 'BEGIN{ seq_length = 0} {seq_length += length($seq)} END{print seq_length}'", InputFastaFile  ), intern = T))
-	    for(file in list.files(fasta_folder_split, full.names = TRUE)){	
+	    for(file in list.files(fasta_folder_split, full.names = TRUE)){
 		    seq_length = as.numeric(system(paste("bioawk -cfastx '{print length($seq)}'",file), intern = T))
 		    read_numb = seq_length/total_seq_length * ReadNumber
 		    output = file.path(TargetDirectory,paste0(basename(InputFastaFile),"_", basename(file) ))
-	        home_dir_ds = "/home/genskeu/SCRATCH_NOBAK/read_simulation_nanopore/DeepSimulator"	
-		    system(paste("./deep_simulator -i", file, "-n",round(read_numb),"-l", ReadLength, "-o", output, "-c 6", "-H", home_dir_ds, "-S 1" ))
+	        home_dir_ds = "/mnt/biolibs/ubuntu/DeepSimulator"
+		    system(paste("./deep_simulator -i", file, "-n",round(read_numb),"-l", ReadLength, "-o", output, "-c 14", "-H", home_dir_ds, "-S 1" ))
 		    system(paste("cat", file.path(output,"pass.fastq"), ">>", output_fasta))
-		    # only the sequence is kept, other info like current signal is deleted
-            system(paste("rm -r ", output))
+		    # if uncommented, only the sequence is kept, other info like current signal is deleted
+            #system(paste("rm -r ", output))
         }
 	system(paste0("rm -r ",fasta_folder_split))
 	}
 }
 
-Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10, AllowNsFromGenome = F) {
+Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F, ReadLength = 250, pairedEnd = F, FastaFileLocation = NULL, IMGdata = NULL, TargetDirectory = NULL, FastaExtension = ".fna",  MeanFragmentSize, FragmentStdDev, Workers, Simulator = c("Neat", "Mason", "Mason2"), Cleaned = T, FilenamePostfixPattern="_", ReadMargin = 10, AllowNsFromGenome = F, RelativeGenomeSizes=F) {
 
     if(any(c(is.null(Members), is.null(TotalReadNumber),is.null(Proportional2GenomeSize ),is.null(FastaFileLocation  ),is.null(IMGdata ),is.null(TargetDirectory ) ))) stop("Please submit valid variables to function Simulate.Reads.fromMultipleGenomes")
 
@@ -240,7 +240,12 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
         MeanFragmentSizes <- rep(MeanFragmentSize, length(Members))
         FragmentStdDevs <- rep(FragmentStdDev, length(Members))
     }
-    ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
+
+    if (RelativeGenomeSizes){
+        ReadLengths <- rep(ReadLength, length(Members))
+    } else {
+        ReadLengths <- sapply(IMGdata$Genome.Size[Members], function(x){min(x, ReadLength)})
+    }
 
     Check <- foreach(i = 1:length(Members) ) %dopar% {
 
