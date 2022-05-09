@@ -71,7 +71,8 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
             cat(paste0("###FINISHED ACCESSION: ", FilePrefix, "###\n"))
             return(1)
         }
-    } else  if (Simulator == "Mason2" | Simulator == "Mason"){
+    }
+    else  if (Simulator == "Mason2" | Simulator == "Mason"){
         # MASON
         # output paths
         OutputFile.Left <- file.path(TargetDirectory,paste0(FilePrefix,FileExtension))
@@ -141,7 +142,43 @@ Simulate.Reads <- function(InputFastaFile = NULL, ReadCoverage = NULL, ReadLengt
             return(1)
         }
     }
-
+    else  if (Simulator == "DeepSimulator"){
+        # paired end simulation not implemented yet
+        if(pairedEnd){
+        }
+        cat(paste0("###SIMULATING ACCESSION: ", FilePrefix, "###\n"))
+        cat(paste0("###READ NUMBER: ", ReadNumber, "###\n"))
+        if(!Cleaned){
+          # remove contigs smaller than fragment length + create temp fasta (copied from mason)
+          tempFasta <- sub(paste0("[.]",InputFileExtension),paste0(".temp.",InputFileExtension),InputFastaFile)
+          system(paste("bioawk -cfastx '{if(length($seq) > ", ReadLength + ReadMargin," ) {print \">\"$name \" \" $comment;print $seq}}'",InputFastaFile,">",tempFasta ))
+          InputFastaFile <- tempFasta
+        }
+        # split fastas with multiple contigs (1 contig per file)
+        # otherwise its not possible to specify the correct read number to simulate
+	    temp_folder_split <- file.path(TargetDirectory,"temp")
+	    if(!dir.exists(temp_folder_split)){
+		    dir.create(temp_folder_split)
+        }
+	    fasta_folder_split <- file.path(temp_folder_split, basename(InputFastaFile),"")
+	    dir.create(fasta_folder_split)
+        system(paste0("bioawk -cfastx '{print \">\"$name \" \" $comment \"\\n\" $seq > (","\"",fasta_folder_split,"\"","$name\".fasta\")}' ",InputFastaFile))
+	    # simulate reads (output from the contigs is combined into one fasta again)
+	    output_fasta <- file.path(TargetDirectory,basename(InputFastaFile))
+	    file.create(output_fasta)
+	    total_seq_length <- as.numeric(system(paste("bioawk -cfastx 'BEGIN{ seq_length = 0} {seq_length += length($seq)} END{print seq_length}'", InputFastaFile  ), intern = T))
+	    for(file in list.files(fasta_folder_split, full.names = TRUE)){
+		    seq_length <- as.numeric(system(paste("bioawk -cfastx '{print length($seq)}'",file), intern = T))
+		    read_numb <- seq_length/total_seq_length * ReadNumber
+		    output <- file.path(TargetDirectory,paste0(basename(InputFastaFile),"_", basename(file) ))
+	        home_dir_ds <- "/mnt/biolibs/ubuntu/DeepSimulator"
+		    system(paste("./deep_simulator -i", file, "-n",round(read_numb),"-l", ReadLength, "-o", output, "-c 14", "-H", home_dir_ds, "-S 1" ))
+		    system(paste("cat", file.path(output,"pass.fastq"), ">>", output_fasta))
+		    # if uncommented, only the sequence is kept, other info like current signal is deleted
+            #system(paste("rm -r ", output))
+        }
+	system(paste0("rm -r ",fasta_folder_split))
+	}
 }
 
 Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber = NULL, Proportional2GenomeSize = T, Fix.Coverage = F,
@@ -166,7 +203,7 @@ Simulate.Reads.fromMultipleGenomes <- function(Members = NULL, TotalReadNumber =
         if(Fix.Coverage == T) {
             ReadCoveragePerGenome <- rep(TotalReadNumber, length(Members))
         }
-    } else  if (Simulator == "Mason2" | Simulator == "Mason"){
+    } else  if (Simulator == "Mason2" | Simulator == "Mason" | Simulator == "DeepSimulator"){
         if( Proportional2GenomeSize == T){
             ReadNumberPerGenome <- ceiling(IMGdata$Genome.Size[Members]/sum(IMGdata$Genome.Size[Members]) * TotalReadNumber )
             if (pairedEnd){
