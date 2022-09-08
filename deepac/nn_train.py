@@ -373,6 +373,8 @@ class RCNet:
                     self._build_siam_model()
                 elif self.config.rc_mode == "none":
                     self._build_simple_model()
+                elif self.config.rc_mode == "deephage":
+                    self._build_deephage_model()
                 else:
                     raise ValueError('Unrecognized RC mode')
             if self.config.epoch_start > 0:
@@ -746,6 +748,28 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         self._current_pool = self._current_pool + 1
         return out
+
+    def _build_deephage_model(self):
+        """Build the standard network with the hardcoded DeePhage architecture"""
+        print("Building model...")
+        # Number of added recurrent layers
+        self._current_recurrent = 0
+        self._current_conv = 0
+        self._current_tformer = 0
+        # Initialize input
+        inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
+        x = Conv1D(64, 6, activation='relu',padding='same')(inputs)        
+        self._current_conv = self._current_conv + 1
+        x = MaxPooling1D(3)(x)
+        x = BatchNormalization()(x)
+        x = Dropout(0.3)(x)
+        x = GlobalAveragePooling1D()(x)
+        x = Dense(64, activation='relu')(x)
+        x = BatchNormalization()(x)
+        x = Dense(1)(x)
+        x = Activation('sigmoid', dtype='float32')(x)
+        # Initialize the model
+        self.model = Model(inputs, x)
 
     def _build_simple_model(self):
         """Build the standard network"""

@@ -518,19 +518,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "deepac-test-species_sample_val_aupr.png"))), "Evaluation failed."
 
-        config['Options']['Agg_logits'] = 'True'
-        config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit'
-        evaluate_species(config)
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test-species-logit-metrics.csv"))), "Evaluation failed."
-        if not self.multiclass:
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit_sample_val_auc.png"))), "Evaluation failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit_sample_val_aupr.png"))), "Evaluation failed."
-
         config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit-in'
-        config['Options']['Agg_logits'] = 'False'
         config['Options']['Add_activ'] = 'True'
         if self.multiclass:
             config['Data']['DataPredictions'] = \

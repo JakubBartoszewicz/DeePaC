@@ -2,11 +2,7 @@
 A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
 
 """
-import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled tests
-import matplotlib.pyplot as plt # also to solve import ordering problems in bioconda mulled tests
-import numpy as np
 import tensorflow as tf
-import random as rn
 import argparse
 import configparser
 import os
@@ -30,22 +26,6 @@ from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
-
-
-def main():
-    """Run DeePaC CLI."""
-    seed = 0
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-    rn.seed(seed)
-    modulepath = os.path.dirname(__file__)
-    builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
-                       "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
-    builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
-                       "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
-    remote_repo_url = "https://zenodo.org/api/records/4456008"
-    runner = MainRunner(builtin_configs, builtin_weights, remote_repo_url)
-    runner.parse()
 
 
 def run_filter(args):
@@ -452,5 +432,3 @@ class MainRunner:
             parser.print_help()
 
 
-if __name__ == "__main__":
-    main()
