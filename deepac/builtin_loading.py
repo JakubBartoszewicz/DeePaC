@@ -39,7 +39,7 @@ def fetch_from_url(repo_url, fetch_dir, out_dir, do_compile=True, n_cpus=None, n
                 try:
                     wget.download(link, out=os.path.join(fetch_dir, filename))
                 except ContentTooShortError as e:
-                    print(e.message)
+                    print(e.reason)
                     print("Your internet connection might be unstable or blocked. "
                           "Try again or check if your VPN could have terminated the connection.")
                 print()

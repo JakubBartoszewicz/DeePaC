@@ -175,6 +175,10 @@ def preproc(config, autotrim=False):
 
         n_all = n_negative + n_positive + np.sum(n_multi)
         slice_size = math.ceil(n_all/n_files)
+
+        # In the future, this should be changed to tf.Dataset.save
+        # Left like this for backwards compatibility between TF versions
+
         for i in range(n_files):
             start = i * slice_size
             end = min((i+1) * slice_size, n_all)
@@ -184,12 +188,14 @@ def preproc(config, autotrim=False):
 
             filename = os.path.join(out_dir, os.path.splitext(os.path.basename(out_dir))[0]
                                     + '_{}-{}.tfrec'.format(start, end - 1))
-            writer = tf.data.experimental.TFRecordWriter(filename)
+            writer = tf.io.TFRecordWriter(filename)
             if tf.executing_eagerly():
-                writer.write(serialized_features_dataset)
+                for example in serialized_features_dataset:
+                    writer.write(example.numpy())
             else:
                 with tf.compat.v1.Session() as sess:
-                    sess.run(writer.write(serialized_features_dataset))
+                    for example in serialized_features_dataset:
+                        sess.run(writer.write(example.numpy()))
 
     print("Done!")
 
