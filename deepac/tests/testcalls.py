@@ -588,6 +588,7 @@ class Tester:
                      n_classes=n_classes,
                      positive_classes=positive_classes)
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-filtered-pos.fasta"))), "Filtering failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-filtered-neg.fasta"))), "Filtering failed."
 
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
@@ -608,4 +609,6 @@ class Tester:
                             positive_classes=positive_classes)
 
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"))), \
+            "Filtering failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"))), \
             "Filtering failed."

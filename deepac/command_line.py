@@ -40,14 +40,14 @@ def run_filter(args):
     if args.paired_predictions is None:
         filter_fasta(args.input, args.predictions, args.output,
                      threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
-                     confidence_thresh=args.c_thresh,
+                     confidence_thresh=args.c_thresh, output_neg=args.neg_output, output_undef=args.undef_output,
                      pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
     else:
         if args.paired_fasta is None:
             args.paired_fasta = args.input
         filter_paired_fasta(args.input, args.predictions, args.output, args.paired_fasta, args.paired_predictions,
                             threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
-                            confidence_thresh=args.c_thresh,
+                            confidence_thresh=args.c_thresh, output_neg=args.neg_output, output_undef=args.undef_output,
                             pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
 
 
@@ -310,7 +310,7 @@ class MainRunner:
                                    default=0.5, type=float)
         parser_filter.add_argument('-c', '--confidence-threshold', dest="c_thresh",
                                    help="Confidence threshold [default=None].", type=float)
-        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
+        parser_filter.add_argument('-o', '--output', help="Output file path for positive predictions [.fasta].")
         parser_filter.add_argument('-s', '--std', dest="std",
                                    help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('-n', '--n-classes', dest="n_classes",
@@ -323,6 +323,11 @@ class MainRunner:
                                    default=False, action="store_true")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
+        parser_filter.add_argument('--neg-output', dest="neg_output", help="Output file path "
+                                                                           "for negative predictions [.fasta].")
+        parser_filter.add_argument('--undef-output', dest="undef_output", help="Output file path for predictions "
+                                                                               "not passing the confidence "
+                                                                               "threshold [.fasta].")
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
