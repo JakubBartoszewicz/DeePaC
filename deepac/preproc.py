@@ -16,9 +16,10 @@ from functools import partial
 import gzip
 import os
 import math
+from termcolor import colored
 
 
-def tokenize(seq, tokenizer, datatype='int8', read_length=250):
+def tokenize(seq, tokenizer, datatype='int8', read_length=250, silent=False):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
@@ -26,6 +27,10 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250):
         # Pad with zeros
         matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4), dtype=datatype)))
     if matrix.shape[0] > read_length:
+        if not silent:
+            print(colored(f"WARNING: input sequence length ({matrix.shape[0]}bp) "
+                          f"greater than specified read length ({read_length}bp). "
+                          f"Automatically trimming to {read_length}bp..."), "red")
         # Trim
         matrix = matrix[:read_length, :]
     return matrix
