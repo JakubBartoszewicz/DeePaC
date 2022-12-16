@@ -16,6 +16,7 @@ from functools import partial
 import gzip
 import os
 import math
+from termcolor import colored
 
 
 def tokenize(seq, tokenizer, datatype='int8', read_length=250, autotrim=False):
@@ -30,10 +31,10 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250, autotrim=False):
             # Trim
             matrix = matrix[:read_length, :]
         else:
-            raise(ValueError(f"Sequence length: {matrix.shape[0]}bp greater than specified read length ({read_length}bp"
-                             f"). To classify long sequences like contigs or genomes, fragment them with "
-                             f"'deepac gwpa fragment' and take the mean of the predictions for all subsequences. To "
-                             f"automatically trim you reads to max. {read_length}, use the '--trim' parameter."))
+            raise(ValueError(f"Found sequence length ({matrix.shape[0]}bp) greater than the specified read length "
+                             f"({read_length}bp). To classify long sequences like contigs or genomes, fragment them "
+                             f"with 'deepac gwpa fragment' and take the mean of the predictions for all subsequences. "
+                             f"To automatically trim your reads to max. {read_length}, use the '--trim' parameter."))
     return matrix
 
 
@@ -49,17 +50,16 @@ def tokenize_fasta(in_path, max_cores, read_length, datatype, autotrim=False, al
     tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
     tokenizer.fit_on_texts(alphabet)
 
+    if autotrim:
+        print(colored(f"Autotrim on: any sequences longer than the specified read length "
+                      f"({read_length}bp) will be trimmed to {read_length}bp.", "yellow"))
+
     with open(in_path) as input_handle:
         # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
         # Tokenize function is applied to the fasta sequence generator.
-        if max_cores > 1:
-            with Pool(processes=max_cores) as p:
-                x_arr = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                 read_length=read_length, autotrim=autotrim), read_fasta(input_handle)),
-                                   dtype=datatype)
-        else:
-            x_arr = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                read_length=read_length, autotrim=autotrim), read_fasta(input_handle))),
+        with Pool(processes=max_cores) as p:
+            x_arr = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                             read_length=read_length, autotrim=autotrim), read_fasta(input_handle)),
                                dtype=datatype)
     return x_arr
 

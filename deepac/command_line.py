@@ -295,9 +295,10 @@ class MainRunner:
                                     help='Alpha value for the RC-constraint compliance check plot.')
         parser_predict.add_argument('--replicates', default=1, type=int,
                                     help='Number of replicates for MC uncertainty estimation.')
-        parser_predict.add_argument('--trim', dest="trim", help='Automatically trim the sequences to the read length '
-                                                                'specified by the input size of the model '
-                                                                '(if using fasta input).')
+        parser_predict.add_argument('--trim', dest="trim", action='store_true', help='Automatically trim the sequences '
+                                                                                     'to the read length specified by '
+                                                                                     'the input size of the model '
+                                                                                     '(if using fasta input).')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -354,8 +355,9 @@ class MainRunner:
         # create the parser for the "preproc" command
         parser_preproc = subparsers.add_parser('preproc', help='Convert fasta files to numpy arrays for training.')
         parser_preproc.add_argument('config', help='Preprocessing config file.')
-        parser_preproc.add_argument('--trim', dest="trim", help='Automatically trim the sequences to the read length '
-                                                                'specified in the config file.')
+        parser_preproc.add_argument('--trim', dest="trim", action='store_true', help='Automatically trim the sequences '
+                                                                                     'to the read length specified in '
+                                                                                     'the config file.')
         parser_preproc.set_defaults(func=run_preproc)
 
         # create the parser for the "eval" command

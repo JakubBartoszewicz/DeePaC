@@ -82,6 +82,7 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512,
 
     end = time.time()
     print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
+    print("Mean prediction: {mean:.3f}".format(mean=np.mean(y_pred)))
     np.save(file=output, arr=y_pred)
     if replicates > 1:
         out_std = "{}-std.npy".format(os.path.splitext(output)[0])
