@@ -40,7 +40,12 @@ def convert_cudnn(config, saved_model, no_prep, no_weights=False, verbose=True):
     else:
         save_path = path
 
-    paprnet.model.compile(loss='binary_crossentropy',
+    if paprnet.config.n_classes == 2:
+        loss = 'binary_crossentropy'
+    else:
+        loss = 'sparse_categorical_crossentropy'
+
+    paprnet.model.compile(loss=loss,
                           optimizer=paprnet.config.optimizer,
                           metrics=['accuracy'])
 

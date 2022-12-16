@@ -85,7 +85,7 @@ class Tester:
             self.run_datagen(npy=True,
                              tfrec=self.input_modes_dict["tfdata"])
         set_mem_growth()
-        if not self.offline:
+        if self.do_all and not self.offline:
             print("TEST: Fetching models...")
             self.test_fetch()
         print("TEST: Training...")
@@ -518,19 +518,7 @@ class Tester:
             assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
                                                 "deepac-test-species_sample_val_aupr.png"))), "Evaluation failed."
 
-        config['Options']['Agg_logits'] = 'True'
-        config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit'
-        evaluate_species(config)
-        assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                            "deepac-test-species-logit-metrics.csv"))), "Evaluation failed."
-        if not self.multiclass:
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit_sample_val_auc.png"))), "Evaluation failed."
-            assert (os.path.isfile(os.path.join("deepac-tests", "deepac-test-logs",
-                                                "deepac-test-species-logit_sample_val_aupr.png"))), "Evaluation failed."
-
         config['Data']['RunName'] = 'deepac-tests/deepac-test-logs/deepac-test-species-logit-in'
-        config['Options']['Agg_logits'] = 'False'
         config['Options']['Add_activ'] = 'True'
         if self.multiclass:
             config['Data']['DataPredictions'] = \
@@ -600,6 +588,7 @@ class Tester:
                      n_classes=n_classes,
                      positive_classes=positive_classes)
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-filtered-pos.fasta"))), "Filtering failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-val-filtered-neg.fasta"))), "Filtering failed."
 
         predict_fasta(model, os.path.join("deepac-tests", "sample-test.fasta"),
                       os.path.join("deepac-tests", "deepac-test-logs",
@@ -620,4 +609,6 @@ class Tester:
                             positive_classes=positive_classes)
 
         assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-pos.fasta"))), \
+            "Filtering failed."
+        assert (os.path.isfile(os.path.join("deepac-tests", "sample-test-filtered-paired-neg.fasta"))), \
             "Filtering failed."

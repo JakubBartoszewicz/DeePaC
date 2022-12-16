@@ -2,11 +2,7 @@
 A DeePaC CLI. Support subcommands, prediction with built-in and custom models, training, evaluation, data preprocessing.
 
 """
-import sklearn # to load libgomp early to solve problems with static TLS on some systems like bioconda mulled tests
-import matplotlib.pyplot as plt # also to solve import ordering problems in bioconda mulled tests
-import numpy as np
 import tensorflow as tf
-import random as rn
 import argparse
 import configparser
 import os
@@ -29,23 +25,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
-
-
-def main():
-    """Run DeePaC CLI."""
-    seed = 0
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-    rn.seed(seed)
-    modulepath = os.path.dirname(__file__)
-    builtin_configs = {"rapid": os.path.join(modulepath, "builtin", "config", "nn-img-rapid-cnn.ini"),
-                       "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
-    builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
-                       "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
-    remote_repo_url = "https://zenodo.org/api/records/4456008"
-    runner = MainRunner(builtin_configs, builtin_weights, remote_repo_url)
-    runner.parse()
+import tensorflow.keras.mixed_precision as mixed_precision
 
 
 def run_filter(args):
@@ -60,14 +40,14 @@ def run_filter(args):
     if args.paired_predictions is None:
         filter_fasta(args.input, args.predictions, args.output,
                      threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
-                     confidence_thresh=args.c_thresh,
+                     confidence_thresh=args.c_thresh, output_neg=args.neg_output, output_undef=args.undef_output,
                      pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
     else:
         if args.paired_fasta is None:
             args.paired_fasta = args.input
         filter_paired_fasta(args.input, args.predictions, args.output, args.paired_fasta, args.paired_predictions,
                             threshold=args.threshold, print_potentials=args.potentials, precision=args.precision,
-                            confidence_thresh=args.c_thresh,
+                            confidence_thresh=args.c_thresh, output_neg=args.neg_output, output_undef=args.undef_output,
                             pred_uncertainty=args.std, n_classes=args.n_classes, positive_classes=args.positive_classes)
 
 
@@ -75,7 +55,7 @@ def run_preproc(args):
     """Parse the config file and preprocess the Illumina reads."""
     config = configparser.ConfigParser()
     config.read(args.config)
-    preproc(config)
+    preproc(config, args.trim)
 
 
 def run_evaluate(args):
@@ -149,11 +129,11 @@ def add_global_parser(gparser):
 
 
 class MainRunner:
-    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_url=None):
+    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_urls=None):
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
-        self.rloader = RemoteLoader(remote_repo_url)
+        self.rloader = RemoteLoader(remote_repo_urls)
         self.tpu_resolver = None
         self.precision_policy = None
 
@@ -226,7 +206,7 @@ class MainRunner:
                         get_logits=args.get_logits)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
-                          batch_size=args.batch_size, get_logits=args.get_logits)
+                          batch_size=args.batch_size, get_logits=args.get_logits, autotrim=args.trim)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -315,6 +295,10 @@ class MainRunner:
                                     help='Alpha value for the RC-constraint compliance check plot.')
         parser_predict.add_argument('--replicates', default=1, type=int,
                                     help='Number of replicates for MC uncertainty estimation.')
+        parser_predict.add_argument('--trim', dest="trim", action='store_true', help='Automatically trim the sequences '
+                                                                                     'to the read length specified by '
+                                                                                     'the input size of the model '
+                                                                                     '(if using fasta input).')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -330,7 +314,7 @@ class MainRunner:
                                    default=0.5, type=float)
         parser_filter.add_argument('-c', '--confidence-threshold', dest="c_thresh",
                                    help="Confidence threshold [default=None].", type=float)
-        parser_filter.add_argument('-o', '--output', help="Output file path [.fasta].")
+        parser_filter.add_argument('-o', '--output', help="Output file path for positive predictions [.fasta].")
         parser_filter.add_argument('-s', '--std', dest="std",
                                    help="Standard deviations of predictions if MC dropout used.")
         parser_filter.add_argument('-n', '--n-classes', dest="n_classes",
@@ -343,6 +327,11 @@ class MainRunner:
                                    default=False, action="store_true")
         parser_filter.add_argument('--precision', help="Format pathogenic potentials to given precision "
                                    "[default=3].", default=3, type=int)
+        parser_filter.add_argument('--neg-output', dest="neg_output", help="Output file path "
+                                                                           "for negative predictions [.fasta].")
+        parser_filter.add_argument('--undef-output', dest="undef_output", help="Output file path for predictions "
+                                                                               "not passing the confidence "
+                                                                               "threshold [.fasta].")
         parser_filter.set_defaults(func=run_filter)
 
         # create the parser for the "train" command
@@ -366,6 +355,9 @@ class MainRunner:
         # create the parser for the "preproc" command
         parser_preproc = subparsers.add_parser('preproc', help='Convert fasta files to numpy arrays for training.')
         parser_preproc.add_argument('config', help='Preprocessing config file.')
+        parser_preproc.add_argument('--trim', dest="trim", action='store_true', help='Automatically trim the sequences '
+                                                                                     'to the read length specified in '
+                                                                                     'the config file.')
         parser_preproc.set_defaults(func=run_preproc)
 
         # create the parser for the "eval" command
@@ -452,5 +444,3 @@ class MainRunner:
             parser.print_help()
 
 
-if __name__ == "__main__":
-    main()

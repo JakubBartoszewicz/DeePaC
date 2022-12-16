@@ -7,7 +7,7 @@ def readme():
 
 
 setup(name='deepac',
-      version='0.14.0',
+      version='0.14.1',
       description='Predicting pathogenic potentials of novel DNA with reverse-complement neural networks.',
       long_description=readme(),
       long_description_content_type='text/markdown',
@@ -18,14 +18,16 @@ setup(name='deepac',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
       ],
       keywords='deep learning DNA sequencing synthetic biology pathogenicity prediction',
-      url='https://gitlab.com/rki_bioinformatics/DeePaC',
+      url='https://gitlab.com/dacs-hpi/deepac',
       author='Jakub Bartoszewicz',
       author_email='jakub.bartoszewicz@hpi.de',
       license='MIT',
-      packages=['deepac', 'deepac.eval', 'deepac.tests', 'deepac.explain', 'deepac.gwpa'],
+      packages=['deepac', 'deepac.eval', 'deepac.tests', 'deepac.explain', 'deepac.gwpa', 'deepac.builtin',
+                'deepac.builtin.config', 'deepac.tests.configs'],
       python_requires='>=3',
       install_requires=[
           'tensorflow>=2.1.2',
@@ -46,7 +48,7 @@ setup(name='deepac',
           'tqdm>=4.49'
       ],
       entry_points={
-          'console_scripts': ['deepac=deepac.command_line:main'],
+          'console_scripts': ['deepac=deepac.__main__:main'],
       },
       include_package_data=True,
       zip_safe=False)

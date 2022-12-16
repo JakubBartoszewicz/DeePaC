@@ -99,6 +99,7 @@ def nt_map(args, allow_eager=False):
                     break
                 genome_read_counter_dict[seq_name][start:end] += 1
 
+            df_list = []
             for seq_name, genome_read_counter in genome_read_counter_dict.items():
 
                 # compute mean pathogenicity score per nucleotide
@@ -111,7 +112,8 @@ def nt_map(args, allow_eager=False):
                 df_s = pd.DataFrame(OrderedDict((('seq_name', [seq_name]*scores.shape[0]), ('start', interval_starts),
                                                  ('end', interval_ends),
                                                  ('score', scores))))
-                df = df.append(df_s, ignore_index=True)
+                df_list.append(df_s)
+            df = pd.concat(df_list, ignore_index=True)
 
             # save results
             out_file = args.out_dir + "/" + genome + "_nt_contribs_map.bedgraph"

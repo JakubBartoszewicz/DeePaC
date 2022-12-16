@@ -270,7 +270,7 @@ class RCConfig:
             self.learning_rate = config['Training'].getfloat('LearningRate')
             self.optimization_method = config['Training']['Optimizer']
             if self.optimization_method == "adam":
-                self.optimizer = Adam(lr=self.learning_rate)
+                self.optimizer = Adam(learning_rate=self.learning_rate)
             else:
                 warnings.warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
                 self.optimizer = self.optimization_method
@@ -358,7 +358,8 @@ class RCNet:
         else:
             self.strategy = self.config.strategy_dict[self.config.strategy]()
 
-        if float(tf.__version__[:3]) > 2.1 and self.config.epoch_start > 0:
+        version = tuple(map(int, (tf.__version__.split("."))))
+        if version[0] >= 2 and version[1] >= 2 and self.config.epoch_start > 0:
             checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)
@@ -373,10 +374,13 @@ class RCNet:
                     self._build_siam_model()
                 elif self.config.rc_mode == "none":
                     self._build_simple_model()
+                elif self.config.rc_mode == "deephage":
+                    self._build_deephage_model()
                 else:
                     raise ValueError('Unrecognized RC mode')
             if self.config.epoch_start > 0:
-                print("WARNING: loading a pre-trained model will reset the optimizer state. Please update to TF>=2.2.")
+                warnings.warn("WARNING: loading a pre-trained model will reset the optimizer state."
+                              " Please update to TF>=2.2.")
                 checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
                 model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
                 path = re.sub("\.h5$", "", model_file)
@@ -746,6 +750,28 @@ class RCNet:
         out = concatenate([x_fwd, x_rc], axis=-1)
         self._current_pool = self._current_pool + 1
         return out
+
+    def _build_deephage_model(self):
+        """Build the standard network with the hardcoded DeePhage architecture"""
+        print("Building model...")
+        # Number of added recurrent layers
+        self._current_recurrent = 0
+        self._current_conv = 0
+        self._current_tformer = 0
+        # Initialize input
+        inputs = Input(shape=(self.config.seq_length, self.config.seq_dim))
+        x = Conv1D(64, 6, activation='relu',padding='same')(inputs)        
+        self._current_conv = self._current_conv + 1
+        x = MaxPooling1D(3)(x)
+        x = BatchNormalization()(x)
+        x = Dropout(0.3)(x)
+        x = GlobalAveragePooling1D()(x)
+        x = Dense(64, activation='relu')(x)
+        x = BatchNormalization()(x)
+        x = Dense(1)(x)
+        x = Activation('sigmoid', dtype='float32')(x)
+        # Initialize the model
+        self.model = Model(inputs, x)
 
     def _build_simple_model(self):
         """Build the standard network"""

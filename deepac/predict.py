@@ -2,7 +2,7 @@
 Predict pathogenic potentials and use them to filter sequences of interest.
 
 """
-from deepac.preproc import read_fasta, tokenize
+from deepac.preproc import tokenize_fasta
 from multiprocessing import Pool
 from functools import partial
 import time
@@ -17,25 +17,15 @@ from tensorflow.keras import backend as K
 
 
 def predict_fasta(model, input_fasta, output, token_cores=8, datatype='int32', rc=False, replicates=1, batch_size=512,
-                  get_logits=False):
+                  get_logits=False, autotrim=False):
     """Predict pathogenic potentials from a fasta file."""
 
-    alphabet = "ACGT"
     input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
     read_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
 
-    # Preproc
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
-    tokenizer.fit_on_texts(alphabet)
-
     print("Preprocessing data...")
     start = time.time()
-    with open(input_fasta) as input_handle:
-        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-        # Tokenize function is applied to the fasta sequence generator.
-        with Pool(processes=token_cores) as p:
-            x_data = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                              read_length=read_length), read_fasta(input_handle)))
+    x_data = tokenize_fasta(input_fasta, token_cores, read_length, datatype, autotrim)
     # Predict
     y_pred, y_std = predict_array(model, x_data, output, rc, replicates, batch_size, get_logits)
     end = time.time()
@@ -92,6 +82,7 @@ def predict_array(model, x_data, output, rc=False, replicates=1, batch_size=512,
 
     end = time.time()
     print("Predictions for {} reads done in {} s".format(y_pred.shape[0], end - start))
+    print("Mean prediction: {mean:.3f}".format(mean=np.mean(y_pred)))
     np.save(file=output, arr=y_pred)
     if replicates > 1:
         out_std = "{}-std.npy".format(os.path.splitext(output)[0])

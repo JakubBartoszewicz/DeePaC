@@ -5,6 +5,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus
 import tensorflow as tf
 from urllib.parse import urlparse
+from urllib.error import ContentTooShortError
 import requests
 import json
 import wget
@@ -35,7 +36,12 @@ def fetch_from_url(repo_url, fetch_dir, out_dir, do_compile=True, n_cpus=None, n
                     print(f'Found: {filename} (incorrect md5 checksum). Deleting...')
                     os.remove(os.path.join(fetch_dir, filename))
                 print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
-                wget.download(link, out=os.path.join(fetch_dir, filename))
+                try:
+                    wget.download(link, out=os.path.join(fetch_dir, filename))
+                except ContentTooShortError as e:
+                    print(e.reason)
+                    print("Your internet connection might be unstable or blocked. "
+                          "Try again or check if your VPN could have terminated the connection.")
                 print()
 
             if filename.lower().endswith(".h5"):
@@ -55,11 +61,11 @@ def fetch_from_url(repo_url, fetch_dir, out_dir, do_compile=True, n_cpus=None, n
 
 
 class RemoteLoader:
-    def __init__(self, remote_repo_url=None):
-        if remote_repo_url is None:
+    def __init__(self, remote_repo_urls=None):
+        if remote_repo_urls is None:
             self.remote_repo_urls = ["https://zenodo.org/api/records/4456008", "https://zenodo.org/api/records/5711877"]
         else:
-            self.remote_repo_urls = [remote_repo_url]
+            self.remote_repo_urls = remote_repo_urls
 
     def fetch_models(self, out_dir, do_compile=True, n_cpus=None, n_gpus=None, log_path="logs", training_mode=False,
                      tpu_resolver=None, timeout=15.):

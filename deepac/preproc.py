@@ -16,9 +16,10 @@ from functools import partial
 import gzip
 import os
 import math
+from termcolor import colored
 
 
-def tokenize(seq, tokenizer, datatype='int8', read_length=250):
+def tokenize(seq, tokenizer, datatype='int8', read_length=250, autotrim=False):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
@@ -26,8 +27,14 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250):
         # Pad with zeros
         matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4), dtype=datatype)))
     if matrix.shape[0] > read_length:
-        # Trim
-        matrix = matrix[:read_length, :]
+        if autotrim:
+            # Trim
+            matrix = matrix[:read_length, :]
+        else:
+            raise(ValueError(f"Found sequence length ({matrix.shape[0]}bp) greater than the specified read length "
+                             f"({read_length}bp). To classify long sequences like contigs or genomes, fragment them "
+                             f"with 'deepac gwpa fragment' and take the mean of the predictions for all subsequences. "
+                             f"To automatically trim your reads to max. {read_length}, use the '--trim' parameter."))
     return matrix
 
 
@@ -38,7 +45,26 @@ def read_fasta(in_handle):
         yield seq
 
 
-def preproc(config):
+def tokenize_fasta(in_path, max_cores, read_length, datatype, autotrim=False, alphabet="ACGT"):
+    # Set alphabet and prepare the tokenizer
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
+    tokenizer.fit_on_texts(alphabet)
+
+    if autotrim:
+        print(colored(f"Autotrim on: any sequences longer than the specified read length "
+                      f"({read_length}bp) will be trimmed to {read_length}bp.", "yellow"))
+
+    with open(in_path) as input_handle:
+        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+        # Tokenize function is applied to the fasta sequence generator.
+        with Pool(processes=max_cores) as p:
+            x_arr = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                             read_length=read_length, autotrim=autotrim), read_fasta(input_handle)),
+                               dtype=datatype)
+    return x_arr
+
+
+def preproc(config, autotrim=False):
     """Preprocess the CNN on Illumina reads using the supplied configuration."""
     # Set the number of cores to use
     max_cores = config['Devices'].getint('N_CPUs')
@@ -67,25 +93,10 @@ def preproc(config):
     use_tfdata = config['Options'].getboolean('Use_TFData')
     n_files = config['Options'].getint('N_Files')
 
-    # Set alphabet and prepare the tokenizer
-    alphabet = "ACGT"
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
-    tokenizer.fit_on_texts(alphabet)
     # Preprocess
     if neg_path != "none":
         print("Preprocessing negative data...")
-        with open(neg_path) as input_handle:
-            # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-            # Tokenize function is applied to the fasta sequence generator.
-            if max_cores > 1:
-                with Pool(processes=max_cores) as p:
-                    x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                           read_length=read_length), read_fasta(input_handle)),
-                                             dtype=datatype)
-            else:
-                x_train_neg = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                          read_length=read_length), read_fasta(input_handle))),
-                                         dtype=datatype)
+        x_train_neg = tokenize_fasta(neg_path, max_cores, read_length, datatype, autotrim)
         # Count negative samples
         n_negative = x_train_neg.shape[0]
     else:
@@ -94,17 +105,7 @@ def preproc(config):
 
     if pos_path != "none":
         print("Preprocessing positive data...")
-        with open(pos_path) as input_handle:
-            # Parse fasta, tokenize in parallel & concatenate to negative data
-            if max_cores > 1:
-                with Pool(processes=max_cores) as p:
-                    x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                           read_length=read_length), read_fasta(input_handle)),
-                                             dtype=datatype)
-            else:
-                x_train_pos = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                          read_length=read_length), read_fasta(input_handle))),
-                                         dtype=datatype)
+        x_train_pos = tokenize_fasta(pos_path, max_cores, read_length, datatype, autotrim)
         # Count positive samples
         n_positive = x_train_pos.shape[0]
     else:
@@ -117,23 +118,11 @@ def preproc(config):
         for class_path in multi_paths:
             if class_path != "none":
                 print("Preprocessing {}...".format(class_path))
-                with open(class_path) as input_handle:
-                    # Parse fasta, tokenize in parallel & concatenate to negative data
-                    if max_cores > 1:
-                        with Pool(processes=max_cores) as p:
-                            x_train_class = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                                     read_length=read_length),
-                                                             read_fasta(input_handle)),
-                                                       dtype=datatype)
-                    else:
-                        x_train_class = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                                    read_length=read_length),
-                                                            read_fasta(input_handle))),
-                                                   dtype=datatype)
+                x_train_class = tokenize_fasta(class_path, max_cores, read_length, datatype, autotrim)
                 # Count positive samples
                 n_class = x_train_class.shape[0]
             else:
-                x_train_class = np.zeros((0, read_length, 4), dtype=np.datatype)
+                x_train_class = np.zeros((0, read_length, 4), dtype=datatype)
                 n_class = 0
             x_train_multi.append(x_train_class)
             n_multi.append(n_class)
@@ -186,6 +175,10 @@ def preproc(config):
 
         n_all = n_negative + n_positive + np.sum(n_multi)
         slice_size = math.ceil(n_all/n_files)
+
+        # In the future, this should be changed to tf.Dataset.save
+        # Left like this for backwards compatibility between TF versions
+
         for i in range(n_files):
             start = i * slice_size
             end = min((i+1) * slice_size, n_all)
@@ -195,12 +188,14 @@ def preproc(config):
 
             filename = os.path.join(out_dir, os.path.splitext(os.path.basename(out_dir))[0]
                                     + '_{}-{}.tfrec'.format(start, end - 1))
-            writer = tf.data.experimental.TFRecordWriter(filename)
+            writer = tf.io.TFRecordWriter(filename)
             if tf.executing_eagerly():
-                writer.write(serialized_features_dataset)
+                for example in serialized_features_dataset:
+                    writer.write(example.numpy())
             else:
                 with tf.compat.v1.Session() as sess:
-                    sess.run(writer.write(serialized_features_dataset))
+                    for example in serialized_features_dataset:
+                        sess.run(writer.write(example.numpy()))
 
     print("Done!")
 
