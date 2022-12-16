@@ -55,7 +55,7 @@ def run_preproc(args):
     """Parse the config file and preprocess the Illumina reads."""
     config = configparser.ConfigParser()
     config.read(args.config)
-    preproc(config)
+    preproc(config, args.trim)
 
 
 def run_evaluate(args):
@@ -206,7 +206,7 @@ class MainRunner:
                         get_logits=args.get_logits)
         else:
             predict_fasta(model, args.input, args.output, args.n_cpus, replicates=args.replicates,
-                          batch_size=args.batch_size, get_logits=args.get_logits)
+                          batch_size=args.batch_size, get_logits=args.get_logits, autotrim=args.trim)
 
     def run_getmodels(self, args):
         """Get built-in weights and rebuild built-in models."""
@@ -295,6 +295,9 @@ class MainRunner:
                                     help='Alpha value for the RC-constraint compliance check plot.')
         parser_predict.add_argument('--replicates', default=1, type=int,
                                     help='Number of replicates for MC uncertainty estimation.')
+        parser_predict.add_argument('--trim', dest="trim", help='Automatically trim the sequences to the read length '
+                                                                'specified by the input size of the model '
+                                                                '(if using fasta input).')
         parser_predict.set_defaults(func=self.run_predict)
 
         # create the parser for the "filter" command
@@ -351,6 +354,8 @@ class MainRunner:
         # create the parser for the "preproc" command
         parser_preproc = subparsers.add_parser('preproc', help='Convert fasta files to numpy arrays for training.')
         parser_preproc.add_argument('config', help='Preprocessing config file.')
+        parser_preproc.add_argument('--trim', dest="trim", help='Automatically trim the sequences to the read length '
+                                                                'specified in the config file.')
         parser_preproc.set_defaults(func=run_preproc)
 
         # create the parser for the "eval" command

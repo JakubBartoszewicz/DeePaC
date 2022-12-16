@@ -358,7 +358,8 @@ class RCNet:
         else:
             self.strategy = self.config.strategy_dict[self.config.strategy]()
 
-        if float(tf.__version__[:3]) > 2.1 and self.config.epoch_start > 0:
+        version = tuple(map(int, (tf.__version__.split("."))))
+        if version[0] >= 2 and version[1] >= 2 and self.config.epoch_start > 0:
             checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
             model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
             print("Loading " + model_file)

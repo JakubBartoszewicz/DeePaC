@@ -16,10 +16,9 @@ from functools import partial
 import gzip
 import os
 import math
-from termcolor import colored
 
 
-def tokenize(seq, tokenizer, datatype='int8', read_length=250, silent=False):
+def tokenize(seq, tokenizer, datatype='int8', read_length=250, autotrim=False):
     """Tokenize and delete the out-of-vocab token (N) column."""
     # Cast to datatype instead of default float64 to save memory
     matrix = tokenizer.texts_to_matrix(seq).astype(datatype)[:, 1:]
@@ -27,12 +26,14 @@ def tokenize(seq, tokenizer, datatype='int8', read_length=250, silent=False):
         # Pad with zeros
         matrix = np.concatenate((matrix, np.zeros((read_length - len(seq), 4), dtype=datatype)))
     if matrix.shape[0] > read_length:
-        if not silent:
-            print(colored(f"WARNING: input sequence length ({matrix.shape[0]}bp) "
-                          f"greater than specified read length ({read_length}bp). "
-                          f"Automatically trimming to {read_length}bp..."), "red")
-        # Trim
-        matrix = matrix[:read_length, :]
+        if autotrim:
+            # Trim
+            matrix = matrix[:read_length, :]
+        else:
+            raise(ValueError(f"Sequence length: {matrix.shape[0]}bp greater than specified read length ({read_length}bp"
+                             f"). To classify long sequences like contigs or genomes, fragment them with "
+                             f"'deepac gwpa fragment' and take the mean of the predictions for all subsequences. To "
+                             f"automatically trim you reads to max. {read_length}, use the '--trim' parameter."))
     return matrix
 
 
@@ -43,7 +44,27 @@ def read_fasta(in_handle):
         yield seq
 
 
-def preproc(config):
+def tokenize_fasta(in_path, max_cores, read_length, datatype, autotrim=False, alphabet="ACGT"):
+    # Set alphabet and prepare the tokenizer
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
+    tokenizer.fit_on_texts(alphabet)
+
+    with open(in_path) as input_handle:
+        # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
+        # Tokenize function is applied to the fasta sequence generator.
+        if max_cores > 1:
+            with Pool(processes=max_cores) as p:
+                x_arr = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                 read_length=read_length, autotrim=autotrim), read_fasta(input_handle)),
+                                   dtype=datatype)
+        else:
+            x_arr = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
+                                                read_length=read_length, autotrim=autotrim), read_fasta(input_handle))),
+                               dtype=datatype)
+    return x_arr
+
+
+def preproc(config, autotrim=False):
     """Preprocess the CNN on Illumina reads using the supplied configuration."""
     # Set the number of cores to use
     max_cores = config['Devices'].getint('N_CPUs')
@@ -72,25 +93,10 @@ def preproc(config):
     use_tfdata = config['Options'].getboolean('Use_TFData')
     n_files = config['Options'].getint('N_Files')
 
-    # Set alphabet and prepare the tokenizer
-    alphabet = "ACGT"
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=True)
-    tokenizer.fit_on_texts(alphabet)
     # Preprocess
     if neg_path != "none":
         print("Preprocessing negative data...")
-        with open(neg_path) as input_handle:
-            # Parse fasta and tokenize in parallel. Partial function takes tokenizer as a fixed argument.
-            # Tokenize function is applied to the fasta sequence generator.
-            if max_cores > 1:
-                with Pool(processes=max_cores) as p:
-                    x_train_neg = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                           read_length=read_length), read_fasta(input_handle)),
-                                             dtype=datatype)
-            else:
-                x_train_neg = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                          read_length=read_length), read_fasta(input_handle))),
-                                         dtype=datatype)
+        x_train_neg = tokenize_fasta(neg_path, max_cores, read_length, datatype, autotrim)
         # Count negative samples
         n_negative = x_train_neg.shape[0]
     else:
@@ -99,17 +105,7 @@ def preproc(config):
 
     if pos_path != "none":
         print("Preprocessing positive data...")
-        with open(pos_path) as input_handle:
-            # Parse fasta, tokenize in parallel & concatenate to negative data
-            if max_cores > 1:
-                with Pool(processes=max_cores) as p:
-                    x_train_pos = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                           read_length=read_length), read_fasta(input_handle)),
-                                             dtype=datatype)
-            else:
-                x_train_pos = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                          read_length=read_length), read_fasta(input_handle))),
-                                         dtype=datatype)
+        x_train_pos = tokenize_fasta(pos_path, max_cores, read_length, datatype, autotrim)
         # Count positive samples
         n_positive = x_train_pos.shape[0]
     else:
@@ -122,23 +118,11 @@ def preproc(config):
         for class_path in multi_paths:
             if class_path != "none":
                 print("Preprocessing {}...".format(class_path))
-                with open(class_path) as input_handle:
-                    # Parse fasta, tokenize in parallel & concatenate to negative data
-                    if max_cores > 1:
-                        with Pool(processes=max_cores) as p:
-                            x_train_class = np.asarray(p.map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                                     read_length=read_length),
-                                                             read_fasta(input_handle)),
-                                                       dtype=datatype)
-                    else:
-                        x_train_class = np.asarray(list(map(partial(tokenize, tokenizer=tokenizer, datatype=datatype,
-                                                                    read_length=read_length),
-                                                            read_fasta(input_handle))),
-                                                   dtype=datatype)
+                x_train_class = tokenize_fasta(class_path, max_cores, read_length, datatype, autotrim)
                 # Count positive samples
                 n_class = x_train_class.shape[0]
             else:
-                x_train_class = np.zeros((0, read_length, 4), dtype=np.datatype)
+                x_train_class = np.zeros((0, read_length, 4), dtype=datatype)
                 n_class = 0
             x_train_multi.append(x_train_class)
             n_multi.append(n_class)
