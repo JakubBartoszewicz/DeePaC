@@ -5,6 +5,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus
 import tensorflow as tf
 from urllib.parse import urlparse
+from urllib.error import ContentTooShortError
 import requests
 import json
 import wget
@@ -35,7 +36,12 @@ def fetch_from_url(repo_url, fetch_dir, out_dir, do_compile=True, n_cpus=None, n
                     print(f'Found: {filename} (incorrect md5 checksum). Deleting...')
                     os.remove(os.path.join(fetch_dir, filename))
                 print(f'Downloading: {filename} size: {get_human_readable_size(size)}')
-                wget.download(link, out=os.path.join(fetch_dir, filename))
+                try:
+                    wget.download(link, out=os.path.join(fetch_dir, filename))
+                except ContentTooShortError as e:
+                    print(e.message)
+                    print("Your internet connection might be unstable or blocked. "
+                          "Try again or check if your VPN could have terminated the connection.")
                 print()
 
             if filename.lower().endswith(".h5"):
