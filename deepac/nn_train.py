@@ -379,7 +379,8 @@ class RCNet:
                 else:
                     raise ValueError('Unrecognized RC mode')
             if self.config.epoch_start > 0:
-                print("WARNING: loading a pre-trained model will reset the optimizer state. Please update to TF>=2.2.")
+                warnings.warn("WARNING: loading a pre-trained model will reset the optimizer state."
+                              " Please update to TF>=2.2.")
                 checkpoint_name = self.config.log_dir + "/{runname}-".format(runname=self.config.runname)
                 model_file = checkpoint_name + "e{epoch:03d}.h5".format(epoch=self.config.epoch_start)
                 path = re.sub("\.h5$", "", model_file)
