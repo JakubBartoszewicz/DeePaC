@@ -85,7 +85,7 @@ class Tester:
             self.run_datagen(npy=True,
                              tfrec=self.input_modes_dict["tfdata"])
         set_mem_growth()
-        if not self.offline:
+        if self.do_all and not self.offline:
             print("TEST: Fetching models...")
             self.test_fetch()
         print("TEST: Training...")
