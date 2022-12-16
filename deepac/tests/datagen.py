@@ -57,7 +57,7 @@ def generate_multiclass_sample_data(gc_per_class=(0.3, 0.7, 0.1, 0.9), n_train=1
                 for line in infile:
                     outfile.write(line)
 
-        generate_reads(n=class_val//2, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_per_class[i],
+        generate_reads(n=class_val, filename=os.path.join("deepac-tests", "sample-test.fasta"), gc=gc_per_class[i],
                        append=True)
 
         generate_species_csv(i, class_val, 2, f"deepac-tests-species.csv")
