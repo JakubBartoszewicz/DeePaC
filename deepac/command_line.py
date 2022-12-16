@@ -25,7 +25,7 @@ from deepac import __file__
 from deepac.utils import config_gpus, config_cpus, config_tpus
 from deepac.explain.command_line import add_explain_parser
 from deepac.gwpa.command_line import add_gwpa_parser
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
+import tensorflow.keras.mixed_precision as mixed_precision
 
 
 def run_filter(args):
@@ -129,11 +129,11 @@ def add_global_parser(gparser):
 
 
 class MainRunner:
-    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_url=None):
+    def __init__(self, builtin_configs=None, builtin_weights=None, remote_repo_urls=None):
         self.builtin_configs = builtin_configs
         self.builtin_weights = builtin_weights
         self.bloader = BuiltinLoader(self.builtin_configs, self.builtin_weights)
-        self.rloader = RemoteLoader(remote_repo_url)
+        self.rloader = RemoteLoader(remote_repo_urls)
         self.tpu_resolver = None
         self.precision_policy = None
 

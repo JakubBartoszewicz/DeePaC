@@ -6,6 +6,7 @@ import random as rn
 import os
 from deepac.command_line import MainRunner
 
+
 def main():
     """Run DeePaC CLI."""
     seed = 0
@@ -17,8 +18,8 @@ def main():
                        "sensitive": os.path.join(modulepath, "builtin", "config", "nn-img-sensitive-lstm.ini")}
     builtin_weights = {"rapid": os.path.join(modulepath, "builtin", "weights", "nn-img-rapid-cnn.h5"),
                        "sensitive": os.path.join(modulepath, "builtin", "weights", "nn-img-sensitive-lstm.h5")}
-    remote_repo_url = "https://zenodo.org/api/records/4456008"
-    runner = MainRunner(builtin_configs, builtin_weights, remote_repo_url)
+    remote_repo_urls = ["https://zenodo.org/api/records/4456008", "https://zenodo.org/api/records/5711877"]
+    runner = MainRunner(builtin_configs, builtin_weights, remote_repo_urls)
     runner.parse()
 
     

@@ -270,7 +270,7 @@ class RCConfig:
             self.learning_rate = config['Training'].getfloat('LearningRate')
             self.optimization_method = config['Training']['Optimizer']
             if self.optimization_method == "adam":
-                self.optimizer = Adam(lr=self.learning_rate)
+                self.optimizer = Adam(learning_rate=self.learning_rate)
             else:
                 warnings.warn("Custom learning rates implemented for Adam only. Using default Keras learning rate.")
                 self.optimizer = self.optimization_method
