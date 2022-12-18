@@ -3,13 +3,12 @@
 # DeePaC
 
 DeePaC is a python package and a CLI tool for predicting labels (e.g. pathogenic potentials) from short DNA sequences (e.g. Illumina 
-reads) with interpretable reverse-complement neural networks. For details, see our preprint on bioRxiv: 
-<https://www.biorxiv.org/content/10.1101/535286v3> and the paper in *Bioinformatics*: <https://doi.org/10.1093/bioinformatics/btz541>.
-For details regarding the interpretability functionalities of DeePaC, see the preprint here: <https://www.biorxiv.org/content/10.1101/2020.01.29.925354v2>
+reads) with interpretable reverse-complement neural networks. For details, see the original paper in *Bioinformatics*: <https://doi.org/10.1093/bioinformatics/btz541>.
+For details regarding the interpretability functionalities of DeePaC, see the paper in *NAR Genomics and Bioinformatics*: <https://doi.org/10.1093/nargab/lqab004>. For the description of the most current models, see papers in *Briefings in Bioinformatics* (<https://doi.org/10.1093/bib/bbab269>) and *Bioinformatics* (<https://doi.org/10.1093/bioinformatics/btac495>).
 
 Documentation can be found here:
 <https://rki_bioinformatics.gitlab.io/DeePaC/>. 
-See also the main repo here: <https://gitlab.com/rki_bioinformatics/DeePaC>.
+See also the main repo here: <https://gitlab.com/dacs-hpi/deePac> and the legacy URL <https://gitlab.com/rki_bioinformatics/DeePaC>.
 
 ## Plug-ins
 ### DeePaC-strain
@@ -39,6 +38,7 @@ You can install DeePaC with `bioconda`. Set up the [bioconda channel](
 conda config --add channels defaults
 conda config --add channels bioconda
 conda config --add channels conda-forge
+conda config --set channel_priority strict
 ```
 
 We recommend setting up an isolated `conda` environment:
@@ -50,12 +50,11 @@ conda activate my_env
 
 and then:
 ```
-# For GPU support (recommended) - install tensorflow-gpu from the defaults channel
-conda install -c defaults tensorflow-gpu
-conda install deepac
-# Or: basic installation (CPU-only)
+# For the latest version (0.14.1), this should work both for GPU-equipped and CPU-only systems
 conda install deepac
 ```
+
+If `conda` is slow, consider installing [mamba](https://mamba.readthedocs.io/en/latest/installation.html).
 
 Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
@@ -73,6 +72,7 @@ conda install deepacvir deepacstrain
 Requirements: 
 * install [Docker](https://docs.docker.com/get-docker/) on your host machine. 
 * For GPU support, you have to install the [NVIDIA Docker support](https://github.com/NVIDIA/nvidia-docker) as well.
+* The containers can also be run with Singularity/[Apptainer](https://apptainer.org/docs/user/main/quick_start.html).
 
 See [TF Docker installation guide](https://www.tensorflow.org/install/docker) and the 
 [NVIDIA Docker support installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) 
@@ -81,30 +81,30 @@ for details. The guide below assumes you have Docker 19.03 or above.
 You can then pull the desired image:
 ```
 # Basic installation - CPU only
-docker pull dacshpi/deepac:0.13.5
+docker pull dacshpi/deepac:0.14.1
 
 # For GPU support
-docker pull dacshpi/deepac:0.13.5-gpu
+docker pull dacshpi/deepac:0.14.1-gpu
 ```
 
 And run it:
 ```
 # Basic installation - CPU only
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac --help
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.13.5 deepac test -q
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.14.1 deepac --help
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm dacshpi/deepac:0.14.1 deepac test -q
 
 # With GPU support
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu deepac test
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.14.1-gpu deepac test
 
 # If you want to use the shell inside the container
-docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5-gpu bash
+docker run -it -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.14.1-gpu bash
 ```
 
 The image ships the main `deepac` package along with the `deepac-vir` and `deepac-strain` plugins. See the basic usage guide below for more deepac commands.
 
 Optional: download and compile the latest deepac-live custom models [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4456008.svg)](https://doi.org/10.5281/zenodo.4456008):
 ```
-docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.13.5 deepac --fetch
+docker run -v $(pwd):/deepac -u $(id -u):$(id -g) --rm --gpus all dacshpi/deepac:0.14.1 deepac --fetch
 ```
 
 For more information about the usage of the NVIDIA container toolkit (e.g. selecting the GPUs to use),
@@ -283,6 +283,9 @@ predicted phenotype potentials and nucleotide contributions:
 # Fragment the genomes into pseudoreads
 deepac gwpa fragment -g genomes_fasta -o fragmented_genomes
 
+# Create the .genome annotation files from .gff3 files corresponding to your .fasta files
+deepac gwpa gff2genome genomes_gff3 genomes_genome
+
 # Predict the pathogenic potential of each pseudoread
 deepac predict -r -a fragmented_genomes/sample1_fragmented_genomes.npy -o predictions/sample1_pred.npy
 
@@ -386,15 +389,19 @@ If you find DeePaC useful, please cite:
     eprint = {https://academic.oup.com/bib/article-pdf/22/6/bbab269/41088711/bbab269.pdf},
 }
 
-@article{10.1101/2021.11.30.470625,
+@article{10.1093/bioinformatics/btac495,
     author = {Bartoszewicz, Jakub M and Nasri, Ferdous and Nowicka, Melania and Renard, Bernhard Y},
-    title = {Pathogenic potential prediction for novel fungal DNA based on a curated fungi-hosts data collection},
-    year = {2021},
-    doi = {10.1101/2021.11.30.470625},
-    publisher = {Cold Spring Harbor Laboratory},
-    URL = {https://www.biorxiv.org/content/early/2021/12/01/2021.11.30.470625},
-    eprint = {https://www.biorxiv.org/content/early/2021/12/01/2021.11.30.470625.full.pdf},
-    journal = {bioRxiv}
+    title = "{Detecting DNA of novel fungal pathogens using ResNets and a curated fungi-hosts data collection}",
+    journal = {Bioinformatics},
+    volume = {38},
+    number = {Supplement_2},
+    pages = {ii168-ii174},
+    year = {2022},
+    month = {09},
+    issn = {1367-4803},
+    doi = {10.1093/bioinformatics/btac495},
+    url = {https://doi.org/10.1093/bioinformatics/btac495},
+    eprint = {https://academic.oup.com/bioinformatics/article-pdf/38/Supplement\_2/ii168/45884230/btac495.pdf},
 }
 
 ```
