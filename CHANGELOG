@@ -1,3 +1,10 @@
+### v0.14.1 - 16 Dec 2022
+    *  update TF API for newer versions
+    *  supporting newer TF versions should solve some issues with installation via bioconda that would make it impossible to install the latest version under some configurations when using tensorflow-gpu
+    *  warn when preprocessing sequences longer than expected and ask the user to explicitly enable trimming (--trim)
+    *  add negative and undefined outputs in filter: now you can automatically get also the non-positive reads (see rki_bioinformatics/DeePaC#3).
+    *  small refactors and bugfixes
+
 ### v0.14.0 - 18 Nov 2021
     *  new feature: multiclass models
 
