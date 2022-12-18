@@ -8,7 +8,7 @@ For details regarding the interpretability functionalities of DeePaC, see the pa
 
 Documentation can be found here:
 <https://rki_bioinformatics.gitlab.io/DeePaC/>. 
-See also the main repo here: <https://gitlab.com/dacs-hpi/deePac> and the legacy URL <https://gitlab.com/rki_bioinformatics/DeePaC>.
+See also the main repo here: <https://gitlab.com/dacs-hpi/deepac> and the legacy URL <https://gitlab.com/rki_bioinformatics/DeePaC>.
 
 ## Plug-ins
 ### DeePaC-strain
