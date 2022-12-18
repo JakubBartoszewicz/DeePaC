@@ -1,11 +1,11 @@
 ### Project head
-Bernhard Y. Renard \<RenardB(at)rki.de\>  
-  
-### Technical head
-Jakub M. Bartoszewicz \<BartoszewiczJ(at)rki.de\>
+Jakub M. Bartoszewicz \<jakub.bartoszewicz(at)hpi.de\>
 
 ### Active Contributors
-Jakub M. Bartoszewicz \<BartoszewiczJ(at)rki.de\>
+Jakub M. Bartoszewicz \<jakub.bartoszewicz(at)hpi.de\>
   
 ### Former Contributors
 Anja Seidel
+Ulrich Genske
+Ferdous Nasri
+Melania Nowicka
