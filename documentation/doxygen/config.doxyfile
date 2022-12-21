@@ -45,7 +45,7 @@ PROJECT_NUMBER         = "0.14.1"
 # quick idea about the purpose of the project. Keep the description short.
 
 
-PROJECT_BRIEF          = "Predicting pathogenic potentials of novel DNA reads with reverse-complement neural networks."
+PROJECT_BRIEF          = "Predicting pathogenic potentials of novel DNA reads with reverse-complement neural networks"
 
 # With the PROJECT_LOGO tag one can specify a logo or an icon that is included
 # in the documentation. The maximum height of the logo should not exceed 55
