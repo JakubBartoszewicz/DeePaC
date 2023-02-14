@@ -234,7 +234,9 @@ class RCConfig:
                     counts = [config['ClassWeights'].getfloat('ClassCount_0'),
                               config['ClassWeights'].getfloat('ClassCount_1')]
                 sum_count = sum(counts)
-                weights = [sum_count/(2*class_count) for class_count in counts]
+                no_classes = len(counts)
+                # analogous to in sklearn.utils.class_weight.compute_class_weight
+                weights = [sum_count/(no_classes*class_count) for class_count in counts]
                 classes = range(len(counts))
                 self.class_weight = dict(zip(classes, weights))
                 self.log_init = False
