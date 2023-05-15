@@ -4,6 +4,9 @@ import pybedtools
 import pandas as pd
 from functools import partial
 from collections import OrderedDict
+from scipy.stats import ttest_ind
+from statsmodels.sandbox.stats.multicomp import multipletests
+import numpy as np
 
 
 def featuretype_filter(feature, featuretype):
@@ -49,6 +52,24 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
         total_num_bases += num_bases
     patho_score /= float(total_num_bases)
     return patho_score
+
+
+def compute_gene_ttest(filtered_gff, bedgraph):
+    """Test for elevated pathogenicity score within a gene."""
+    # intersection = pybedtools.BedTool(bedgraph).intersect( b=filtered_gff)
+    intersection = bedgraph.intersect(b=filtered_gff)
+    subtraction = bedgraph.subtract(b=filtered_gff)
+    in_list = []
+    out_list = []
+    for entry in intersection:
+        num_bases = entry.length
+        in_list = in_list + [float(entry.fields[3]) for i in range(num_bases)]
+    for entry in subtraction:
+        num_bases = entry.length
+        out_list = out_list + [float(entry.fields[3]) for i in range(num_bases)]
+
+    difference = np.mean(in_list) - np.mean(out_list)
+    return difference, ttest_ind(in_list, out_list)[1]
 
 
 def gene_rank(args):
@@ -100,11 +121,19 @@ def gene_rank(args):
                 # compute mean pathogencity score per feature
                 feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
                                            for filtered_gff in filtered_gffs]
+                # t-test inside vs outside feature
+                ttest_results = [compute_gene_ttest(filtered_gff, bedgraph) for filtered_gff in filtered_gffs]
+                ttest_diffs, ttest_pvals = zip(*ttest_results)
+                ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
 
                 # save results
                 patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
                                                         ('bioproject_id', bioproject_id),
-                                                        ('pathogenicity_score', feature_pathogenicities))))
+                                                        ('pathogenicity_score', feature_pathogenicities),
+                                                        ('raw_p_value', ttest_pvals),
+                                                        ('q_value', ttest_qvals),
+                                                        ('difference', ttest_diffs),
+                                                        )))
                 patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
 
                 if args.extended:
