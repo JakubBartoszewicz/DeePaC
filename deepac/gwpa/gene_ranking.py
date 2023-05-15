@@ -118,29 +118,30 @@ def gene_rank(args):
             with multiprocessing.Pool(processes=cores) as pool:
                 # filter gff files for feature of interest
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
-                # compute mean pathogencity score per feature
-                feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
-                                           for filtered_gff in filtered_gffs]
+            # compute mean pathogencity score per feature
+            feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
+                                       for filtered_gff in filtered_gffs]
+            with multiprocessing.Pool(processes=cores) as pool:
                 # t-test inside vs outside feature
-                ttest_results = [compute_gene_ttest(filtered_gff, bedgraph) for filtered_gff in filtered_gffs]
-                ttest_diffs, ttest_pvals = zip(*ttest_results)
-                ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
+                ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bedgraph), filtered_gffs)
+            ttest_diffs, ttest_pvals = zip(*ttest_results)
+            ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
 
-                # save results
-                patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
-                                                        ('bioproject_id', bioproject_id),
-                                                        ('pathogenicity_score', feature_pathogenicities),
-                                                        ('raw_p_value', ttest_pvals),
-                                                        ('q_value', ttest_qvals),
-                                                        ('difference', ttest_diffs),
-                                                        )))
-                patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
+            # save results
+            patho_table = pd.DataFrame(OrderedDict((('feature', all_feature_types),
+                                                    ('bioproject_id', bioproject_id),
+                                                    ('pathogenicity_score', feature_pathogenicities),
+                                                    ('raw_p_value', ttest_pvals),
+                                                    ('q_value', ttest_qvals),
+                                                    ('difference', ttest_diffs),
+                                                    )))
+            patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
 
-                if args.extended:
-                    patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity_extended.csv",
-                                       sep="\t",
-                                       index=False)
-                else:
-                    patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv",
-                                       sep="\t",
-                                       index=False)
+            if args.extended:
+                patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity_extended.csv",
+                                   sep="\t",
+                                   index=False)
+            else:
+                patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv",
+                                   sep="\t",
+                                   index=False)
