@@ -145,3 +145,4 @@ def gene_rank(args):
                 patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity.csv",
                                    sep="\t",
                                    index=False)
+            pybedtools.cleanup()
