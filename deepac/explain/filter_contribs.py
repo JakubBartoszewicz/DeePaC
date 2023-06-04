@@ -58,7 +58,7 @@ def get_filter_contribs(args, allow_eager=False):
     else:
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
-        motif_length = get_rf_size(model, conv_layer_idx)
+        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1], get_rf_size(model, conv_layer_idx))
         n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
