@@ -216,27 +216,35 @@ def get_filter_contribs(args, allow_eager=False):
                     scores_rc = scores_fwd[:, :, :n_filters]
                     scores_rc = scores_rc[:, :, ::-1]
                     scores_fwd = scores_fwd[:, :, n_filters:]
-
+                    print("Forward ...")
                     dat_fwd = p.map(partial(get_filter_data, scores_filter_avg=scores_fwd,
                                             input_reads=reads_chunk, motif_len=motif_length,
                                             max_only=max_only), filter_range)
+
+                    print("Reverse-complement ...")
                     dat_rc = p.map(partial(get_filter_data, scores_filter_avg=scores_rc,
                                            input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                            max_only=max_only), filter_range)
 
             if max_only:
+                print("Max across strands ...")
                 dat_max = p.map(partial(get_max_strand, dat_fwd=dat_fwd, dat_rc=dat_rc), filter_range)
+                print("Unpacking ...")
                 contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
             else:
+                print("Unpacking forward...")
                 contrib_dat_fwd, motif_dat_fwd = list(zip(*dat_fwd))
+                print("Unpacking reverse-complement...")
                 contrib_dat_rc, motif_dat_rc = list(zip(*dat_rc))
 
         print("Saving data ...")
         with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
             if contrib_dat_fwd:
+                print("Forward ...")
                 p.map(partial(write_filter_data, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
                               out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
             if contrib_dat_rc:
+                print("Reverse-complement ...")
                 p.map(partial(write_filter_data,  contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
                               out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
 
