@@ -233,7 +233,8 @@ def get_filter_contribs(args, allow_eager=False):
 
             if max_only:
                 print("Max across strands ...")
-                dat_max = [get_max_strand(f, dat_fwd=dat_fwd, dat_rc=dat_rc) for f in filter_range]
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
+                    dat_max = p.map(partial(get_max_strand(f, dat_fwd=dat_fwd, dat_rc=dat_rc), filter_range))
                 print("Unpacking ...")
                 contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
             else:
