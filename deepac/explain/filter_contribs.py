@@ -234,7 +234,7 @@ def get_filter_contribs(args, allow_eager=False):
             if max_only:
                 print("Max across strands ...")
                 with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                    dat_max = p.map(partial(get_max_strand, dat_fwd=dat_fwd, dat_rc=dat_rc), filter_range)
+                    dat_max = p.map(partial(get_max_strand(f, dat_fwd=dat_fwd, dat_rc=dat_rc), filter_range))
                 print("Unpacking ...")
                 contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
             else:
@@ -244,16 +244,17 @@ def get_filter_contribs(args, allow_eager=False):
                 contrib_dat_rc, motif_dat_rc = list(zip(*dat_rc))
 
         print("Saving data ...")
-        if contrib_dat_fwd:
-            print("Forward ...")
-            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                p.map(partial(write_filter_data, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
-                              out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
-        if contrib_dat_rc:
-            print("Reverse-complement ...")
-            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                p.map(partial(write_filter_data, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
-                              out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
+        with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
+            if contrib_dat_fwd:
+                print("Forward ...")
+                for f in filter_range:
+                    write_filter_data(f, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
+                                      out_dir=args.out_dir, data_set_name=test_data_set_name)
+            if contrib_dat_rc:
+                print("Reverse-complement ...")
+                for f in filter_range:
+                    write_filter_data(f, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
+                                      out_dir=args.out_dir, data_set_name=test_data_set_name)
 
         if args.partial:
             print("Getting partial data ...")
@@ -285,18 +286,19 @@ def get_filter_contribs(args, allow_eager=False):
             scores_nt_fwd, read_ids_fwd = list(zip(*partials_nt_fwd))
             scores_nt_rc, read_ids_rc = list(zip(*partials_nt_rc))
             print("Saving partial data ...")
-            if scores_nt_fwd:
-                print("Forward ...")
-                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                    p.map(partial(write_filter_data, read_ids=read_ids_fwd, contribution_data=contrib_dat_fwd,
-                                  scores_input_pad=scores_nt_fwd, out_dir=args.out_dir,
-                                  data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
-            if scores_nt_rc:
-                print("Reverse-complement ...")
-                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                    p.map(partial(write_filter_data, read_ids=read_ids_rc, contribution_data=contrib_dat_rc,
-                                  scores_input_pad=scores_nt_rc, out_dir=args.out_dir,
-                                  data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
+            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
+                if scores_nt_fwd:
+                    print("Forward ...")
+                    for f in filter_range:
+                        write_filter_data(f, read_ids=read_ids_fwd, contribution_data=contrib_dat_fwd,
+                                          scores_input_pad=scores_nt_fwd, out_dir=args.out_dir,
+                                          data_set_name=test_data_set_name, motif_len=motif_length)
+                if scores_nt_rc:
+                    print("Reverse-complement ...")
+                    for f in filter_range:
+                        write_filter_data(f, read_ids=read_ids_rc, contribution_data=contrib_dat_rc,
+                                          scores_input_pad=scores_nt_rc, out_dir=args.out_dir,
+                                          data_set_name=test_data_set_name, motif_len=motif_length)
         i += chunk_size
     print("Done "+str(min(i, total_num_reads))+" from "+str(total_num_reads)+" sequences")
 
