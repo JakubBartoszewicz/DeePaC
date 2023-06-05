@@ -48,6 +48,7 @@ def add_explain_parser(xparser):
     parser_fcontribs.add_argument("-P", "--patho-test", required=True, help="Pathogenic reads of the "
                                                                             "test data set (.fasta)")
     parser_fcontribs.add_argument("-o", "--out-dir", default=".", help="Output directory")
+    parser_fcontribs.add_argument("-n", "--n-cpus", dest="n_cpus", type=int, help="Number of CPU cores. Default: all.")
     parser_fcontribs.add_argument("-r", "--ref-mode", default="N", choices=['N', 'GC', 'own_ref_file'],
                                   help="Modus to calculate reference sequences")
     parser_fcontribs.add_argument("-a", "--train-data",
