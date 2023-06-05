@@ -210,7 +210,7 @@ def get_filter_contribs(args, allow_eager=False):
                 dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd[:, :seq_length//2, :],
                                            input_reads=reads_chunk, motif_len=motif_length,
                                            max_only=max_only) for i in filter_range]
-                dat_rc = [get_filter_data(i, scores_filter_avg=scores_fwd[:, seq_length//2:, :],
+                dat_rc = [get_filter_data(i, scores_filter_avg=scores_fwd[:, seq_length//2:, ::-1],
                                           input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                           max_only=max_only) for i in filter_range]
 
