@@ -53,7 +53,7 @@ class ExplainTester:
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs0"), ref_mode="N",
                          inter_neuron=None, chunk_size=500, all_occurrences=False,
                          do_lstm=False, inter_layer=0, easy_partial=False, partial=False, train_data=None,
-                         no_check=(not self.additivity_check), target_class=self.target_class)
+                         no_check=(not self.additivity_check), target_class=self.target_class, n_cpus=None)
         get_filter_contribs(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs0", "fasta",
                                             "sample_val_data_motifs_filter_1.fasta"))), "Fcontribs for last layer" \
@@ -65,7 +65,7 @@ class ExplainTester:
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs"), ref_mode="N",
                          inter_neuron=None, chunk_size=500, all_occurrences=False,
                          do_lstm=False, inter_layer=1, easy_partial=True, partial=False, train_data=None,
-                         no_check=(not self.additivity_check), target_class=self.target_class)
+                         no_check=(not self.additivity_check), target_class=self.target_class, n_cpus=None)
         get_filter_contribs(args)
         assert (os.path.isfile(os.path.join(self.outpath, "fcontribs", "fasta",
                                             "sample_val_data_motifs_filter_1.fasta"))), "Fcontribs failed."

@@ -234,54 +234,51 @@ def get_filter_contribs(args, allow_eager=False):
         print("Saving data ...")
         with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
             if contrib_dat_fwd:
-                for f in filter_range:
-                    write_filter_data(f, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
-                                      out_dir=args.out_dir, data_set_name=test_data_set_name)
+                    p.map(partial(write_filter_data, contribution_data=contrib_dat_fwd, motifs=motif_dat_fwd,
+                                      out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
             if contrib_dat_rc:
-                for f in filter_range:
-                    write_filter_data(f, contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
-                                      out_dir=args.out_dir, data_set_name=test_data_set_name)
+                    p.map(partial(write_filter_data,  contribution_data=contrib_dat_rc, motifs=motif_dat_rc,
+                                      out_dir=args.out_dir, data_set_name=test_data_set_name), filter_range)
 
         if args.partial:
             print("Getting partial data ...")
-            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                partials_nt_fwd = [get_partials(f, model=model, conv_layer_idx=conv_layer_idx,
-                                                node=0, ref_samples=ref_samples,
-                                                contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
-                                                input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                                pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
-                                                check_additivity=check_additivity) for f in filter_range]
+            partials_nt_fwd = [get_partials(f, model=model, conv_layer_idx=conv_layer_idx,
+                                            node=0, ref_samples=ref_samples,
+                                            contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
+                                            input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
+                                            pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                            check_additivity=check_additivity) for f in filter_range]
 
-                partials_nt_rc = [get_partials(f, model=model, conv_layer_idx=conv_layer_idx,
-                                               node=1, ref_samples=ref_samples,
-                                               contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
-                                               input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                               pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
-                                               check_additivity=check_additivity) for f in filter_range]
+            partials_nt_rc = [get_partials(f, model=model, conv_layer_idx=conv_layer_idx,
+                                           node=1, ref_samples=ref_samples,
+                                           contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
+                                           input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
+                                           pad_left=pad_left, pad_right=pad_right, lstm=args.do_lstm,
+                                           check_additivity=check_additivity) for f in filter_range]
         elif args.easy_partial:
             print("Getting partial data ...")
-            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                partials_nt_fwd = [get_easy_partials(f, model=model, conv_layer_idx=conv_layer_idx, node=0,
-                                                     contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
-                                                     input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
-                                                     pad_left=pad_left, pad_right=pad_right) for f in filter_range]
+            partials_nt_fwd = [get_easy_partials(f, model=model, conv_layer_idx=conv_layer_idx, node=0,
+                                                 contribution_data=contrib_dat_fwd, samples_chunk=samples_chunk,
+                                                 input_reads=reads_chunk, intermediate_diff=inter_diff_fwd,
+                                                 pad_left=pad_left, pad_right=pad_right) for f in filter_range]
 
-                partials_nt_rc = [get_easy_partials(f, model=model, conv_layer_idx=conv_layer_idx, node=1,
-                                                    contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
-                                                    input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
-                                                    pad_left=pad_left, pad_right=pad_right) for f in filter_range]
+            partials_nt_rc = [get_easy_partials(f, model=model, conv_layer_idx=conv_layer_idx, node=1,
+                                                contribution_data=contrib_dat_rc, samples_chunk=samples_chunk,
+                                                input_reads=reads_chunk, intermediate_diff=inter_diff_rc,
+                                                pad_left=pad_left, pad_right=pad_right) for f in filter_range]
         if args.partial or args.easy_partial:
             scores_nt_fwd, read_ids_fwd = list(zip(*partials_nt_fwd))
             scores_nt_rc, read_ids_rc = list(zip(*partials_nt_rc))
             print("Saving partial data ...")
-            if scores_nt_fwd:
-                p.map(partial(write_partial_data, read_ids=read_ids_fwd, contribution_data=contrib_dat_fwd,
-                              scores_input_pad=scores_nt_fwd, out_dir=args.out_dir,
-                              data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
-            if scores_nt_rc:
-                p.map(partial(write_partial_data, read_ids=read_ids_rc, contribution_data=contrib_dat_rc,
-                              scores_input_pad=scores_nt_rc, out_dir=args.out_dir,
-                              data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
+            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
+                if scores_nt_fwd:
+                    p.map(partial(write_partial_data, read_ids=read_ids_fwd, contribution_data=contrib_dat_fwd,
+                                  scores_input_pad=scores_nt_fwd, out_dir=args.out_dir,
+                                  data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
+                if scores_nt_rc:
+                    p.map(partial(write_partial_data, read_ids=read_ids_rc, contribution_data=contrib_dat_rc,
+                                  scores_input_pad=scores_nt_rc, out_dir=args.out_dir,
+                                  data_set_name=test_data_set_name, motif_len=motif_length), filter_range)
         i += chunk_size
     print("Done "+str(min(i, total_num_reads))+" from "+str(total_num_reads)+" sequences")
 
