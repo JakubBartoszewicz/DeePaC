@@ -197,31 +197,36 @@ def get_filter_contribs(args, allow_eager=False):
 
         print("Getting data ...")
         # for each filter do:
-        with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-            if args.do_lstm:
+        if args.do_lstm:
+            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                 dat_fwd = p.map(partial(get_lstm_data, scores_filter_avg=scores_fwd,
                                         input_reads=reads_chunk, motif_len=motif_length), filter_range)
+            with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                 dat_rc = p.map(partial(get_lstm_data, scores_filter_avg=scores_rc,
                                        input_reads=reads_chunk, motif_len=motif_length,
                                        rc=True), filter_range)
-            else:
-                if do_rc:
+        else:
+            if do_rc:
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                     dat_fwd = p.map(partial(get_filter_data, scores_filter_avg=scores_fwd,
                                                input_reads=reads_chunk, motif_len=motif_length,
                                                max_only=max_only), filter_range)
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                     dat_rc = p.map(partial(get_filter_data, scores_filter_avg=scores_rc,
                                               input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                               max_only=max_only), filter_range)
-                else:
-                    scores_rc = scores_fwd[:, :, :n_filters]
-                    scores_rc = scores_rc[:, :, ::-1]
-                    scores_fwd = scores_fwd[:, :, n_filters:]
-                    print("Forward ...")
+            else:
+                scores_rc = scores_fwd[:, :, :n_filters]
+                scores_rc = scores_rc[:, :, ::-1]
+                scores_fwd = scores_fwd[:, :, n_filters:]
+                print("Forward ...")
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                     dat_fwd = p.map(partial(get_filter_data, scores_filter_avg=scores_fwd,
                                             input_reads=reads_chunk, motif_len=motif_length,
                                             max_only=max_only), filter_range)
 
-                    print("Reverse-complement ...")
+                print("Reverse-complement ...")
+                with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                     dat_rc = p.map(partial(get_filter_data, scores_filter_avg=scores_rc,
                                            input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                            max_only=max_only), filter_range)
