@@ -27,6 +27,7 @@ def get_filter_contribs(args, allow_eager=False):
     model = load_model(args.model, custom_objects=get_custom_objects())
     max_only = args.partial or args.easy_partial or not args.all_occurrences
     check_additivity = not args.no_check
+    do_rc = args.inter_layer > 0
 
     target = args.target_class
     if target is None:
@@ -46,8 +47,25 @@ def get_filter_contribs(args, allow_eager=False):
         model.save(norm_path)
         args.model = norm_path
 
+    if args.inter_layer == 0:
+        if args.do_lstm:
+            raise ValueError("Layer=0 not supported with LSTMs.")
+        # Special case - second-to-last layer (just before pooling)
+        print("Finding most relevant subsequences not supported for the global pooling layer. "
+              "Executing for the second-to-last layer, just before pooling...")
+        # For RC-nets, the input to global pooling is strictly speaking the Activation layer,
+        # but we will take the inputs before activation to be consistent with the treatment of Convs
+        conv_layer_ids = [idx-2 for idx, layer in enumerate(model.layers)
+                          if "Global" in str(layer)]
+        conv_layer_idx = conv_layer_ids[0]
+        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
+                           get_rf_size(model, conv_layer_idx))
+        n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[2]
+        pad_left = (motif_length - 1) // 2
+        pad_right = motif_length - 1 - pad_left
     # extract some model information
-    if args.do_lstm:
+    elif args.do_lstm:
         conv_layer_idx = [idx for idx, layer in enumerate(model.layers)
                           if "Bidirectional" in str(layer)][args.inter_layer - 1]
         n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[-1]
@@ -106,13 +124,20 @@ def get_filter_contribs(args, allow_eager=False):
     chunk_size = args.chunk_size // num_ref_seqs
     i = 0
     if tf.executing_eagerly():
-        intermediate_model = tf.keras.Model(model.inputs,
-                                            (model.get_layer(index=conv_layer_idx).get_output_at(0),
-                                             model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        if do_rc:
+            intermediate_model = tf.keras.Model(model.inputs,
+                                                (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                                 model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        else:
+            intermediate_model = tf.keras.Model(model.inputs,
+                                                (model.get_layer(index=conv_layer_idx).get_output_at(0)))
 
-        def map2layer(input_samples):
+        def map2layer(input_samples, rc=True):
             out = intermediate_model(input_samples, training=False)
-            return out[0].numpy(), out[1].numpy()
+            if rc:
+                return out[0].numpy(), out[1].numpy()
+            else:
+                return out[0].numpy(), None
 
         intermediate_ref_fwd, intermediate_ref_rc = map2layer(ref_samples)
     else:
@@ -122,15 +147,18 @@ def get_filter_contribs(args, allow_eager=False):
                                                                 feed_dict)
 
         intermediate_ref_fwd = map2layer(ref_samples, conv_layer_idx, 0)
-        intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1)
+        intermediate_ref_rc = map2layer(ref_samples, conv_layer_idx, 1) if do_rc else None
         intermediate_ref_fwd = intermediate_ref_fwd.mean(axis=0, keepdims=True)
-        intermediate_ref_rc = intermediate_ref_rc.mean(axis=0, keepdims=True)
+        intermediate_ref_rc = intermediate_ref_rc.mean(axis=0, keepdims=True) if do_rc else None
 
-    explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
-                                  model.get_layer(index=conv_layer_idx).get_output_at(1)],
-                                 model.layers[-1].output),
-                                [intermediate_ref_fwd,
-                                 intermediate_ref_rc])
+    if do_rc:
+        explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                    model.get_layer(index=conv_layer_idx).get_output_at(1)],
+                                   model.layers[-1].output),
+                                  [intermediate_ref_fwd, intermediate_ref_rc])
+    else:
+        explainer = DeepExplainer(([model.get_layer(index=conv_layer_idx).get_output_at(0)],
+                                   model.layers[-1].output), [intermediate_ref_fwd])
     filter_range = range(n_filters)
     if args.inter_neuron is not None:
         filter_range = [None]*n_filters
@@ -144,16 +172,20 @@ def get_filter_contribs(args, allow_eager=False):
         reads_chunk = reads[i:i+chunk_size]
 
         if tf.executing_eagerly():
-            intermediate_fwd, intermediate_rc = map2layer(ref_samples)
+            intermediate_fwd, intermediate_rc = map2layer(ref_samples, rc=do_rc)
         else:
             intermediate_fwd = map2layer(samples_chunk, conv_layer_idx, 0)
-            intermediate_rc = map2layer(samples_chunk, conv_layer_idx, 1)
+            intermediate_rc = map2layer(samples_chunk, conv_layer_idx, 1) if do_rc else None
         inter_diff_fwd = intermediate_fwd - intermediate_ref_fwd
-        inter_diff_rc = intermediate_rc - intermediate_ref_rc
+        inter_diff_rc = intermediate_rc - intermediate_ref_rc if do_rc else None
 
-        scores_filter = explainer.shap_values([intermediate_fwd,
-                                               intermediate_rc], check_additivity=check_additivity)
-        scores_fwd, scores_rc = scores_filter[target]
+        if do_rc:
+            scores_filter = explainer.shap_values([intermediate_fwd,
+                                                   intermediate_rc], check_additivity=check_additivity)
+            scores_fwd, scores_rc = scores_filter[target]
+        else:
+            scores_filter = explainer.shap_values([intermediate_fwd], check_additivity=check_additivity)
+            scores_fwd, scores_rc = scores_filter[target], None
 
         # shape: [num_reads, len_reads, n_filters]
 
@@ -166,12 +198,21 @@ def get_filter_contribs(args, allow_eager=False):
                                     input_reads=reads_chunk, motif_len=motif_length,
                                     rc=True) for i in filter_range]
         else:
-            dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
-                                       input_reads=reads_chunk, motif_len=motif_length,
-                                       max_only=max_only) for i in filter_range]
-            dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
-                                      input_reads=reads_chunk, motif_len=motif_length, rc=True,
-                                      max_only=max_only) for i in filter_range]
+            if do_rc:
+                dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd,
+                                           input_reads=reads_chunk, motif_len=motif_length,
+                                           max_only=max_only) for i in filter_range]
+                dat_rc = [get_filter_data(i, scores_filter_avg=scores_rc,
+                                          input_reads=reads_chunk, motif_len=motif_length, rc=True,
+                                          max_only=max_only) for i in filter_range]
+            else:
+                seq_length = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[1]
+                dat_fwd = [get_filter_data(i, scores_filter_avg=scores_fwd[:, :seq_length//2, :],
+                                           input_reads=reads_chunk, motif_len=motif_length,
+                                           max_only=max_only) for i in filter_range]
+                dat_rc = [get_filter_data(i, scores_filter_avg=scores_fwd[:, seq_length//2:, :],
+                                          input_reads=reads_chunk, motif_len=motif_length, rc=True,
+                                          max_only=max_only) for i in filter_range]
 
         if max_only:
             dat_max = [get_max_strand(i, dat_fwd=dat_fwd, dat_rc=dat_rc) for i in filter_range]
