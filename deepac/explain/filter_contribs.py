@@ -56,7 +56,9 @@ def get_filter_contribs(args, allow_eager=False):
         pad_left = 0
         pad_right = 0
     else:
-        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+        # ignore size-1 Convs in skip connections
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)
+                          and layer.kernel_size[0] > 1]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
         motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1], get_rf_size(model, conv_layer_idx))
