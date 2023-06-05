@@ -69,13 +69,27 @@ def get_maxact(args):
     do_lstm = args.do_lstm
     if args.inter_layer == 0:
         if find_maxact:
-            raise ValueError("Finding max activations not supported for the global pooling layer.")
-        # Special case - last layer (after pooling)
-        pad_left = 0
-        pad_right = 0
-        motif_length = None
-        conv_layer_ids = [idx for idx, layer in enumerate(model.layers)
-                          if "Global" in str(layer)]
+            # Special case - second-to-last layer (just before pooling)
+            print("Finding max activations not supported for the global pooling layer. "
+                  "Executing for the second-to-last layer, just before pooling...")
+            # For RC-nets, the input to global pooling is strictly speaking the Activation layer,
+            # but we will take the inputs before activation to be consistent with the treatment of Convs
+            conv_layer_ids = [idx-2 for idx, layer in enumerate(model.layers)
+                              if "Global" in str(layer)]
+            conv_layer_idx = conv_layer_ids[0]
+            input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+            motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
+                               get_rf_size(model, conv_layer_idx))
+            pad_left = (motif_length - 1) // 2
+            pad_right = motif_length - 1 - pad_left
+
+        else:
+            # Special case - last layer (after pooling)
+            pad_left = 0
+            pad_right = 0
+            motif_length = None
+            conv_layer_ids = [idx for idx, layer in enumerate(model.layers)
+                              if "Global" in str(layer)]
         if len(conv_layer_ids) > 1:
             raise ValueError("Only one global pooling layer was assumed. Found more.")
         else:
@@ -95,7 +109,8 @@ def get_maxact(args):
                           and layer.kernel_size[0] > 1]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
-        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1], get_rf_size(model, conv_layer_idx))
+        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1], get_rf_size(model,
+                                                                                                        conv_layer_idx))
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
 
@@ -209,8 +224,8 @@ def get_maxact(args):
                     act_rc = act_rc.numpy() if do_rc else None
                 if find_maxact:
                     results_fwd = [K.max(act_fwd, axis=1).numpy(), K.argmax(act_fwd, axis=1).numpy()]
-                    out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
                     if do_rc:
+                        out_shape = model.get_layer(index=conv_layer_idx).get_output_shape_at(1)
                         results_rc = [K.max(act_rc, axis=1).numpy(),
                                       out_shape[1] - 1 - K.argmax(act_rc, axis=1).numpy()]
             else:
@@ -232,24 +247,28 @@ def get_maxact(args):
             # for each filter do:
             if cores > 1:
                 with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
-                    p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
+                    if do_rc:
+                        p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters))
                     p.map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
                                   reads_chunk=reads_chunk, motif_length=motif_length,
                                   test_data_set_name=test_data_set_name, out_dir=args.out_dir),
                           range(n_filters))
-                    p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
-                                  reads_chunk=reads_chunk, motif_length=motif_length,
-                                  test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
-                          range(n_filters))
+                    if do_rc:
+                        p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
+                                      reads_chunk=reads_chunk, motif_length=motif_length,
+                                      test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
+                              range(n_filters))
             else:
-                list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
+                if do_rc:
+                    list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), range(n_filters)))
                 list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
                                  reads_chunk=reads_chunk, motif_length=motif_length,
                                  test_data_set_name=test_data_set_name, out_dir=args.out_dir),
                          range(n_filters)))
-                list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
-                                 reads_chunk=reads_chunk, motif_length=motif_length,
-                                 test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
+                if do_rc:
+                    list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
+                                     reads_chunk=reads_chunk, motif_length=motif_length,
+                                     test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
                          range(n_filters)))
 
         n += chunk_size

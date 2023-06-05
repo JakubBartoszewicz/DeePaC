@@ -49,6 +49,17 @@ class ExplainTester:
 
     def test_fcontribs(self):
         """Test contribution (DeepLIFT) scores."""
+        args = Namespace(model=self.model, w_norm=False, test_data=self.test_data, nonpatho_test=self.neg_fasta,
+                         patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs2"), ref_mode="N",
+                         inter_neuron=None, chunk_size=500, all_occurrences=False,
+                         do_lstm=False, inter_layer=2, easy_partial=False, partial=False, train_data=None,
+                         no_check=(not self.additivity_check), target_class=self.target_class)
+        get_filter_contribs(args)
+        assert (os.path.isfile(os.path.join(self.outpath, "fcontribs2", "fasta",
+                                            "sample_val_data_motifs_filter_1.fasta"))), "Fcontribs for layer 2 failed."
+        assert (os.path.isfile(os.path.join(self.outpath, "fcontribs2", "filter_scores",
+                                            "sample_val_data_rel_filter_1.csv"))), "Fcontribs for layer 2 failed."
+
         args = Namespace(model=self.model, w_norm=True, test_data=self.test_data, nonpatho_test=self.neg_fasta,
                          patho_test=self.pos_fasta, out_dir=os.path.join(self.outpath, "fcontribs"), ref_mode="N",
                          inter_neuron=None, chunk_size=500, all_occurrences=False,
