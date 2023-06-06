@@ -59,7 +59,8 @@ def get_maxact(args):
 
     save_activations_npy = args.save_activs_and_maxact or args.save_activs_only
     find_maxact = not args.save_activs_only
-    do_rc = args.inter_layer > 0 or find_maxact
+    do_rc = args.inter_layer > 0
+    do_split_rc = args.inter_layer == 0 and find_maxact
     merge_activations_npy = args.save_activs_merge if save_activations_npy else None
     reads = None
 
@@ -247,13 +248,16 @@ def get_maxact(args):
                 filter_range = range(n_filters//2)
                 results_rc = [[], []]
                 results_rc[0] = results_fwd[0][:, n_filters//2:]
+                results_rc[1] = results_fwd[1][:, n_filters//2:]
                 results_rc[0] = results_rc[0][:, ::-1]
+                results_rc[1] = results_rc[1][:, ::-1]
                 results_fwd[0] = results_fwd[0][:, :n_filters//2]
+                results_fwd[1] = results_fwd[1][:, :n_filters//2]
             else:
                 filter_range = range(n_filters)
             # for each filter do:
             if cores > 1:
-                if do_rc:
+                if do_rc or do_split_rc:
                     with get_context("spawn").Pool(processes=min(cores, len(results_fwd[0]))) as p:
                         p.map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), filter_range)
 
@@ -262,20 +266,20 @@ def get_maxact(args):
                                   reads_chunk=reads_chunk, motif_length=motif_length,
                                   test_data_set_name=test_data_set_name, out_dir=args.out_dir),
                           filter_range)
-                if do_rc:
+                if do_rc or do_split_rc:
                     with get_context("spawn").Pool(processes=min(cores, len(results_rc[0]))) as p:
                         p.map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                                       reads_chunk=reads_chunk, motif_length=motif_length,
                                       test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
                               filter_range)
             else:
-                if do_rc:
+                if do_rc or do_split_rc:
                     list(map(partial(get_max_strand, dat_fwd=results_fwd, dat_rc=results_rc), filter_range))
                 list(map(partial(get_filter_data, activation_list=results_fwd[0], motif_start_list=results_fwd[1],
                                  reads_chunk=reads_chunk, motif_length=motif_length,
                                  test_data_set_name=test_data_set_name, out_dir=args.out_dir),
                          filter_range))
-                if do_rc:
+                if do_rc or do_split_rc:
                     list(map(partial(get_filter_data, activation_list=results_rc[0], motif_start_list=results_rc[1],
                                      reads_chunk=reads_chunk, motif_length=motif_length,
                                      test_data_set_name=test_data_set_name, out_dir=args.out_dir, rc=True),
