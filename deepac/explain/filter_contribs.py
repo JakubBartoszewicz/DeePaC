@@ -216,9 +216,9 @@ def get_filter_contribs(args, allow_eager=False):
                                               input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                               max_only=max_only), filter_range)
             else:
-                scores_rc = scores_fwd[:, :, :n_filters]
+                scores_rc = scores_fwd[:, :, n_filters:]
                 scores_rc = scores_rc[:, :, ::-1]
-                scores_fwd = scores_fwd[:, :, n_filters:]
+                scores_fwd = scores_fwd[:, :, :n_filters]
                 print("Forward ...")
                 with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
                     dat_fwd = p.map(partial(get_filter_data, scores_filter_avg=scores_fwd,
@@ -231,16 +231,16 @@ def get_filter_contribs(args, allow_eager=False):
                                            input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                            max_only=max_only), filter_range)
 
-            if max_only:
-                print("Max across strands ...")
-                dat_max = [get_max_strand(f, dat_fwd=dat_fwd, dat_rc=dat_rc) for f in filter_range]
-                print("Unpacking ...")
-                contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
-            else:
-                print("Unpacking forward...")
-                contrib_dat_fwd, motif_dat_fwd = list(zip(*dat_fwd))
-                print("Unpacking reverse-complement...")
-                contrib_dat_rc, motif_dat_rc = list(zip(*dat_rc))
+        if max_only:
+            print("Max across strands ...")
+            dat_max = [get_max_strand(f, dat_fwd=dat_fwd, dat_rc=dat_rc) for f in filter_range]
+            print("Unpacking ...")
+            contrib_dat_fwd, motif_dat_fwd, contrib_dat_rc, motif_dat_rc = list(zip(*dat_max))
+        else:
+            print("Unpacking forward...")
+            contrib_dat_fwd, motif_dat_fwd = list(zip(*dat_fwd))
+            print("Unpacking reverse-complement...")
+            contrib_dat_rc, motif_dat_rc = list(zip(*dat_rc))
 
         print("Saving data ...")
         with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:
