@@ -59,7 +59,7 @@ def get_maxact(args):
 
     save_activations_npy = args.save_activs_and_maxact or args.save_activs_only
     find_maxact = not args.save_activs_only
-    do_rc = args.inter_layer > 0
+    do_rc = args.inter_layer > 0 or find_maxact
     merge_activations_npy = args.save_activs_merge if save_activations_npy else None
     reads = None
 
