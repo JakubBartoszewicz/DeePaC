@@ -95,6 +95,8 @@ def add_gwpa_parser(gparser):
     parser_fenrichment.add_argument('-n', '--n-cpus', dest="n_cpus", help="Number of CPU cores.", type=int)
     parser_fenrichment.add_argument('-x', '--extended', dest='extended', action='store_true',
                                     help='Check for multiple CDSs per gene and unnamed genes.')
+    parser_fenrichment.add_argument('-T', '--ttest', dest='ttest', action='store_true',
+                                    help='Run a t-test on activation magnitudes in addition to binary hits.')
     parser_fenrichment.set_defaults(func=run_fenrichment)
 
     parser_gff2genome = gwpa_subparsers.add_parser('gff2genome', help='Generate .genome files.')

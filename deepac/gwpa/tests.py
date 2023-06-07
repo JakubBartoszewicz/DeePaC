@@ -12,6 +12,7 @@ from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
 from deepac.gwpa.command_line import run_gff2genome
 from tensorflow.keras.utils import get_custom_objects
+from deepac.explain.rf_sizes import get_rf_size
 
 
 class GWPATester:
@@ -154,12 +155,32 @@ class GWPATester:
 
     def test_fenrichment(self):
         """Test filter enrichment analysis."""
+        model = load_model(self.model, custom_objects=get_custom_objects())
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+        conv_layer_idx = conv_layer_ids[0]
+        motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),
-                         motif_length=15, n_cpus=self.n_cpus, extended=True)
+                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=False)
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
+            "Fenrichment failed."
+
+        # get just-before-pooling activs
+        conv_layer_ids = [idx - 2 for idx, layer in enumerate(model.layers)
+                          if "Global" in str(layer)]
+        conv_layer_idx = conv_layer_ids[0]
+        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
+                           get_rf_size(model, conv_layer_idx))
+        args = Namespace(bed_dir=os.path.join(self.outpath, "factiv0"),
+                         gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
+                         out_dir=os.path.join(self.outpath, "fenrichment0"),
+                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=True)
+        filter_enrichment(args)
+        assert (len(os.listdir(os.path.join(self.outpath, "fenrichment0"))) > 0), \
             "Fenrichment failed."
 
     def test_gff2genome(self):

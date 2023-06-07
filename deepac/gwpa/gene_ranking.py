@@ -54,19 +54,20 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
     return patho_score
 
 
-def compute_gene_ttest(filtered_gff, bedgraph):
+def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False):
     """Test for elevated pathogenicity score within a gene."""
     # intersection = pybedtools.BedTool(bedgraph).intersect( b=filtered_gff)
     intersection = bedgraph.intersect(b=filtered_gff)
     subtraction = bedgraph.subtract(b=filtered_gff)
     in_list = []
     out_list = []
+    index = 3 if not filter_annot else 4
     for entry in intersection:
         num_bases = entry.length
-        in_list = in_list + [float(entry.fields[3]) for i in range(num_bases)]
+        in_list = in_list + [float(entry.fields[index]) for i in range(num_bases)]
     for entry in subtraction:
         num_bases = entry.length
-        out_list = out_list + [float(entry.fields[3]) for i in range(num_bases)]
+        out_list = out_list + [float(entry.fields[index]) for i in range(num_bases)]
 
     difference = np.mean(in_list) - np.mean(out_list)
     return difference, ttest_ind(in_list, out_list)[1]

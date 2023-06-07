@@ -1,11 +1,13 @@
 import os
 import multiprocessing
 import pybedtools
+import numpy as np
 import pandas as pd
 from scipy.stats import fisher_exact
 import re
 from statsmodels.sandbox.stats.multicomp import multipletests
 from functools import partial
+from deepac.gwpa.gene_ranking import compute_gene_ttest
 
 
 def featuretype_filter(feature, featuretype):
@@ -122,10 +124,10 @@ def filter_enrichment(args):
                                                  range(len(all_feature_types))]
             num_hits_outside_feature = [num_entries - num_hits_feature[i] for i in range(len(all_feature_types))]
 
-            motif_results = pd.DataFrame(
-                columns=["motif_id", "bioproject_id", "feature", "num_hits_feature", "num_hits_outside_feature",
-                         "num_possible_hits_feature", "num_possible_hits_outside_feature", "fisher_logoddsratio",
-                         "fisher_p_value_2sided", "fisher_p_value_feature", "fisher_p_value_outside_feature"])
+            cols = ["motif_id", "bioproject_id", "feature", "num_hits_feature", "num_hits_outside_feature",
+                    "num_possible_hits_feature", "num_possible_hits_outside_feature", "fisher_logoddsratio",
+                    "fisher_p_value_2sided", "fisher_p_value_feature", "fisher_p_value_outside_feature"]
+            motif_results = pd.DataFrame(columns=cols)
 
             for idx in range(len(all_feature_types)):
                 feature_type = all_feature_types[idx]
@@ -145,14 +147,11 @@ def filter_enrichment(args):
                                                      alternative="less")
                 # H1: motif occurs significantly more often in noncoding regions
 
-                motif_results.loc[idx] = [c_filter, bioproject_id, feature_type, num_hits_feature[idx],
-                                          num_hits_outside_feature[idx], num_possible_hits_feature[idx],
-                                          num_possible_hits_outside_feature[idx],
-                                          oddsratio, p_value, p_value_c, p_value_nc]
-
-            # save enrichment results per motif
-            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + ".csv"
-            motif_results.to_csv(out_file, sep="\t", index=False)
+                row = [c_filter, bioproject_id, feature_type, num_hits_feature[idx],
+                       num_hits_outside_feature[idx], num_possible_hits_feature[idx],
+                       num_possible_hits_outside_feature[idx],
+                       oddsratio, p_value, p_value_c, p_value_nc]
+                motif_results.loc[idx] = row
 
             # multiple testing correction
             fisher_q_value_2sided = multipletests(motif_results.fisher_p_value_2sided, alpha=0.05, method="fdr_bh")[1]
@@ -165,8 +164,22 @@ def filter_enrichment(args):
             motif_results['fisher_q_value_feature'] = fisher_q_value_feature
             motif_results['fisher_q_value_outside_feature'] = fisher_q_value_outside_feature
 
-            out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_ext.csv"
-            # save results
+            if args.ttest:
+                with multiprocessing.Pool(processes=cores) as pool:
+                    # t-test inside vs outside feature
+                    ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True),
+                                             filtered_gffs)
+                ttest_diffs, ttest_pvals = zip(*ttest_results)
+                ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
+                motif_results['ttest_difference'] = ttest_diffs
+                motif_results['ttest_p_value_2sided'] = ttest_pvals
+                motif_results['ttest_q_value_2sided'] = ttest_qvals
+
+            # save enrichment results per motif
+            if args.extended:
+                out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_extended.csv"
+            else:
+                out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + ".csv"
             motif_results.to_csv(out_file, sep="\t", index=False)
 
             if args.extended:
@@ -174,7 +187,13 @@ def filter_enrichment(args):
             else:
                 out_file = args.out_dir + "/" + bioproject_id + "_" + c_filter + "_sorted_filtered.csv"
             # filtering out entries with FDR >= 0.05
-            motif_results = motif_results[motif_results.fisher_q_value_feature < 0.05]
-            motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
+            if args.ttest:
+                motif_results = motif_results[np.logical_or(motif_results.fisher_q_value_feature < 0.05,
+                                                            motif_results.ttest_q_value_2sided < 0.05)]
+                motif_results = motif_results.sort_values(by=['ttest_q_value_2sided',
+                                                              'fisher_p_value_2sided', 'fisher_p_value_feature'])
+            else:
+                motif_results = motif_results[motif_results.fisher_q_value_feature < 0.05]
+                motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
             if len(motif_results.index):
                 motif_results.to_csv(out_file, sep="\t", index=False)
