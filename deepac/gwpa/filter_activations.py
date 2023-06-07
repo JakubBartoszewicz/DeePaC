@@ -9,6 +9,7 @@ from deepac.utils import set_mem_growth
 from tensorflow.keras.utils import get_custom_objects
 import pandas as pd
 from math import floor, log10
+from deepac.explain.rf_sizes import get_rf_size
 
 
 def filter_activations(args):
@@ -18,9 +19,20 @@ def filter_activations(args):
     set_mem_growth()
 
     model = load_model(args.model, custom_objects=get_custom_objects())
-    conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
-    conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
-    motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+    do_rc = args.inter_layer > 0
+    if args.inter_layer != 0:
+        conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
+        conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
+        motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+    else:
+        print("Finding activations not supported for the global pooling layer. "
+              "Executing for the second-to-last layer, just before pooling...")
+        conv_layer_ids = [idx - 2 for idx, layer in enumerate(model.layers)
+                          if "Global" in str(layer)]
+        conv_layer_idx = conv_layer_ids[0]
+        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
+        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
+                           get_rf_size(model, conv_layer_idx))
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
 
@@ -48,9 +60,12 @@ def filter_activations(args):
     # Specify input and output of the network
 
     if tf.executing_eagerly():
-        model = tf.keras.Model(model.inputs,
-                               (model.get_layer(index=conv_layer_idx).get_output_at(0),
-                                model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        if do_rc:
+            model = tf.keras.Model(model.inputs,
+                                   (model.get_layer(index=conv_layer_idx).get_output_at(0),
+                                    model.get_layer(index=conv_layer_idx).get_output_at(1)))
+        else:
+            model = tf.keras.Model(model.inputs, model.get_layer(index=conv_layer_idx).get_output_at(0))
         iterate_fwd = None
         iterate_rc = None
     else:
@@ -61,10 +76,13 @@ def filter_activations(args):
         iterate_fwd = K.function([input_img, K.learning_phase()],
                                  [layer_output_fwd])
 
-        layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
-        # index at fwd_output = output size - index at rc_output
-        iterate_rc = K.function([input_img, K.learning_phase()],
-                                [layer_output_rc])
+        if do_rc:
+            layer_output_rc = model.get_layer(index=conv_layer_idx).get_output_at(1)
+            # index at fwd_output = output size - index at rc_output
+            iterate_rc = K.function([input_img, K.learning_phase()],
+                                    [layer_output_rc])
+        else:
+            iterate_rc = None
 
     print("Computing activations ...")
     chunk_size = args.chunk_size
@@ -78,25 +96,41 @@ def filter_activations(args):
         samples_chunk = samples[n:n+chunk_size, :, :]
         reads_info_chunk = reads_info[n:n+chunk_size]
         if tf.executing_eagerly():
-            activations_fwd, activations_rc = model(samples_chunk, training=False)
-            activations_fwd = activations_fwd.numpy()
-            activations_rc = activations_rc.numpy()
+            if do_rc:
+                activations_fwd, activations_rc = model(samples_chunk, training=False)
+                activations_fwd = activations_fwd.numpy()
+                activations_rc = activations_rc.numpy()
+            else:
+                activations_fwd = model(samples_chunk, training=False)
+                activations_fwd = activations_fwd.numpy()
+                activations_rc = None
         else:
-            activations_fwd = iterate_fwd([samples_chunk, 0])[0]
-            activations_rc = iterate_rc([samples_chunk, 0])[0]
-
+            if do_rc:
+                activations_fwd = iterate_fwd([samples_chunk, 0])[0]
+                activations_rc = iterate_rc([samples_chunk, 0])[0]
+            else:
+                activations_fwd = iterate_fwd([samples_chunk, 0])[0]
+                activations_rc = None
         n_filters = activations_fwd.shape[-1]
+        if not do_rc:
+            # split
+            activations_rc = activations_fwd[:, :, n_filters//2:]
+            # rotate in both channel and seq dimension
+            activations_rc = activations_rc[::, ::-1, ::-1]
+            # split
+            activations_fwd = activations_fwd[:, :, :n_filters//2]
+
         if args.inter_neuron is not None:
             filter_range = args.inter_neuron
         else:
-            filter_range = range(n_filters)
+            filter_range = range(n_filters) if do_rc else range(n_filters//2)
         if all_filter_rows_fwd is None:
-            all_filter_rows_fwd = [[] for f in range(n_filters)]
-            all_filter_rows_rc = [[] for f in range(n_filters)]
+            all_filter_rows_fwd = [[] for f in range(activations_fwd.shape[-1])]
+            all_filter_rows_rc = [[] for f in range(activations_fwd.shape[-1])]
         get_activation_data(activations_fwd, filter_range, all_filter_rows_fwd, reads_info_chunk,
-                                pad_left, motif_length, rc=False)
+                            pad_left, motif_length, rc=False)
         get_activation_data(activations_rc, filter_range, all_filter_rows_rc, reads_info_chunk,
-                                pad_left, motif_length, rc=True)
+                            pad_left, motif_length, rc=True)
 
         n += chunk_size
 

@@ -247,10 +247,13 @@ def get_maxact(args):
             if args.inter_layer == 0:
                 filter_range = range(n_filters//2)
                 results_rc = [[], []]
+                # split
                 results_rc[0] = results_fwd[0][:, n_filters//2:]
                 results_rc[1] = results_fwd[1][:, n_filters//2:]
+                # rotate in channel dimension (positions are taken care of in get_filter_data)
                 results_rc[0] = results_rc[0][:, ::-1]
                 results_rc[1] = results_rc[1][:, ::-1]
+                # split
                 results_fwd[0] = results_fwd[0][:, :n_filters//2]
                 results_fwd[1] = results_fwd[1][:, :n_filters//2]
             else:
@@ -293,8 +296,11 @@ def get_maxact(args):
     if save_activations_npy:
         print("Saving raw activations...")
         if args.inter_layer == 0:
+            # split
             all_act_rc = all_act_fwd[:, n_filters//2:]
+            # rotate in channel dimension
             all_act_rc = all_act_rc[::, ::-1]
+            # split
             all_act_fwd = all_act_fwd[:, :n_filters//2]
 
         if do_rc or args.inter_layer == 0:

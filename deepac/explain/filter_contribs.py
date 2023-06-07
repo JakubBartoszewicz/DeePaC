@@ -216,8 +216,11 @@ def get_filter_contribs(args, allow_eager=False):
                                               input_reads=reads_chunk, motif_len=motif_length, rc=True,
                                               max_only=max_only), filter_range)
             else:
+                # split
                 scores_rc = scores_fwd[:, :, n_filters:]
+                # rotate in channel dimension (positions are taken care of in get_filter_data)
                 scores_rc = scores_rc[:, :, ::-1]
+                # split
                 scores_fwd = scores_fwd[:, :, :n_filters]
                 print("Forward ...")
                 with get_context("spawn").Pool(processes=min(cores, n_filters)) as p:

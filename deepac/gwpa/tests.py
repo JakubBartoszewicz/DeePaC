@@ -142,6 +142,16 @@ class GWPATester:
                                             "sample_genome2_fragmented_genomes_filter_1.bed"))), \
             "Factiv failed."
 
+        args = Namespace(model=self.model,
+                         test_data=os.path.join(self.outpath, "genome_frag", "sample_genome2_fragmented_genomes.npy"),
+                         test_fasta=os.path.join(self.outpath, "genome_frag",
+                                                 "sample_genome2_fragmented_genomes.fasta"),
+                         out_dir=os.path.join(self.outpath, "factiv0"), chunk_size=500, inter_layer=0, inter_neuron=[1])
+        filter_activations(args)
+        assert (os.path.isfile(os.path.join(self.outpath, "factiv0",
+                                            "sample_genome2_fragmented_genomes_filter_1.bed"))), \
+            "Factiv failed."
+
     def test_fenrichment(self):
         """Test filter enrichment analysis."""
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
