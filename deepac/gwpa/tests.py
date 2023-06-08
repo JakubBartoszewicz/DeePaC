@@ -163,7 +163,8 @@ class GWPATester:
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment"),
-                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=False)
+                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=False,
+                         min_overlap_factor=3)
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment"))) > 0), \
             "Fenrichment failed."
@@ -178,7 +179,8 @@ class GWPATester:
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv0"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment0"),
-                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=True)
+                         motif_length=motif_length, n_cpus=self.n_cpus, extended=True, ttest=True,
+                         min_overlap_factor=3)
         filter_enrichment(args)
         assert (len(os.listdir(os.path.join(self.outpath, "fenrichment0"))) > 0), \
             "Fenrichment failed."

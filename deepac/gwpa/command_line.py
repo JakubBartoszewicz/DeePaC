@@ -97,6 +97,9 @@ def add_gwpa_parser(gparser):
                                     help='Check for multiple CDSs per gene and unnamed genes.')
     parser_fenrichment.add_argument('-T', '--ttest', dest='ttest', action='store_true',
                                     help='Run a t-test on activation magnitudes in addition to binary hits.')
+    parser_fenrichment.add_argument("-O", "--min-overlap-factor", dest='min_overlap_factor',default=3,
+                                    type=int, help="The motifs should overlap by min 1/min-overlap-factor to be "
+                                                   "counted as a hit.")
     parser_fenrichment.set_defaults(func=run_fenrichment)
 
     parser_gff2genome = gwpa_subparsers.add_parser('gff2genome', help='Generate .genome files.')

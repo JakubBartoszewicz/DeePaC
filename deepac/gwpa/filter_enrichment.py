@@ -41,11 +41,11 @@ def subset_featuretypes(featuretype, gff):
     return pybedtools.BedTool(result.fn)
 
 
-def count_reads_in_features(features_fn, bed):
+def count_reads_in_features(features_fn, bed, min_overlap_factor=3):
     """Callback function to count reads in features"""
-    # overlap of at least 5bp (motif_length/3)
+    # originally: overlap of at least 5bp (motif_length/3)
     return pybedtools.BedTool(bed).intersect(b=features_fn, stream=True,
-                                             f=1 / 3).count()
+                                             f=1 / min_overlap_factor).count()
 
 
 def count_num_feature_occurences(features_fn):
@@ -66,6 +66,8 @@ def filter_enrichment(args):
         cores = multiprocessing.cpu_count()
     else:
         cores = args.n_cpus
+
+    min_overlap_factor = args.min_overlap_factor
 
     print("Processing gff file ...")
     gff = pybedtools.BedTool(args.gff)
@@ -93,7 +95,7 @@ def filter_enrichment(args):
     motif_length = args.motif_length
     genome_size = gff.total_coverage()
     num_possible_hits = 2 * (genome_size - motif_length + 1)
-    min_overlap = motif_length//3
+    min_overlap = motif_length//min_overlap_factor
 
     # one bed file per filter motif
     print("Processing bed files ...")
@@ -112,7 +114,8 @@ def filter_enrichment(args):
             filtered_gffs = [b.merge() for b in filtered_gffs]
             num_entries = bed.count()
             with multiprocessing.Pool(processes=cores) as pool:
-                num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed), filtered_gffs)
+                num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed,
+                                                    min_overlap_factor=min_overlap_factor), filtered_gffs)
             with multiprocessing.Pool(processes=cores) as pool:
                 num_feature_occurences = pool.map(count_num_feature_occurences, filtered_gffs)
             with multiprocessing.Pool(processes=cores) as pool:
