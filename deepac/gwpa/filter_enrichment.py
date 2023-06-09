@@ -175,7 +175,7 @@ def filter_enrichment(args):
                     # t-test inside vs outside feature
                     print("t-test ...")
                     ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
-                                                     min_length=min_overlap), filtered_gffs)
+                                                      min_length=min_overlap), filtered_gffs)
                 ttest_diffs, ttest_pvals = zip(*ttest_results)
                 ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
                 motif_results['ttest_difference'] = ttest_diffs

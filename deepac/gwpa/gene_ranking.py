@@ -59,18 +59,27 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
         intersection = intersection.filter(lambda x: len(x) >= min_length).saveas()
         subtraction = subtraction.filter(lambda x: len(x) >= min_length).saveas()
     index = 3 if not filter_annot else 4
-    intersection_df = intersection.to_dataframe()
-    in_scores = intersection_df.iloc[:, index]
-    subtraction_df = subtraction.to_dataframe()
-    out_scores = subtraction_df.iloc[:, index]
-    if not filter_annot:
-        in_lengths = intersection_df['end'] - intersection_df['start']
-        in_list = np.repeat(in_scores, in_lengths)
-        out_lengths = subtraction_df['end'] - subtraction_df['start']
-        out_list = np.repeat(out_scores, out_lengths)
+    if len(intersection) > 0:
+        intersection_df = intersection.to_dataframe()
+        in_scores = intersection_df.iloc[:, index]
+        if not filter_annot:
+            in_lengths = intersection_df['end'] - intersection_df['start']
+            in_list = np.repeat(in_scores, in_lengths)
+        else:
+            in_list = in_scores
     else:
-        in_list = in_scores
-        out_list = out_scores
+        in_list = []
+
+    if len(subtraction) > 0:
+        subtraction_df = subtraction.to_dataframe()
+        out_scores = subtraction_df.iloc[:, index]
+        if not filter_annot:
+            out_lengths = subtraction_df['end'] - subtraction_df['start']
+            out_list = np.repeat(out_scores, out_lengths)
+        else:
+            out_list = out_scores
+    else:
+        out_list = []
 
     difference = np.mean(in_list) - np.mean(out_list)
     return difference, ttest_ind(in_list, out_list)[1]
