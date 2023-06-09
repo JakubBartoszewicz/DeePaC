@@ -57,6 +57,10 @@ def count_len_feature_region(features_fn):
     return features_fn.total_coverage()
 
 
+def get_complement(features_fn, genome):
+    return features_fn.complement(g=genome)
+
+
 def filter_enrichment(args):
     """Perform genomic enrichment analysis per filter."""
     # create output directory
@@ -73,6 +77,8 @@ def filter_enrichment(args):
     print("Processing gff file ...")
     gff = pybedtools.BedTool(args.gff)
     bioproject_id = os.path.splitext(os.path.basename(args.gff))[0]
+    genome_tmp_path = args.out_dir + "/" + bioproject_id + ".genome.tmp"
+    gff2genome(args.gff, out_path=genome_tmp_path)
     # extract all feature types (genes, RNAs, CDS) from gff file
     all_feature_types = []
     for feature in gff:
@@ -124,12 +130,46 @@ def filter_enrichment(args):
                 num_feature_occurences = pool.map(count_num_feature_occurences, filtered_gffs)
             with multiprocessing.Pool(processes=cores) as pool:
                 len_feature_region = pool.map(count_len_feature_region, filtered_gffs)
+
+            max_overlapping = []
+            for i in range(len(all_feature_types)):
+                diffs = []
+                for _i in range(len(filtered_gffs[i])):
+                    for _j in range(_i+1, len(filtered_gffs[i])):
+                        diffs.append(filtered_gffs[i][_j].start - filtered_gffs[i][_i].end)
+                # maximum number of motifs spanning two features at once:
+                # motif_length - 2*min_overlap - distance + 1
+                max_overlapping.append(sum([motif_length - 2 * min_overlap - distance + 1
+                                       for distance in diffs if distance <= min_overlap]))
             num_possible_hits_feature = [
-                2 * (len_feature_region[i] + num_feature_occurences[i] * (1 + motif_length - 2 * min_overlap))
+                2 * (len_feature_region[i] + num_feature_occurences[i] * (1 + motif_length - 2 * min_overlap)
+                     + max_overlapping[i])
                 for i in range(len(all_feature_types))]
-            num_possible_hits_outside_feature = [num_possible_hits - num_possible_hits_feature[i] for i in
-                                                 range(len(all_feature_types))]
-            num_hits_outside_feature = [num_entries - num_hits_feature[i] for i in range(len(all_feature_types))]
+
+            with multiprocessing.Pool(processes=cores) as pool:
+                complement_features = pool.map(partial(get_complement, genome=genome_tmp_path), filtered_gffs)
+            with multiprocessing.Pool(processes=cores) as pool:
+                num_complement_occurences = pool.map(count_num_feature_occurences, complement_features)
+            with multiprocessing.Pool(processes=cores) as pool:
+                len_complement_region = pool.map(count_len_feature_region, complement_features)
+            with multiprocessing.Pool(processes=cores) as pool:
+                num_hits_outside_feature = pool.map(partial(count_reads_in_features, bed=bed,
+                                                    min_overlap_length=min_overlap), complement_features)
+            max_overlapping_comp = []
+            for i in range(len(all_feature_types)):
+                diffs = []
+                for _i in range(len(complement_features[i])):
+                    for _j in range(_i + 1, len(complement_features[i])):
+                        diffs.append(complement_features[i][_j].start - complement_features[i][_i].end)
+                # maximum number of motifs spanning two features at once:
+                # motif_length - 2*min_overlap - distance + 1
+                max_overlapping_comp.append(sum([motif_length - 2 * min_overlap - distance + 1
+                                            for distance in diffs if distance <= min_overlap]))
+
+            num_possible_hits_outside_feature = [
+                2 * (len_complement_region[i] + num_complement_occurences[i] * (1 + motif_length - 2 * min_overlap)
+                     + max_overlapping_comp[i])
+                for i in range(len(all_feature_types))]
 
             cols = ["motif_id", "bioproject_id", "feature", "num_hits_feature", "num_hits_outside_feature",
                     "num_possible_hits_feature", "num_possible_hits_outside_feature", "fisher_logoddsratio",
@@ -205,3 +245,4 @@ def filter_enrichment(args):
                 motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
             if len(motif_results.index):
                 motif_results.to_csv(out_file, sep="\t", index=False)
+    os.remove(genome_tmp_path)
