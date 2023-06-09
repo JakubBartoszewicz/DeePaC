@@ -8,6 +8,7 @@ import re
 from statsmodels.sandbox.stats.multicomp import multipletests
 from functools import partial
 from deepac.gwpa.gene_ranking import compute_gene_ttest
+from deepac.gwpa.gff2genome import gff2genome
 
 
 def featuretype_filter(feature, featuretype):
@@ -41,11 +42,11 @@ def subset_featuretypes(featuretype, gff):
     return pybedtools.BedTool(result.fn)
 
 
-def count_reads_in_features(features_fn, bed, min_overlap_factor=3):
+def count_reads_in_features(features_fn, bed, min_overlap_length):
     """Callback function to count reads in features"""
     # originally: overlap of at least 5bp (motif_length/3)
-    return pybedtools.BedTool(bed).intersect(b=features_fn, stream=True,
-                                             f=1 / min_overlap_factor).count()
+    return pybedtools.BedTool(bed).intersect(b=features_fn, stream=True).filter(
+        lambda x: len(x) >= min_overlap_length).count()
 
 
 def count_num_feature_occurences(features_fn):
@@ -118,14 +119,14 @@ def filter_enrichment(args):
             print("Counting ...")
             with multiprocessing.Pool(processes=cores) as pool:
                 num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed,
-                                                    min_overlap_factor=min_overlap_factor), filtered_gffs)
+                                                    min_overlap_length=min_overlap), filtered_gffs)
             with multiprocessing.Pool(processes=cores) as pool:
                 num_feature_occurences = pool.map(count_num_feature_occurences, filtered_gffs)
             with multiprocessing.Pool(processes=cores) as pool:
                 len_feature_region = pool.map(count_len_feature_region, filtered_gffs)
             num_possible_hits_feature = [
-                2 * (len_feature_region[i] + num_feature_occurences[i] + motif_length * num_feature_occurences[
-                    i] - 2 * min_overlap * num_feature_occurences[i]) for i in range(len(all_feature_types))]
+                2 * (len_feature_region[i] + num_feature_occurences[i] * (1 + motif_length - 2 * min_overlap))
+                for i in range(len(all_feature_types))]
             num_possible_hits_outside_feature = [num_possible_hits - num_possible_hits_feature[i] for i in
                                                  range(len(all_feature_types))]
             num_hits_outside_feature = [num_entries - num_hits_feature[i] for i in range(len(all_feature_types))]
@@ -175,7 +176,7 @@ def filter_enrichment(args):
                     # t-test inside vs outside feature
                     print("t-test ...")
                     ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
-                                                      min_length=min_overlap), filtered_gffs)
+                                                     min_length=min_overlap), filtered_gffs)
                 ttest_diffs, ttest_pvals = zip(*ttest_results)
                 ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
                 motif_results['ttest_difference'] = ttest_diffs
