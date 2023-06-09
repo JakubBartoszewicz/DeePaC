@@ -100,8 +100,6 @@ def filter_enrichment(args):
 
     all_feature_types = sorted(list(set(all_feature_types)))
     motif_length = args.motif_length
-    genome_size = gff.total_coverage()
-    num_possible_hits = 2 * (genome_size - motif_length + 1)
     min_overlap = motif_length//min_overlap_factor
 
     # one bed file per filter motif
@@ -120,7 +118,6 @@ def filter_enrichment(args):
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
 
             filtered_gffs = [b.merge() for b in filtered_gffs]
-            num_entries = bed.count()
 
             print("Counting ...")
             with multiprocessing.Pool(processes=cores) as pool:
