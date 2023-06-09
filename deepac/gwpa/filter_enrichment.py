@@ -108,11 +108,14 @@ def filter_enrichment(args):
             bed = pybedtools.BedTool(args.bed_dir + "/" + bed_file)
 
             # filter gff files for feature of interest
+            print("Filtering ...")
             with multiprocessing.Pool(processes=cores) as pool:
                 filtered_gffs = pool.map(partial(subset_featuretypes, gff=gff), all_feature_types)
 
             filtered_gffs = [b.merge() for b in filtered_gffs]
             num_entries = bed.count()
+
+            print("Counting ...")
             with multiprocessing.Pool(processes=cores) as pool:
                 num_hits_feature = pool.map(partial(count_reads_in_features, bed=bed,
                                                     min_overlap_factor=min_overlap_factor), filtered_gffs)
@@ -170,8 +173,9 @@ def filter_enrichment(args):
             if args.ttest:
                 with multiprocessing.Pool(processes=cores) as pool:
                     # t-test inside vs outside feature
-                    ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True),
-                                             filtered_gffs)
+                    print("t-test ...")
+                    ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
+                                                     min_length=min_overlap), filtered_gffs)
                 ttest_diffs, ttest_pvals = zip(*ttest_results)
                 ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
                 motif_results['ttest_difference'] = ttest_diffs

@@ -44,30 +44,33 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
     """Compute mean pathogenicity score of a gene."""
     # intersection = pybedtools.BedTool(bedgraph).intersect( b=filtered_gff)
     intersection = bedgraph.intersect(b=filtered_gff)
-    total_num_bases = 0.
-    patho_score = 0.
-    for entry in intersection:
-        num_bases = entry.length
-        patho_score += float(entry.fields[3]) * num_bases
-        total_num_bases += num_bases
-    patho_score /= float(total_num_bases)
+    intersection_df = intersection.to_dataframe()
+    in_scores = intersection_df.iloc[:, 3]
+    in_lengths = intersection_df['end'] - intersection_df['start']
+    patho_score = sum((in_lengths * in_scores))/sum(in_lengths)
     return patho_score
 
 
-def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False):
+def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1):
     """Test for elevated pathogenicity score within a gene."""
-    # intersection = pybedtools.BedTool(bedgraph).intersect( b=filtered_gff)
     intersection = bedgraph.intersect(b=filtered_gff)
     subtraction = bedgraph.subtract(b=filtered_gff)
-    in_list = []
-    out_list = []
+    if min_length > 1:
+        intersection = intersection.filter(lambda x: len(x) >= min_length).saveas()
+        subtraction = subtraction.filter(lambda x: len(x) >= min_length).saveas()
     index = 3 if not filter_annot else 4
-    for entry in intersection:
-        num_bases = entry.length
-        in_list = in_list + [float(entry.fields[index]) for i in range(num_bases)]
-    for entry in subtraction:
-        num_bases = entry.length
-        out_list = out_list + [float(entry.fields[index]) for i in range(num_bases)]
+    intersection_df = intersection.to_dataframe()
+    in_scores = intersection_df.iloc[:, index]
+    subtraction_df = subtraction.to_dataframe()
+    out_scores = subtraction_df.iloc[:, index]
+    if not filter_annot:
+        in_lengths = intersection_df['end'] - intersection_df['start']
+        in_list = np.repeat(in_scores, in_lengths)
+        out_lengths = subtraction_df['end'] - subtraction_df['start']
+        out_list = np.repeat(out_scores, out_lengths)
+    else:
+        in_list = in_scores
+        out_list = out_scores
 
     difference = np.mean(in_list) - np.mean(out_list)
     return difference, ttest_ind(in_list, out_list)[1]
