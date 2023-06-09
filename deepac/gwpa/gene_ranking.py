@@ -81,8 +81,11 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
     else:
         out_list = []
 
-    difference = np.mean(in_list) - np.mean(out_list)
-    return difference, ttest_ind(in_list, out_list)[1]
+    if len(in_list) > 0 and len(out_list) > 0:
+        difference = np.mean(in_list) - np.mean(out_list)
+        return difference, ttest_ind(in_list, out_list)[1]
+    else:
+        return np.nan, np.nan
 
 
 def gene_rank(args):
