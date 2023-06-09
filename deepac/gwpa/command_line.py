@@ -4,13 +4,13 @@ A DeePaC gwpa CLI. Support GWPA tools.
 """
 import warnings
 import os
-import re
 from deepac.gwpa.fragment_genomes import frag_genomes
 from deepac.gwpa.gene_ranking import gene_rank
 from deepac.gwpa.genome_pathogenicity import genome_map
 from deepac.gwpa.nt_contribs import nt_map
 from deepac.gwpa.filter_activations import filter_activations
 from deepac.gwpa.filter_enrichment import filter_enrichment
+from deepac.gwpa.gff2genome import gff2genome
 
 
 def add_gwpa_parser(gparser):
@@ -154,15 +154,4 @@ def run_gff2genome(args):
             gff2genome(os.path.join(args.gff3_dir, file), os.path.join(args.out_dir, out_file))
 
 
-def gff2genome(gff3_path, out_path):
-    """Generate a .genome file."""
-    ptrn = re.compile(r'(Genbank|RefSeq)\s+region')
-    out_lines = []
-    with open(gff3_path) as in_file:
-        for line in in_file:
-            region = ptrn.search(line)
-            if region:
-                out_lines.append(line.split()[0] + "\t" + line.split()[4] + "\n")
-    with open(out_path, 'w') as out_file:
-        out_file.writelines(out_lines)
 
