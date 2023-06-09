@@ -174,8 +174,7 @@ class GWPATester:
                           if "Global" in str(layer)]
         conv_layer_idx = conv_layer_ids[0]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
-        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
-                           get_rf_size(model, conv_layer_idx))
+        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv0"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),
                          out_dir=os.path.join(self.outpath, "fenrichment0"),

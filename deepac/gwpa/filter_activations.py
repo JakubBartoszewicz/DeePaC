@@ -9,7 +9,6 @@ from deepac.utils import set_mem_growth
 from tensorflow.keras.utils import get_custom_objects
 import pandas as pd
 from math import floor, log10
-from deepac.explain.rf_sizes import get_rf_size
 
 
 def filter_activations(args):
@@ -31,8 +30,7 @@ def filter_activations(args):
                           if "Global" in str(layer)]
         conv_layer_idx = conv_layer_ids[0]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
-        motif_length = min(model.get_layer(index=input_layer_id).get_output_at(0).shape[1],
-                           get_rf_size(model, conv_layer_idx))
+        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
 
