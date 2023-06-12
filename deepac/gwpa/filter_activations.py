@@ -187,5 +187,6 @@ def get_activation_data(activations, filter_range, all_filter_rows, reads_info_c
                 'filter': np.repeat("filter_" + str(filter_index), region_names.shape[0]),
                 'activation': activation_scores.flatten()
                 })
-
+        row_data['start'] = row_data['start'].astype('int')
+        row_data['end'] = row_data['end'].astype('int')
         all_filter_rows[filter_index].append(row_data)
