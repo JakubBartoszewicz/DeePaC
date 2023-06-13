@@ -9,6 +9,7 @@ from statsmodels.sandbox.stats.multicomp import multipletests
 from functools import partial
 from deepac.gwpa.gene_ranking import compute_gene_ttest
 from deepac.gwpa.gff2genome import gff2genome
+from shutil import rmtree
 
 
 def featuretype_filter(feature, featuretype):
@@ -66,6 +67,10 @@ def filter_enrichment(args):
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
+    temp_path = os.path.join(args.out_dir, "tmp")
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
+    pybedtools.helpers.set_tempdir(temp_path)
 
     if args.n_cpus is None:
         cores = multiprocessing.cpu_count()
@@ -243,3 +248,4 @@ def filter_enrichment(args):
             if len(motif_results.index):
                 motif_results.to_csv(out_file, sep="\t", index=False)
     os.remove(genome_tmp_path)
+    rmtree(temp_path)
