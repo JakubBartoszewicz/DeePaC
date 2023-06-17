@@ -158,7 +158,7 @@ class GWPATester:
         model = load_model(self.model, custom_objects=get_custom_objects())
         conv_layer_ids = [idx for idx, layer in enumerate(model.layers) if "Conv1D" in str(layer)]
         conv_layer_idx = conv_layer_ids[0]
-        motif_length = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[0]
+        motif_length = get_rf_size(model, conv_layer_idx)
 
         args = Namespace(bed_dir=os.path.join(self.outpath, "factiv"),
                          gff=os.path.join(self.outpath, "genome_gff3", "sample_genome2.gff3"),

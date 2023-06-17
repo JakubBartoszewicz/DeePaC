@@ -65,7 +65,7 @@ def get_filter_contribs(args, allow_eager=False):
                           if "Global" in str(layer)]
         conv_layer_idx = conv_layer_ids[0]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
-        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
+        motif_length = get_rf_size(model, conv_layer_idx)
         n_filters = model.get_layer(index=conv_layer_idx).get_output_at(0).shape[2]//2
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
@@ -84,7 +84,7 @@ def get_filter_contribs(args, allow_eager=False):
                           and layer.kernel_size[0] > 1]
         conv_layer_idx = conv_layer_ids[args.inter_layer - 1]
         input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
-        motif_length = model.get_layer(index=input_layer_id).get_output_at(0).shape[1]
+        motif_length = get_rf_size(model, conv_layer_idx)
         n_filters = model.get_layer(index=conv_layer_idx).get_weights()[0].shape[-1]
         pad_left = (motif_length - 1) // 2
         pad_right = motif_length - 1 - pad_left
