@@ -84,6 +84,8 @@ def add_gwpa_parser(gparser):
                                help="Sequence chunk size. Decrease for lower memory usage.")
     parser_factiv.add_argument("-F", "--inter-neuron", nargs='*', dest="inter_neuron", type=int,
                                help="Perform calculations for this filter only")
+    parser_factiv.add_argument('-g', '--gpus', dest="gpus", nargs='+', type=int,
+                               help="GPU devices to use (comma-separated). Default: all")
     parser_factiv.set_defaults(func=run_factiv)
 
     parser_fenrichment = gwpa_subparsers.add_parser('fenrichment', help='Run filter enrichment analysis.')

@@ -10,13 +10,14 @@ from tensorflow.keras.utils import get_custom_objects
 import pandas as pd
 from math import floor, log10
 from deepac.explain.rf_sizes import get_rf_size
+from deepac.utils import config_gpus
 
 
 def filter_activations(args):
     """Compute activation values genome-wide."""
 
     # Creates the model and loads weights
-    set_mem_growth()
+    config_gpus(args.gpus)
 
     model = load_model(args.model, custom_objects=get_custom_objects())
     do_rc = args.inter_layer > 0
@@ -30,7 +31,6 @@ def filter_activations(args):
         conv_layer_ids = [idx - 2 for idx, layer in enumerate(model.layers)
                           if "Global" in str(layer)]
         conv_layer_idx = conv_layer_ids[0]
-        input_layer_id = [idx for idx, layer in enumerate(model.layers) if "Input" in str(layer)][0]
         motif_length = get_rf_size(model, conv_layer_idx)
     pad_left = (motif_length - 1) // 2
     pad_right = motif_length - 1 - pad_left
