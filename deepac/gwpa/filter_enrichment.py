@@ -220,7 +220,12 @@ def filter_enrichment(args):
                     ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
                                                      min_length=min_overlap), filtered_gffs)
                 ttest_diffs, ttest_pvals = zip(*ttest_results)
-                ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
+                nonnan_indices = ~np.isnan(ttest_pvals)
+                ttest_pvals = np.array(ttest_pvals)
+                ttest_qvals = np.empty(ttest_pvals.shape)
+                ttest_qvals[:] = np.nan
+                ttest_qvals[nonnan_indices] = multipletests(ttest_pvals[nonnan_indices], alpha=0.05,
+                                                            method="fdr_bh")[1]
                 motif_results['ttest_difference'] = ttest_diffs
                 motif_results['ttest_p_value_2sided'] = ttest_pvals
                 motif_results['ttest_q_value_2sided'] = ttest_qvals
