@@ -141,8 +141,9 @@ def filter_enrichment(args):
                         diffs.append(filtered_gffs[i][_j].start - filtered_gffs[i][_i].end)
                 # maximum number of motifs spanning two features at once:
                 # motif_length - 2*min_overlap - distance + 1
-                max_overlapping.append(sum([motif_length - 2 * min_overlap - distance + 1
-                                       for distance in diffs if distance <= min_overlap]))
+                max_overlapping_ij = sum([motif_length - 2 * min_overlap - distance + 1
+                                          for distance in diffs if distance <= motif_length - 2 * min_overlap])
+                max_overlapping.append(max_overlapping_ij)
             num_possible_hits_feature = [
                 2 * (len_feature_region[i] + num_feature_occurences[i] * (1 + motif_length - 2 * min_overlap)
                      + max_overlapping[i])
@@ -165,8 +166,9 @@ def filter_enrichment(args):
                         diffs.append(complement_features[i][_j].start - complement_features[i][_i].end)
                 # maximum number of motifs spanning two features at once:
                 # motif_length - 2*min_overlap - distance + 1
-                max_overlapping_comp.append(sum([motif_length - 2 * min_overlap - distance + 1
-                                            for distance in diffs if distance <= min_overlap]))
+                max_overlapping_comp_ij = sum([motif_length - 2 * min_overlap - distance + 1
+                                               for distance in diffs if distance <= motif_length - 2 * min_overlap])
+                max_overlapping_comp.append(max_overlapping_comp_ij)
 
             num_possible_hits_outside_feature = [
                 2 * (len_complement_region[i] + num_complement_occurences[i] * (1 + motif_length - 2 * min_overlap)
@@ -224,8 +226,9 @@ def filter_enrichment(args):
                 ttest_pvals = np.array(ttest_pvals)
                 ttest_qvals = np.empty(ttest_pvals.shape)
                 ttest_qvals[:] = np.nan
-                ttest_qvals[nonnan_indices] = multipletests(ttest_pvals[nonnan_indices], alpha=0.05,
-                                                            method="fdr_bh")[1]
+                if np.any(nonnan_indices):
+                    ttest_qvals[nonnan_indices] = multipletests(ttest_pvals[nonnan_indices], alpha=0.05,
+                                                                method="fdr_bh")[1]
                 motif_results['ttest_difference'] = ttest_diffs
                 motif_results['ttest_p_value_2sided'] = ttest_pvals
                 motif_results['ttest_q_value_2sided'] = ttest_qvals
