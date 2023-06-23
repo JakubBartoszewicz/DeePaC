@@ -249,10 +249,10 @@ def filter_enrichment(args):
                 motif_results = motif_results[np.logical_or(motif_results.fisher_q_value_feature < 0.05,
                                                             motif_results.ttest_q_value_2sided < 0.05)]
                 motif_results = motif_results.sort_values(by=['ttest_q_value_2sided',
-                                                              'fisher_p_value_2sided', 'fisher_p_value_feature'])
+                                                              'fisher_q_value_2sided', 'fisher_q_value_feature'])
             else:
                 motif_results = motif_results[motif_results.fisher_q_value_feature < 0.05]
-                motif_results = motif_results.sort_values(by=['fisher_p_value_2sided', 'fisher_p_value_feature'])
+                motif_results = motif_results.sort_values(by=['fisher_q_value_2sided', 'fisher_q_value_feature'])
             if len(motif_results.index):
                 motif_results.to_csv(out_file, sep="\t", index=False)
     os.remove(genome_tmp_path)
