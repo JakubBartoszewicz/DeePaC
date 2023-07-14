@@ -86,7 +86,7 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
         mean_in = np.mean(in_list)
         mean_out = np.mean(out_list)
         difference = mean_in - mean_out
-        total = np.mean(in_list + out_list)
+        total = np.mean(np.concatenate((in_list, out_list)))
         contribution = total - mean_in
         return difference, ttest_ind(in_list, out_list)[1], mean_out, total, contribution
     else:
