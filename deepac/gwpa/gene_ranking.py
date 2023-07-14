@@ -83,10 +83,14 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
         out_list = []
 
     if len(in_list) > 0 and len(out_list) > 0:
-        difference = np.mean(in_list) - np.mean(out_list)
-        return difference, ttest_ind(in_list, out_list)[1]
+        mean_in = np.mean(in_list)
+        mean_out = np.mean(out_list)
+        difference = mean_in - mean_out
+        total = np.mean(in_list + out_list)
+        contribution = total - mean_in
+        return difference, ttest_ind(in_list, out_list)[1], mean_out, total, contribution
     else:
-        return np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan
 
 
 def gene_rank(args):
@@ -145,7 +149,7 @@ def gene_rank(args):
             with multiprocessing.Pool(processes=cores) as pool:
                 # t-test inside vs outside feature
                 ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bedgraph), filtered_gffs)
-            ttest_diffs, ttest_pvals = zip(*ttest_results)
+            ttest_diffs, ttest_pvals, ttest_mean_out, total, contribs = zip(*ttest_results)
             ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
 
             # save results
@@ -155,6 +159,9 @@ def gene_rank(args):
                                                     ('raw_p_value', ttest_pvals),
                                                     ('q_value', ttest_qvals),
                                                     ('difference', ttest_diffs),
+                                                    ('out_score', ttest_mean_out),
+                                                    ('genome_score', total),
+                                                    ('feature_contrib', contribs)
                                                     )))
             patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
 
