@@ -7,6 +7,7 @@ from collections import OrderedDict
 from scipy.stats import ttest_ind
 from statsmodels.sandbox.stats.multicomp import multipletests
 import numpy as np
+from shutil import rmtree
 
 
 def featuretype_filter(feature, featuretype):
@@ -93,6 +94,10 @@ def gene_rank(args):
     # create output directory
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
+    temp_path = os.path.join(args.out_dir, "tmp")
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
+    pybedtools.helpers.set_tempdir(temp_path)
 
     if args.n_cpus is None:
         cores = multiprocessing.cpu_count()
@@ -162,3 +167,4 @@ def gene_rank(args):
                                    sep="\t",
                                    index=False)
             pybedtools.cleanup()
+    rmtree(temp_path)
