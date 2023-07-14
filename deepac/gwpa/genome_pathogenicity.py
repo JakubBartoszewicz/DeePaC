@@ -118,6 +118,7 @@ def genome_map(args):
             # save results
             out_file = args.out_dir + "/" + genome + "_pathogenicity.bedgraph"
             df[['start', 'end']] = df[['start', 'end']].astype(int)
+            df = df[:c]  # remove rows empty due to intervals longer than 1
             df.to_csv(out_file, sep="\t", index=False, header=False)
 
             mean_score = sum(x * y for x, y in zip(df.score, df.end-df.start)) / sum(df.end-df.start)
