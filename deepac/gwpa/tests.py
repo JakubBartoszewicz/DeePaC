@@ -95,7 +95,7 @@ class GWPATester:
                          dir_fragmented_genomes_preds=os.path.join(self.outpath, "genome_frag_pred"),
                          genomes_dir=os.path.join(self.outpath, "genome"),
                          out_dir=os.path.join(self.outpath, "bedgraph"),
-                         target_class=self.target_class)
+                         target_class=self.target_class, threshold=0.5)
         genome_map(args)
         assert (os.path.isfile(os.path.join(self.outpath, "bedgraph",
                                             "sample_genome2_fragmented_genomes_pathogenicity.bedgraph"))), \

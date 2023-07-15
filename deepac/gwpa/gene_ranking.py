@@ -54,8 +54,9 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
 
 def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1):
     """Test for elevated pathogenicity score within a gene."""
-    intersection = bedgraph.intersect(b=filtered_gff)
-    subtraction = bedgraph.subtract(b=filtered_gff)
+    merged_gff = filtered_gff.merge()
+    intersection = bedgraph.intersect(b=merged_gff)
+    subtraction = bedgraph.subtract(b=merged_gff)
     if min_length > 1:
         intersection = intersection.filter(lambda x: len(x) >= min_length).saveas()
         subtraction = subtraction.filter(lambda x: len(x) >= min_length).saveas()
@@ -87,7 +88,7 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
         mean_out = np.mean(out_list)
         difference = mean_in - mean_out
         total = np.mean(np.concatenate((in_list, out_list)))
-        contribution = total - mean_in
+        contribution = total - mean_out
         return difference, ttest_ind(in_list, out_list)[1], mean_out, total, contribution
     else:
         return np.nan, np.nan, np.nan, np.nan, np.nan
@@ -163,7 +164,7 @@ def gene_rank(args):
                                                     ('genome_score', total),
                                                     ('feature_contrib', contribs)
                                                     )))
-            patho_table = patho_table.sort_values(by=['pathogenicity_score'], ascending=False)
+            patho_table = patho_table.sort_values(by=['feature_contrib'], ascending=False)
 
             if args.extended:
                 patho_table.to_csv(args.out_dir + "/" + bioproject_id + "_feature_pathogenicity_extended.csv",

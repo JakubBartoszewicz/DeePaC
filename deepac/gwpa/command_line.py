@@ -21,7 +21,7 @@ def add_gwpa_parser(gparser):
     parser_fragment.add_argument("-r", "--read_len", default=250, type=int,
                                  help="Length of extracted reads/fragments (default: 250)")
     parser_fragment.add_argument("-s", "--shift", default=50, type=int,
-                                 help="Shift to start with the next fragment (default:50)")
+                                 help="Shift to start with the next fragment (default: 50)")
     parser_fragment.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_fragment.set_defaults(func=run_fragment)
 
@@ -34,6 +34,9 @@ def add_gwpa_parser(gparser):
     parser_genomemap.add_argument("-o", "--out-dir", default=".", help="Output directory")
     parser_genomemap.add_argument("-T", "--target-class", dest="target_class", type=int,
                                   help="Target class ID. Leave unset for binary classification")
+    parser_genomemap.add_argument("-t", "--threshold", default=0.5, type=float,
+                                  help="Classification threshold for binary classification (default: 0.5). "
+                                       "Used to rescale the bedgraph. Use 0 for raw scores.")
     parser_genomemap.set_defaults(func=run_genomemap)
 
     parser_granking = gwpa_subparsers.add_parser('granking', help='Generate gene rankings.')

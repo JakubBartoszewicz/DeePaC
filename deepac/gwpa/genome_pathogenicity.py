@@ -82,7 +82,7 @@ def genome_map(args):
                 # compute mean pathogenicity score per nucleotide
                 genome_patho_dict[seq_name] /= genome_read_counter
                 if target is None:
-                    genome_patho_dict[seq_name] = genome_patho_dict[seq_name] - 0.5
+                    genome_patho_dict[seq_name] = genome_patho_dict[seq_name] - args.threshold
 
                 # convert array of nucelotide pathogenicity scores to intervals (-> bedgraph format)
                 strain_len = int(genome_info.loc[seq_name])
@@ -123,7 +123,7 @@ def genome_map(args):
 
             mean_score = sum(x * y for x, y in zip(df.score, df.end-df.start)) / sum(df.end-df.start)
             if target is None:
-                mean_score = mean_score + 0.5
+                mean_score = mean_score + args.threshold
             mean_scores.append((genome.replace("_fragmented_genomes", ""), mean_score))
 
         mean_scores.sort(key=itemgetter(1))
