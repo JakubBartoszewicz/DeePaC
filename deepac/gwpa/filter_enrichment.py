@@ -221,7 +221,7 @@ def filter_enrichment(args):
                     print("t-test ...")
                     ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
                                                      min_length=min_overlap), filtered_gffs)
-                ttest_diffs, ttest_pvals = zip(*ttest_results)
+                ttest_diffs, ttest_pvals, ttest_mean_out, total, contribs = zip(*ttest_results)
                 nonnan_indices = ~np.isnan(ttest_pvals)
                 ttest_pvals = np.array(ttest_pvals)
                 ttest_qvals = np.empty(ttest_pvals.shape)
@@ -232,6 +232,9 @@ def filter_enrichment(args):
                 motif_results['ttest_difference'] = ttest_diffs
                 motif_results['ttest_p_value_2sided'] = ttest_pvals
                 motif_results['ttest_q_value_2sided'] = ttest_qvals
+                motif_results['out_score'] = ttest_mean_out
+                motif_results['genome_score'] = total
+                motif_results['feature_contrib'] = contribs
 
             # save enrichment results per motif
             if args.extended:
