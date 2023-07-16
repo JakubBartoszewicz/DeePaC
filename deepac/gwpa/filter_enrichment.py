@@ -216,11 +216,15 @@ def filter_enrichment(args):
             motif_results['fisher_q_value_outside_feature'] = fisher_q_value_outside_feature
 
             if args.ttest:
+                all_df = bed.to_dataframe()
+                all_scores = all_df.iloc[:, 4]
+                mean_score = np.mean(all_scores)
+
                 with multiprocessing.Pool(processes=cores) as pool:
                     # t-test inside vs outside feature
                     print("t-test ...")
                     ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bed, filter_annot=True,
-                                                     min_length=min_overlap), filtered_gffs)
+                                                     min_length=min_overlap, mean_score=mean_score), filtered_gffs)
                 ttest_diffs, ttest_pvals, ttest_mean_out, total, contribs = zip(*ttest_results)
                 nonnan_indices = ~np.isnan(ttest_pvals)
                 ttest_pvals = np.array(ttest_pvals)

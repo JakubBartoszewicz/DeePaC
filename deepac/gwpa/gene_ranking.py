@@ -52,7 +52,7 @@ def compute_gene_pathogenicity(filtered_gff, bedgraph):
     return patho_score
 
 
-def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1):
+def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1, mean_score=None):
     """Test for elevated pathogenicity score within a gene."""
     merged_gff = filtered_gff.merge()
     intersection = bedgraph.intersect(b=merged_gff)
@@ -83,11 +83,22 @@ def compute_gene_ttest(filtered_gff, bedgraph, filter_annot=False, min_length=1)
     else:
         out_list = []
 
+    if mean_score is None:
+        all_df = bedgraph.to_dataframe()
+        all_scores = all_df.iloc[:, index]
+        if not filter_annot:
+            all_lengths = all_df['end'] - all_df['start']
+            total = np.mean(np.repeat(all_scores, all_lengths))
+        else:
+            total = np.mean(all_scores)
+    else:
+        total = mean_score
+
     if len(in_list) > 0 and len(out_list) > 0:
         mean_in = np.mean(in_list)
         mean_out = np.mean(out_list)
         difference = mean_in - mean_out
-        total = np.mean(np.concatenate((in_list, out_list)))
+        # total = np.mean(np.concatenate((in_list, out_list)))
         contribution = total - mean_out
         return difference, ttest_ind(in_list, out_list)[1], mean_out, total, contribution
     else:
@@ -147,9 +158,15 @@ def gene_rank(args):
             # compute mean pathogencity score per feature
             feature_pathogenicities = [compute_gene_pathogenicity(filtered_gff, bedgraph)
                                        for filtered_gff in filtered_gffs]
+            all_df = bedgraph.to_dataframe()
+            all_scores = all_df.iloc[:, 3]
+            all_lengths = all_df['end'] - all_df['start']
+            mean_score = np.mean(np.repeat(all_scores, all_lengths))
+
             with multiprocessing.Pool(processes=cores) as pool:
                 # t-test inside vs outside feature
-                ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bedgraph), filtered_gffs)
+                ttest_results = pool.map(partial(compute_gene_ttest, bedgraph=bedgraph, mean_score=mean_score),
+                                         filtered_gffs)
             ttest_diffs, ttest_pvals, ttest_mean_out, total, contribs = zip(*ttest_results)
             ttest_qvals = multipletests(ttest_pvals, alpha=0.05, method="fdr_bh")[1]
 
